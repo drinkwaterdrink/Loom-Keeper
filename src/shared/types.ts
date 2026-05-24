@@ -70,6 +70,10 @@ export interface LoomSettings {
   showMessageButtons: boolean;
   debugMode: boolean;
   promptInjectionEnabled: boolean;
+  showChatLoomPanel: boolean;
+  renderTrackersInMessages: boolean;
+  trackerPlacement: 'drawer' | 'chat_panel' | 'message_card' | 'both';
+  cardDensity: 'compact' | 'normal';
 }
 
 export interface LoomPermissionState {

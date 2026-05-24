@@ -1,6 +1,6 @@
 import type { LoomBackendMessage, LoomFrontendMessage, LoomFrontendState, LoomSettings } from '../shared/types.js';
 import { renderDrawer } from './drawer.js';
-import { ensureFloatingButton, mountMessageCards } from './messageCards.js';
+import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState } from './messageCards.js';
 import { renderSettingsPanel } from './settingsPanel.js';
 import { loomStyles } from './styles.js';
 import type { LoomUiStatus } from './ui.js';
@@ -243,6 +243,7 @@ function updateMessageCardStatus(): void {
     const result = mountMessageCards(contextRef, state);
     lastRenderStatus = result.status;
     ensureFloatingButton(contextRef, state);
+    ensureChatLoomPanel(contextRef, state);
   }
 }
 
@@ -350,6 +351,18 @@ function handleDrawerEvent(event: Event): void {
   if (fieldName === 'placement' && field instanceof HTMLSelectElement) {
     saveSettings({ defaultPlacement: field.value as LoomSettings['defaultPlacement'] });
   }
+  if (fieldName === 'showChatLoomPanel' && field instanceof HTMLInputElement) {
+    saveSettings({ showChatLoomPanel: field.checked });
+  }
+  if (fieldName === 'renderTrackersInMessages' && field instanceof HTMLInputElement) {
+    saveSettings({ renderTrackersInMessages: field.checked });
+  }
+  if (fieldName === 'trackerPlacement' && field instanceof HTMLSelectElement) {
+    saveSettings({ trackerPlacement: field.value as LoomSettings['trackerPlacement'] });
+  }
+  if (fieldName === 'cardDensity' && field instanceof HTMLSelectElement) {
+    saveSettings({ cardDensity: field.value as LoomSettings['cardDensity'] });
+  }
 }
 
 function handleBackendMessage(message: LoomBackendMessage): void {
@@ -397,12 +410,41 @@ function registerFrontendEvents(ctx: FrontendContext): void {
 
 export function setup(ctx: FrontendContext): () => void {
   contextRef = ctx;
+  registerRerenderCallback(() => rerender());
   installStyle(ctx);
   registerDrawer(ctx);
   registerSettingsMount(ctx);
   registerInputActions(ctx);
   registerBackendListener(ctx);
   registerFrontendEvents(ctx);
+
+  const ui = ctx.ui && typeof ctx.ui === 'object' ? ctx.ui as Record<string, unknown> : {};
+  const uiEvents = ui.events && typeof ui.events === 'object' ? ui.events as Record<string, unknown> : {};
+  
+  if (typeof uiEvents.onDrawerChange === 'function') {
+    try {
+      const unsub = (uiEvents.onDrawerChange as (handler: (payload: { open: boolean }) => void) => () => void)((payload) => {
+        setDrawerOpenState(payload.open);
+        rerender();
+      });
+      cleanupFns.push(unsub);
+    } catch {
+      // Optional hook
+    }
+  }
+
+  if (typeof uiEvents.onSettingsChange === 'function') {
+    try {
+      const unsub = (uiEvents.onSettingsChange as (handler: (payload: { open: boolean }) => void) => () => void)((payload) => {
+        setSettingsOpenState(payload.open);
+        rerender();
+      });
+      cleanupFns.push(unsub);
+    } catch {
+      // Optional hook
+    }
+  }
+
   documentRef()?.addEventListener('click', handleDrawerEvent);
   documentRef()?.addEventListener('change', handleDrawerEvent);
   postToBackend(ctx, { type: 'ready' });
@@ -418,6 +460,7 @@ export function setup(ctx: FrontendContext): () => void {
     if (messageCardRetryTimer !== undefined && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(messageCardRetryTimer);
     fallbackRoot?.remove();
     documentRef()?.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
+    documentRef()?.querySelector('.sotl-chat-panel-container')?.remove();
     documentRef()?.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
     rootListenerCleanups.clear();
   };

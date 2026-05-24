@@ -32,9 +32,14 @@ function renderLatestTracker(state: LoomFrontendState): string {
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
   }
   const html = renderTrackerHtml(state.latestTracker, state.activePreset);
+  const attachmentStatus = state.settings.renderTrackersInMessages && state.latestTracker.messageId
+    ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">🔗 Attached to message card (${escapeHtml(state.latestTracker.messageId)})</p>`
+    : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
+
   return [
     `<p class="sotl-note">${escapeHtml(state.latestTracker.compactSummary)}</p>`,
     `<div class="sotl-preview">${html}</div>`,
+    attachmentStatus,
     '<details class="sotl-details"><summary>Manual JSON edit</summary>',
     '<div class="sotl-fields" style="margin-top: 10px;">',
     `<textarea class="sotl-textarea" data-sotl-field="latestJson">${escapeHtml(JSON.stringify(state.latestTracker.data, null, 2))}</textarea>`,
@@ -111,6 +116,8 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     `<p class="sotl-note">Connection: ${escapeHtml(selectedConnection?.name || (state.settings.useDefaultConnectionFallback ? 'default/current fallback' : 'none selected'))}</p>`,
     !state.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : '',
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state.settings.autoGenerate ? 'checked' : '') + '> Auto-generate after assistant messages</label>',
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ' + (state.settings.showChatLoomPanel ? 'checked' : '') + '> Show chat-screen Loom panel</label>',
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ' + (state.settings.renderTrackersInMessages ? 'checked' : '') + '> Render trackers inside chat messages</label>',
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state.settings.stripTrackerBlocksFromMessages ? 'checked' : '') + '> Strip passive tracker blocks when allowed</label>',
     '</div>',
     '<div class="sotl-actions">',

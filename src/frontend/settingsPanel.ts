@@ -20,6 +20,20 @@ function renderConnectionOptions(state: LoomFrontendState): string {
   return options.join('');
 }
 
+function renderTrackerPlacementOptions(state: LoomFrontendState): string {
+  return ['drawer', 'chat_panel', 'message_card', 'both'].map((placement) => {
+    const selected = state.settings.trackerPlacement === placement ? ' selected' : '';
+    return `<option value="${placement}"${selected}>${placement}</option>`;
+  }).join('');
+}
+
+function renderCardDensityOptions(state: LoomFrontendState): string {
+  return ['compact', 'normal'].map((density) => {
+    const selected = state.settings.cardDensity === density ? ' selected' : '';
+    return `<option value="${density}"${selected}>${density}</option>`;
+  }).join('');
+}
+
 export function renderFeatureBreakdown(collapsible = false): string {
   const content = [
     '<div class="sotl-feature-grid">',
@@ -104,12 +118,20 @@ export function renderSettingsPanel(state: LoomFrontendState | null, status: Loo
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ${state.settings.autoGenerate ? 'checked' : ''}> Auto-generate after assistant messages</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="fallback" ${state.settings.useDefaultConnectionFallback ? 'checked' : ''}> Use default/current connection fallback</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="floating" ${state.settings.showFloatingButton ? 'checked' : ''}> Show desktop floating launcher</label>`,
+    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ${state.settings.showChatLoomPanel ? 'checked' : ''}> Show chat-screen Loom panel</label>`,
+    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ${state.settings.renderTrackersInMessages ? 'checked' : ''}> Render trackers inside chat messages</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="messageButtons" ${state.settings.showMessageButtons ? 'checked' : ''}> Show message card buttons</label>`,
     '<label class="sotl-label">Sidecar connection',
     `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state)}</select>`,
     '</label>',
     '<label class="sotl-label">Default placement',
     `<select class="sotl-select" data-sotl-field="placement">${renderPlacementOptions(state)}</select>`,
+    '</label>',
+    '<label class="sotl-label">Tracker display scope',
+    `<select class="sotl-select" data-sotl-field="trackerPlacement">${renderTrackerPlacementOptions(state)}</select>`,
+    '</label>',
+    '<label class="sotl-label">Card density',
+    `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state)}</select>`,
     '</label>',
     '</div>',
     '</section>',

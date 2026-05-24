@@ -92,6 +92,18 @@ function renderConnectionOptions(state2) {
   ];
   return options.join("");
 }
+function renderTrackerPlacementOptions(state2) {
+  return ["drawer", "chat_panel", "message_card", "both"].map((placement) => {
+    const selected = state2.settings.trackerPlacement === placement ? " selected" : "";
+    return `<option value="${placement}"${selected}>${placement}</option>`;
+  }).join("");
+}
+function renderCardDensityOptions(state2) {
+  return ["compact", "normal"].map((density) => {
+    const selected = state2.settings.cardDensity === density ? " selected" : "";
+    return `<option value="${density}"${selected}>${density}</option>`;
+  }).join("");
+}
 function renderFeatureBreakdown(collapsible = false) {
   const content = [
     '<div class="sotl-feature-grid">',
@@ -171,12 +183,20 @@ function renderSettingsPanel(state2, status = {}) {
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ${state2.settings.autoGenerate ? "checked" : ""}> Auto-generate after assistant messages</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="fallback" ${state2.settings.useDefaultConnectionFallback ? "checked" : ""}> Use default/current connection fallback</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="floating" ${state2.settings.showFloatingButton ? "checked" : ""}> Show desktop floating launcher</label>`,
+    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ${state2.settings.showChatLoomPanel ? "checked" : ""}> Show chat-screen Loom panel</label>`,
+    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ${state2.settings.renderTrackersInMessages ? "checked" : ""}> Render trackers inside chat messages</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="messageButtons" ${state2.settings.showMessageButtons ? "checked" : ""}> Show message card buttons</label>`,
     '<label class="sotl-label">Sidecar connection',
     `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state2)}</select>`,
     "</label>",
     '<label class="sotl-label">Default placement',
     `<select class="sotl-select" data-sotl-field="placement">${renderPlacementOptions(state2)}</select>`,
+    "</label>",
+    '<label class="sotl-label">Tracker display scope',
+    `<select class="sotl-select" data-sotl-field="trackerPlacement">${renderTrackerPlacementOptions(state2)}</select>`,
+    "</label>",
+    '<label class="sotl-label">Card density',
+    `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state2)}</select>`,
     "</label>",
     "</div>",
     "</section>",
@@ -221,9 +241,11 @@ function renderLatestTracker(state2) {
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
   }
   const html = renderTrackerHtml(state2.latestTracker, state2.activePreset);
+  const attachmentStatus = state2.settings.renderTrackersInMessages && state2.latestTracker.messageId ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">\u{1F517} Attached to message card (${escapeHtml2(state2.latestTracker.messageId)})</p>` : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
   return [
     `<p class="sotl-note">${escapeHtml2(state2.latestTracker.compactSummary)}</p>`,
     `<div class="sotl-preview">${html}</div>`,
+    attachmentStatus,
     '<details class="sotl-details"><summary>Manual JSON edit</summary>',
     '<div class="sotl-fields" style="margin-top: 10px;">',
     `<textarea class="sotl-textarea" data-sotl-field="latestJson">${escapeHtml2(JSON.stringify(state2.latestTracker.data, null, 2))}</textarea>`,
@@ -296,6 +318,8 @@ function renderDrawer(state2, status = {}) {
     `<p class="sotl-note">Connection: ${escapeHtml2(selectedConnection?.name || (state2.settings.useDefaultConnectionFallback ? "default/current fallback" : "none selected"))}</p>`,
     !state2.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : "",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state2.settings.autoGenerate ? "checked" : "") + "> Auto-generate after assistant messages</label>",
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ' + (state2.settings.showChatLoomPanel ? "checked" : "") + "> Show chat-screen Loom panel</label>",
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ' + (state2.settings.renderTrackersInMessages ? "checked" : "") + "> Render trackers inside chat messages</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state2.settings.stripTrackerBlocksFromMessages ? "checked" : "") + "> Strip passive tracker blocks when allowed</label>",
     "</div>",
     '<div class="sotl-actions">',
@@ -336,58 +360,221 @@ function renderDrawer(state2, status = {}) {
 }
 
 // src/frontend/messageCards.ts
+var injectedWrappers = /* @__PURE__ */ new Map();
+var isChatLoomPanelExpanded = false;
+var isDrawerOpen = false;
+var isSettingsOpen = false;
+var rerenderCallback = null;
 function documentRef() {
   return typeof document === "undefined" ? null : document;
+}
+function escapeHtml3(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function escapeSelector(value) {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(value);
   return value.replace(/["\\]/g, "\\$&");
+}
+function registerRerenderCallback(cb) {
+  rerenderCallback = cb;
+}
+function triggerRerender() {
+  if (rerenderCallback) {
+    rerenderCallback();
+  }
+}
+function setDrawerOpenState(open) {
+  isDrawerOpen = open;
+}
+function setSettingsOpenState(open) {
+  isSettingsOpen = open;
 }
 function findMessageHost(doc, tracker) {
   if (!tracker.messageId) return null;
   const id = escapeSelector(tracker.messageId);
   return doc.querySelector(`[data-message-id="${id}"]`) ?? doc.querySelector(`[data-lumiverse-message-id="${id}"]`) ?? doc.querySelector(`[data-lv-message-id="${id}"]`) ?? doc.querySelector(`[data-chat-message-id="${id}"]`) ?? doc.querySelector(`[data-message_id="${id}"]`) ?? doc.querySelector(`[data-messageid="${id}"]`) ?? doc.getElementById(`message-${tracker.messageId}`);
 }
-function cardForTracker(tracker, state2) {
-  const doc = documentRef();
-  if (!doc || tracker.hidden || tracker.placement === "hidden" || tracker.placement === "drawer" || tracker.placement === "disabled") return null;
-  const wrapper = doc.createElement("div");
-  wrapper.className = "sotl-message-card";
-  wrapper.dataset.sotlMounted = "true";
-  wrapper.dataset.sotlMessageId = tracker.messageId || "latest";
+function renderTrackerHtmlCard(tracker, state2) {
   const controls = state2.settings.showMessageButtons ? `<div class="sotl-message-controls">${iconButton("Regenerate", "card-regenerate", tracker.messageId || "")}${iconButton("Edit", "card-edit", tracker.messageId || "")}${iconButton("Hide", "card-hide", tracker.messageId || "")}${iconButton("Delete", "card-delete", tracker.messageId || "")}</div>` : "";
-  wrapper.innerHTML = controls + renderTrackerHtml(tracker, state2.activePreset);
-  return wrapper;
+  return controls + renderTrackerHtml(tracker, state2.activePreset);
 }
-function mountMessageCards(_ctx, state2) {
+function cleanupMessageCards(ctx) {
+  const domApi = ctx.dom && typeof ctx.dom === "object" ? ctx.dom : null;
+  const uninject = domApi && typeof domApi.uninject === "function" ? domApi.uninject : null;
+  for (const wrapper of injectedWrappers.values()) {
+    try {
+      if (uninject) {
+        uninject(wrapper);
+      } else {
+        wrapper.remove();
+      }
+    } catch {
+    }
+  }
+  injectedWrappers.clear();
+}
+function mountMessageCards(ctx, state2) {
   const doc = documentRef();
   if (!doc) return { status: "Message-card renderer unavailable: no document." };
   if (!state2) return { status: "Message-card renderer waiting for backend state." };
-  doc.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
+  if (!state2.settings.renderTrackersInMessages) {
+    cleanupMessageCards(ctx);
+    return { status: "Message-card rendering is disabled in settings." };
+  }
+  const domApi = ctx.dom && typeof ctx.dom === "object" ? ctx.dom : null;
+  const inject = domApi && typeof domApi.inject === "function" ? domApi.inject : null;
+  const findMessageElement = domApi && typeof domApi.findMessageElement === "function" ? domApi.findMessageElement : null;
+  cleanupMessageCards(ctx);
   const trackers = state2.messageTrackers.length > 0 ? state2.messageTrackers : state2.latestTracker ? [state2.latestTracker] : [];
   if (trackers.length === 0) return { status: "No tracker available for message-card mounting." };
   let mounted = 0;
   let lastMissing;
+  let virtualizationActive = false;
   for (const tracker of trackers) {
-    const host = findMessageHost(doc, tracker);
-    const card = cardForTracker(tracker, state2);
-    if (!host || !card) {
-      if (tracker.messageId) lastMissing = tracker.messageId;
+    if (tracker.hidden || tracker.placement === "hidden" || tracker.placement === "drawer" || tracker.placement === "disabled") {
       continue;
     }
-    if (tracker.placement === "bottom") host.append(card);
-    else host.prepend(card);
-    mounted += 1;
+    const messageId = tracker.messageId;
+    if (!messageId) continue;
+    const cardHtml = renderTrackerHtmlCard(tracker, state2);
+    if (!cardHtml) continue;
+    let hostElement = null;
+    if (findMessageElement) {
+      hostElement = findMessageElement(messageId);
+      virtualizationActive = true;
+    } else {
+      hostElement = findMessageHost(doc, tracker);
+    }
+    if (!hostElement) {
+      lastMissing = messageId;
+      continue;
+    }
+    const pos = tracker.placement === "bottom" ? "beforeend" : "afterbegin";
+    if (inject) {
+      try {
+        const wrapper = inject(hostElement, cardHtml, pos);
+        if (wrapper) {
+          injectedWrappers.set(messageId, wrapper);
+          mounted += 1;
+        }
+      } catch (err) {
+        console.warn("DOM Helper inject failed", err);
+      }
+    } else {
+      const wrapper = doc.createElement("div");
+      wrapper.className = "sotl-message-card";
+      wrapper.dataset.sotlMounted = "true";
+      wrapper.dataset.sotlMessageId = messageId;
+      wrapper.innerHTML = cardHtml;
+      if (tracker.placement === "bottom") {
+        hostElement.append(wrapper);
+      } else {
+        hostElement.prepend(wrapper);
+      }
+      injectedWrappers.set(messageId, wrapper);
+      mounted += 1;
+    }
   }
-  if (mounted > 0) return { status: `Mounted ${mounted} Loom tracker card${mounted === 1 ? "" : "s"}.` };
-  if (lastMissing) return { status: `Message-card mount skipped: no stable message host found for messageId ${lastMissing}.`, messageId: lastMissing };
-  return { status: "Message-card mount skipped: tracker placement is hidden, drawer-only, or disabled." };
+  const reports = [];
+  if (mounted > 0) reports.push(`Mounted ${mounted} Loom tracker card${mounted === 1 ? "" : "s"}.`);
+  if (virtualizationActive) reports.push(`Replay handled by virtualization registry.`);
+  if (lastMissing) {
+    reports.push(`Message host not currently mounted for messageId ${lastMissing}.`);
+  }
+  const fullStatus = reports.join(" ");
+  return {
+    status: fullStatus || "No mounted tracker cards.",
+    messageId: lastMissing
+  };
+}
+function renderCompactPanel(tracker) {
+  if (!tracker) {
+    return [
+      '<div class="sotl-chat-panel">',
+      '  <header class="sotl-chat-panel__head">',
+      '    <span class="sotl-chat-panel__title">Loom HUD</span>',
+      '    <button class="sotl-chat-panel__close" data-sotl-panel-action="collapse" title="Collapse panel">\u2715</button>',
+      "  </header>",
+      '  <div class="sotl-chat-panel__body">',
+      '    <p class="sotl-chat-panel__desc">No tracker has been stored for this chat yet. Click Generate below to start tracking.</p>',
+      "  </div>",
+      '  <div class="sotl-chat-panel__actions">',
+      '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="drawer">Open Drawer</button>',
+      '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="generate" style="background: var(--lv-accent, #3864d9); color: var(--lv-on-accent, #fff); border-color: var(--lv-accent, #3864d9);">Generate</button>',
+      "  </div>",
+      "</div>"
+    ].join("\n");
+  }
+  const castChips = Array.isArray(tracker.data.cast) && tracker.data.cast.length > 0 ? `<div class="sotl-cast-grid" style="margin-top: 4px;">` + tracker.data.cast.slice(0, 3).map((c) => `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml3(c.name || "Cast")}</span>`).join("") + (tracker.data.cast.length > 3 ? `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">+${tracker.data.cast.length - 3}</span>` : "") + `</div>` : "";
+  return [
+    '<div class="sotl-chat-panel">',
+    '  <header class="sotl-chat-panel__head">',
+    '    <span class="sotl-chat-panel__title">Loom HUD</span>',
+    '    <button class="sotl-chat-panel__close" data-sotl-panel-action="collapse" title="Collapse panel">\u2715</button>',
+    "  </header>",
+    '  <div class="sotl-chat-panel__body">',
+    `    <p class="sotl-chat-panel__scene">${escapeHtml3(tracker.data.sceneTitle || "Active Scene")}</p>`,
+    `    <div class="sotl-chat-panel__meta">\u{1F4CD} ${escapeHtml3(tracker.data.location || "Unknown")} \u2022 \u{1F552} ${escapeHtml3(tracker.data.time || "Unknown")}</div>`,
+    `    <p class="sotl-chat-panel__desc">${escapeHtml3(tracker.data.delta || "No deltas recorded.")}</p>`,
+    castChips,
+    "  </div>",
+    '  <div class="sotl-chat-panel__actions">',
+    '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="drawer">Open Drawer</button>',
+    '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="generate" style="background: var(--lv-accent, #3864d9); color: var(--lv-on-accent, #fff); border-color: var(--lv-accent, #3864d9);">Generate</button>',
+    "  </div>",
+    "</div>"
+  ].join("\n");
+}
+function ensureChatLoomPanel(ctx, state2) {
+  const doc = documentRef();
+  if (!doc) return;
+  doc.querySelector(".sotl-chat-panel-container")?.remove();
+  if (!state2 || !state2.settings.showChatLoomPanel) return;
+  if (isDrawerOpen || isSettingsOpen) return;
+  const container = doc.createElement("div");
+  container.className = "sotl-chat-panel-container";
+  container.dataset.sotlChatPanel = "true";
+  if (!isChatLoomPanelExpanded) {
+    container.innerHTML = `<div class="sotl-chat-pill" data-sotl-panel-action="expand">Loom HUD</div>`;
+  } else {
+    container.innerHTML = renderCompactPanel(state2.latestTracker);
+  }
+  container.addEventListener("click", (e) => {
+    const target = e.target;
+    if (!target) return;
+    const action = target.dataset.sotlPanelAction || target.closest("[data-sotl-panel-action]")?.getAttribute("data-sotl-panel-action");
+    if (action === "collapse") {
+      isChatLoomPanelExpanded = false;
+      triggerRerender();
+    } else if (action === "expand") {
+      isChatLoomPanelExpanded = true;
+      triggerRerender();
+    } else if (action === "drawer") {
+      const ui = ctx.ui && typeof ctx.ui === "object" ? ctx.ui : {};
+      const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
+      if (typeof openDrawer === "function") {
+        openDrawer("state_of_the_loom");
+      } else {
+        const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]');
+        openBtn?.click();
+      }
+    } else if (action === "generate") {
+      if (typeof ctx.sendToBackend === "function") {
+        ctx.sendToBackend({ type: "generate_tracker" });
+      } else {
+        const genBtn = doc.querySelector('[data-sotl-action="generate"]');
+        genBtn?.click();
+      }
+    }
+  });
+  doc.body.append(container);
 }
 function ensureFloatingButton(ctx, state2) {
   const doc = documentRef();
   if (!doc) return;
   doc.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
   if (!state2?.settings.showFloatingButton) return;
+  if (isDrawerOpen || isSettingsOpen) return;
   if (typeof globalThis.matchMedia === "function" && globalThis.matchMedia("(max-width: 720px)").matches) return;
   const button2 = doc.createElement("button");
   button2.className = "sotl-float";
@@ -714,6 +901,175 @@ var loomStyles = `
   border-radius: 999px;
   font-size: 12px;
 }
+.sotl-card-details {
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.15)));
+  border-radius: var(--lumiverse-radius, 6px);
+  background: var(--lumiverse-fill-subtle, var(--lv-surface-subtle, rgba(255, 255, 255, 0.2)));
+  padding: 6px 8px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.sotl-card-details summary {
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+.sotl-card-details[open] summary {
+  border-bottom: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.12)));
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+.sotl-cast-section {
+  margin-top: 8px;
+}
+.sotl-cast-section h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+}
+.sotl-cast-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sotl-cast-chip {
+  background: var(--lumiverse-fill-subtle, var(--lv-surface-subtle, rgba(255, 255, 255, 0.2)));
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.15)));
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sotl-cast-role {
+  color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+  font-size: 11px;
+}
+.sotl-cast-pos {
+  font-style: italic;
+  font-size: 11px;
+}
+.sotl-cast-emo {
+  font-size: 11px;
+  color: var(--lv-accent, #3864d9);
+}
+.sotl-card__title {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.sotl-pill--mood {
+  background: var(--lv-accent, #3864d9) !important;
+  color: var(--lv-on-accent, #fff) !important;
+  border-color: var(--lv-accent, #3864d9) !important;
+}
+.sotl-chat-panel-container {
+  position: fixed;
+  top: 76px;
+  right: 16px;
+  z-index: 25;
+  font-family: var(--lv-font-sans, Inter, ui-sans-serif, system-ui, sans-serif);
+  color: var(--lumiverse-text, var(--lv-text, #1e2329));
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sotl-chat-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--lumiverse-fill, var(--lv-surface-raised, rgba(255, 255, 255, 0.85)));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.25)));
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(20, 24, 32, 0.12);
+  user-select: none;
+  transition: all 0.2s ease;
+}
+.sotl-chat-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(20, 24, 32, 0.18);
+  border-color: var(--lv-accent, #3864d9);
+}
+.sotl-chat-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--lv-success-text, #1b7e50);
+  box-shadow: 0 0 6px var(--lv-success-text, #1b7e50);
+}
+.sotl-chat-panel {
+  width: 320px;
+  background: var(--lumiverse-fill, var(--lv-surface-raised, rgba(255, 255, 255, 0.95)));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.28)));
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(20, 24, 32, 0.22);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sotl-chat-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.15)));
+  padding-bottom: 6px;
+}
+.sotl-chat-panel__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.sotl-chat-panel__close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+  font-size: 12px;
+  color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+}
+.sotl-chat-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.sotl-chat-panel__scene {
+  font-weight: 700;
+  font-size: 13px;
+  margin: 0;
+}
+.sotl-chat-panel__meta {
+  color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+  font-size: 11px;
+}
+.sotl-chat-panel__desc {
+  margin: 2px 0 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.sotl-chat-panel__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.sotl-chat-panel__btn {
+  flex: 1;
+  font-size: 11px;
+  min-height: 28px;
+  padding: 0 8px;
+}
 @media (max-width: 520px) {
   .sotl-root {
     padding: 10px;
@@ -727,6 +1083,14 @@ var loomStyles = `
   .sotl-float {
     right: 12px;
     bottom: 88px;
+  }
+  .sotl-chat-panel-container {
+    right: 12px;
+    top: 70px;
+    max-width: calc(100vw - 24px);
+  }
+  .sotl-chat-panel {
+    width: 100%;
   }
 }
 `;
@@ -940,6 +1304,7 @@ function updateMessageCardStatus() {
     const result = mountMessageCards(contextRef, state);
     lastRenderStatus = result.status;
     ensureFloatingButton(contextRef, state);
+    ensureChatLoomPanel(contextRef, state);
   }
 }
 function rerender() {
@@ -1042,6 +1407,18 @@ function handleDrawerEvent(event) {
   if (fieldName === "placement" && field instanceof HTMLSelectElement) {
     saveSettings({ defaultPlacement: field.value });
   }
+  if (fieldName === "showChatLoomPanel" && field instanceof HTMLInputElement) {
+    saveSettings({ showChatLoomPanel: field.checked });
+  }
+  if (fieldName === "renderTrackersInMessages" && field instanceof HTMLInputElement) {
+    saveSettings({ renderTrackersInMessages: field.checked });
+  }
+  if (fieldName === "trackerPlacement" && field instanceof HTMLSelectElement) {
+    saveSettings({ trackerPlacement: field.value });
+  }
+  if (fieldName === "cardDensity" && field instanceof HTMLSelectElement) {
+    saveSettings({ cardDensity: field.value });
+  }
 }
 function handleBackendMessage(message) {
   if (message.type === "state") state = message.state;
@@ -1084,12 +1461,35 @@ function registerFrontendEvents(ctx) {
 }
 function setup(ctx) {
   contextRef = ctx;
+  registerRerenderCallback(() => rerender());
   installStyle(ctx);
   registerDrawer(ctx);
   registerSettingsMount(ctx);
   registerInputActions(ctx);
   registerBackendListener(ctx);
   registerFrontendEvents(ctx);
+  const ui = ctx.ui && typeof ctx.ui === "object" ? ctx.ui : {};
+  const uiEvents = ui.events && typeof ui.events === "object" ? ui.events : {};
+  if (typeof uiEvents.onDrawerChange === "function") {
+    try {
+      const unsub = uiEvents.onDrawerChange((payload) => {
+        setDrawerOpenState(payload.open);
+        rerender();
+      });
+      cleanupFns.push(unsub);
+    } catch {
+    }
+  }
+  if (typeof uiEvents.onSettingsChange === "function") {
+    try {
+      const unsub = uiEvents.onSettingsChange((payload) => {
+        setSettingsOpenState(payload.open);
+        rerender();
+      });
+      cleanupFns.push(unsub);
+    } catch {
+    }
+  }
   documentRef2()?.addEventListener("click", handleDrawerEvent);
   documentRef2()?.addEventListener("change", handleDrawerEvent);
   postToBackend(ctx, { type: "ready" });
@@ -1105,6 +1505,7 @@ function setup(ctx) {
     if (messageCardRetryTimer !== void 0 && typeof globalThis.clearTimeout === "function") globalThis.clearTimeout(messageCardRetryTimer);
     fallbackRoot?.remove();
     documentRef2()?.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
+    documentRef2()?.querySelector(".sotl-chat-panel-container")?.remove();
     documentRef2()?.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
     rootListenerCleanups.clear();
   };
