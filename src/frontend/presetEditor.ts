@@ -1,6 +1,6 @@
 import type { LoomPreset, LoomFrontendState } from '../shared/types.js';
 import { escapeHtml, button } from './ui.js';
-import { validateTemplateSafety } from '../shared/validation.js';
+import { validateTemplateSafety, checkPresetReadiness } from '../shared/validation.js';
 import { renderTrackerHtml } from '../shared/renderer.js';
 import { builtInPresets } from '../shared/defaults.js';
 
@@ -121,6 +121,32 @@ export function renderPresetEditor(state: LoomFrontendState): string {
       ? '<p class="sotl-note" style="color: var(--lv-accent, #3864d9);">ℹ️ Built-in templates are read-only. Click "Duplicate to Edit" to customize.</p>'
       : '<p class="sotl-note" style="color: var(--lv-success-text, #176b43);">✏️ You are editing a custom template.</p>',
     
+    (() => {
+      const readiness = checkPresetReadiness(editingPreset!);
+      const warningsList = readiness.templateWarnings.length > 0
+        ? `<div style="margin-top: 4px; padding: 4px 6px; border-radius: 4px; background: rgba(220,53,69,0.06); color: var(--lv-error-text,#bd2130); font-size: 10px;">⚠️ Unsafe elements: ${readiness.templateWarnings.map(w => escapeHtml(w)).join(', ')}</div>`
+        : '';
+      return [
+        '<div class="sotl-panel" style="margin-top: 6px; padding: 10px; background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.45)); display: grid; gap: 4px; border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.2));">',
+        '  <strong style="font-size: 11px; display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">',
+        readiness.ready 
+          ? '🟢 <span style="color: var(--lv-success-text, #176b43);">Ready to Generate</span>' 
+          : '🔴 <span style="color: var(--lv-error-text, #bd2130);">Not Ready to Generate</span>',
+        '  </strong>',
+        '  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; font-size: 11px;">',
+        `    <div>${readiness.schemaValid ? '✅' : '❌'} <strong>Schema:</strong> ${readiness.schemaValid ? 'Valid' : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml(readiness.schemaError || 'Invalid')}</span>`}</div>`,
+        `    <div>${readiness.sampleDataValid ? '✅' : '❌'} <strong>Sample Data:</strong> ${readiness.sampleDataValid ? 'Valid' : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml(readiness.sampleDataError || 'Invalid')}</span>`}</div>`,
+        `    <div>${readiness.templateSafe ? '✅' : '⚠️'} <strong>Safety:</strong> ${readiness.templateSafe ? 'Safe' : 'Unsafe elements'}</div>`,
+        `    <div>${readiness.promptPresent ? '✅' : '❌'} <strong>Instructions:</strong> ${readiness.promptPresent ? 'Present' : 'Missing'}</div>`,
+        '  </div>',
+        warningsList,
+        readiness.reasons.length > 0
+          ? `  <p style="margin: 2px 0 0; font-size: 10px; color: var(--lv-error-text, #bd2130);"><strong>Blockers:</strong> ${escapeHtml(readiness.reasons.join(', '))}</p>`
+          : '',
+        '</div>'
+      ].join('\n');
+    })(),
+
     '<div class="sotl-actions" style="margin-top: 8px; margin-bottom: 12px;">',
     button('New Template', 'editor-new', { primary: !isBuiltIn }),
     button('Duplicate to Edit', 'editor-duplicate', { primary: isBuiltIn }),

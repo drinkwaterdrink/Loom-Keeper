@@ -34,12 +34,28 @@ export interface GenerationResult {
 
 export class LoomGenerationService {
   private readonly runningKeys = new Set<string>();
+  private readonly activeGenerations = new Map<string, () => void>();
   private status: LoomGenerationStatus = { running: false };
 
   constructor(private readonly spindle: LoomSpindle) {}
 
   getStatus(): LoomGenerationStatus {
     return { ...this.status };
+  }
+
+  cancel(userId: string): boolean {
+    const cancelFn = this.activeGenerations.get(userId);
+    if (cancelFn) {
+      cancelFn();
+      return true;
+    }
+    return false;
+  }
+
+  clearStuckState(): void {
+    this.runningKeys.clear();
+    this.activeGenerations.clear();
+    this.status = { running: false };
   }
 
   async listConnections(userId: string, permissions: LoomPermissionState): Promise<LoomConnectionProfile[]> {
@@ -161,12 +177,19 @@ export class LoomGenerationService {
     chatId: string;
     message: LoomChatMessage;
     recentContext: string;
+    onProgress?: (() => void) | undefined;
   }): Promise<GenerationResult> {
     const messageId = input.message.id || 'latest';
     const key = `${input.chatId}:${messageId}:${input.message.swipe_id ?? 'main'}`;
     if (this.runningKeys.has(key)) throw new Error('Generation already running for this message.');
     this.runningKeys.add(key);
-    this.status = { running: true, message: 'Generating tracker...' };
+
+    const startTime = Date.now();
+    this.status = { running: true, message: 'Generating tracker... 0s' };
+
+    let elapsedTimer: any;
+    let timeoutTimer: any;
+
     try {
       const prompt = buildTrackerPrompt({
         preset: input.preset,
@@ -175,7 +198,57 @@ export class LoomGenerationService {
         previousSummaries: input.previousSummaries,
         recentContext: input.recentContext,
       });
-      const raw = await runSidecarGeneration(this.spindle, input.userId, prompt, input.settings.sidecarConnectionId);
+
+      // 1. Configurable Timeout setup
+      const timeoutMs = typeof input.settings.sidecarGenerationTimeoutMs === 'number'
+        ? input.settings.sidecarGenerationTimeoutMs
+        : 180000; // Default 180 seconds (3 minutes)
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        if (timeoutMs > 0) {
+          timeoutTimer = setTimeout(() => {
+            reject(new Error(`Generation timed out after ${timeoutMs / 1000} seconds.`));
+          }, timeoutMs);
+        }
+      });
+
+      // 2. Cancellation setup
+      let cancelFn: (() => void) | undefined;
+      const cancelPromise = new Promise<never>((_, reject) => {
+        cancelFn = () => reject(new Error('Generation cancelled by user.'));
+      });
+      this.activeGenerations.set(input.userId, cancelFn!);
+
+      // 3. Elapsed Time Interval setup
+      elapsedTimer = setInterval(() => {
+        const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+        let timeStr = `${elapsedSec}s`;
+        if (elapsedSec >= 60) {
+          const min = Math.floor(elapsedSec / 60);
+          const sec = elapsedSec % 60;
+          timeStr = `${min}m ${sec}s`;
+        }
+        this.status = { running: true, message: `Generating tracker... ${timeStr}` };
+        if (input.onProgress) {
+          try {
+            input.onProgress();
+          } catch {
+            // Ignored
+          }
+        }
+      }, 1000);
+
+      const generationPromise = runSidecarGeneration(this.spindle, input.userId, prompt, input.settings.sidecarConnectionId);
+
+      const raw = await Promise.race([
+        generationPromise,
+        timeoutPromise,
+        cancelPromise
+      ]);
+
+      if (elapsedTimer) clearInterval(elapsedTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+
       const data = parseJsonObject(raw);
       const validation = validateAgainstSchema(data, input.preset.schemaJson);
       const tracker: LoomTrackerState = {
@@ -195,7 +268,10 @@ export class LoomGenerationService {
       };
       return { tracker };
     } finally {
+      if (elapsedTimer) clearInterval(elapsedTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
       this.runningKeys.delete(key);
+      this.activeGenerations.delete(input.userId);
       this.status = { running: false };
     }
   }

@@ -801,7 +801,11 @@ function renderTrackerHtml(tracker, preset) {
     const rawHtml = renderTemplate(preset.htmlTemplate, data);
     const isCustom = !builtInPresets.some((p) => p.id === preset.id);
     if (isCustom) {
-      return sanitizeDomHtml(rawHtml);
+      const sanitized = sanitizeDomHtml(rawHtml);
+      if (!sanitized || sanitized.trim() === "") {
+        throw new Error("Purified HTML is empty. The template might have invalid/unsupported tags or failed sanitization.");
+      }
+      return sanitized;
     }
     return rawHtml;
   } catch (error) {
@@ -811,10 +815,11 @@ function renderTrackerHtml(tracker, preset) {
       <section class="sotl-card sotl-density-compact sotl-theme-system" data-sotl-card="true">
         <header class="sotl-card__head">
           <div class="sotl-card__header-main">
-            <div class="sotl-card__eyebrow">State of the Loom (Fallback)</div>
+            <div class="sotl-card__eyebrow" style="color: var(--lv-error-text, #bd2130); font-weight: 600;">\u26A0\uFE0F Loom Rendering Failed</div>
             <h3 class="sotl-card__title">${title}</h3>
           </div>
         </header>
+        <p class="sotl-delta" style="color: var(--lv-error-text, #bd2130); font-weight: 600; margin-bottom: 6px;">Error details: ${escapeHtml(error instanceof Error ? error.message : String(error))}</p>
         <p class="sotl-delta">${escapeHtml(tracker.compactSummary || "Continuity render failed due to a template rendering error.")}</p>
       </section>
     `;
@@ -832,7 +837,8 @@ function button(label, action, options = {}) {
   const disabled = options.disabled ? " disabled" : "";
   const primary = options.primary ? ' data-primary="true"' : "";
   const title = options.title ? ` title="${escapeHtml2(options.title)}"` : "";
-  return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml2(action)}"${primary}${disabled}${title}>${escapeHtml2(label)}</button>`;
+  const style = options.style ? ` style="${escapeHtml2(options.style)}"` : "";
+  return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml2(action)}"${primary}${disabled}${title}${style}>${escapeHtml2(label)}</button>`;
 }
 function iconButton(label, action, id) {
   return `<button class="sotl-icon-button" type="button" data-sotl-action="${escapeHtml2(action)}" data-sotl-message-id="${escapeHtml2(id)}" title="${escapeHtml2(label)}" aria-label="${escapeHtml2(label)}">${escapeHtml2(label.slice(0, 1))}</button>`;
@@ -902,6 +908,52 @@ function validateTemplateSafety(template) {
     }
   }
   return warnings;
+}
+function checkPresetReadiness(preset) {
+  const reasons = [];
+  let schemaValid = false;
+  let schemaError;
+  if (!preset.schemaJson || typeof preset.schemaJson !== "object") {
+    schemaError = "Schema JSON is missing or not an object.";
+  } else {
+    try {
+      JSON.stringify(preset.schemaJson);
+      schemaValid = true;
+    } catch (err) {
+      schemaError = `Schema JSON error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  if (!schemaValid) reasons.push("Invalid Schema JSON");
+  let sampleDataValid = false;
+  let sampleDataError;
+  if (!preset.sampleData || typeof preset.sampleData !== "object") {
+    sampleDataError = "Sample data is missing or not an object.";
+  } else {
+    try {
+      JSON.stringify(preset.sampleData);
+      sampleDataValid = true;
+    } catch (err) {
+      sampleDataError = `Sample data JSON error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  if (!sampleDataValid) reasons.push("Invalid Sample Data");
+  const warnings = validateTemplateSafety(preset.htmlTemplate || "");
+  const templateSafe = warnings.length === 0;
+  if (!templateSafe) reasons.push("Unsafe HTML template elements found");
+  const promptPresent = Boolean(preset.promptInstructions && preset.promptInstructions.trim());
+  if (!promptPresent) reasons.push("Prompt instructions are missing");
+  const ready = schemaValid && sampleDataValid && promptPresent;
+  return {
+    schemaValid,
+    schemaError,
+    sampleDataValid,
+    sampleDataError,
+    templateSafe,
+    templateWarnings: warnings,
+    promptPresent,
+    ready,
+    reasons
+  };
 }
 
 // src/frontend/presetEditor.ts
@@ -997,6 +1049,25 @@ function renderPresetEditor(state2) {
     `  <select class="sotl-select" data-sotl-editor-field="selectedPresetId">${presetsOptions}</select>`,
     "</label>",
     isBuiltIn ? '<p class="sotl-note" style="color: var(--lv-accent, #3864d9);">\u2139\uFE0F Built-in templates are read-only. Click "Duplicate to Edit" to customize.</p>' : '<p class="sotl-note" style="color: var(--lv-success-text, #176b43);">\u270F\uFE0F You are editing a custom template.</p>',
+    (() => {
+      const readiness = checkPresetReadiness(editingPreset);
+      const warningsList = readiness.templateWarnings.length > 0 ? `<div style="margin-top: 4px; padding: 4px 6px; border-radius: 4px; background: rgba(220,53,69,0.06); color: var(--lv-error-text,#bd2130); font-size: 10px;">\u26A0\uFE0F Unsafe elements: ${readiness.templateWarnings.map((w) => escapeHtml2(w)).join(", ")}</div>` : "";
+      return [
+        '<div class="sotl-panel" style="margin-top: 6px; padding: 10px; background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.45)); display: grid; gap: 4px; border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.2));">',
+        '  <strong style="font-size: 11px; display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">',
+        readiness.ready ? '\u{1F7E2} <span style="color: var(--lv-success-text, #176b43);">Ready to Generate</span>' : '\u{1F534} <span style="color: var(--lv-error-text, #bd2130);">Not Ready to Generate</span>',
+        "  </strong>",
+        '  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; font-size: 11px;">',
+        `    <div>${readiness.schemaValid ? "\u2705" : "\u274C"} <strong>Schema:</strong> ${readiness.schemaValid ? "Valid" : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml2(readiness.schemaError || "Invalid")}</span>`}</div>`,
+        `    <div>${readiness.sampleDataValid ? "\u2705" : "\u274C"} <strong>Sample Data:</strong> ${readiness.sampleDataValid ? "Valid" : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml2(readiness.sampleDataError || "Invalid")}</span>`}</div>`,
+        `    <div>${readiness.templateSafe ? "\u2705" : "\u26A0\uFE0F"} <strong>Safety:</strong> ${readiness.templateSafe ? "Safe" : "Unsafe elements"}</div>`,
+        `    <div>${readiness.promptPresent ? "\u2705" : "\u274C"} <strong>Instructions:</strong> ${readiness.promptPresent ? "Present" : "Missing"}</div>`,
+        "  </div>",
+        warningsList,
+        readiness.reasons.length > 0 ? `  <p style="margin: 2px 0 0; font-size: 10px; color: var(--lv-error-text, #bd2130);"><strong>Blockers:</strong> ${escapeHtml2(readiness.reasons.join(", "))}</p>` : "",
+        "</div>"
+      ].join("\n");
+    })(),
     '<div class="sotl-actions" style="margin-top: 8px; margin-bottom: 12px;">',
     button("New Template", "editor-new", { primary: !isBuiltIn }),
     button("Duplicate to Edit", "editor-duplicate", { primary: isBuiltIn }),
@@ -1179,7 +1250,10 @@ function renderSettingsPanel(state2, status = {}) {
     button("Open Loom Drawer", "open-drawer", { primary: true }),
     button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
     "</div>",
-    status.lastToast ? `<p class="sotl-note">${escapeHtml2(status.lastToast.message)}</p>` : "",
+    status.lastToast ? `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid ${status.lastToast.level === "success" ? "#176b43" : status.lastToast.level === "error" ? "#bd2130" : "#b06800"}; background: ${status.lastToast.level === "success" ? "rgba(27,126,80,0.07)" : status.lastToast.level === "error" ? "rgba(220,53,69,0.08)" : "rgba(255,193,7,0.08)"}; display: flex; align-items: center; gap: 8px; font-size: 12px;">
+          <span>${status.lastToast.level === "success" ? "\u2705" : status.lastToast.level === "error" ? "\u274C" : "\u26A0\uFE0F"}</span>
+          <div style="flex: 1; line-height: 1.4; color: ${status.lastToast.level === "success" ? "var(--lv-success-text,#176b43)" : status.lastToast.level === "error" ? "var(--lv-error-text,#bd2130)" : "var(--lv-warning-text,#8a4f00)"}; font-weight: 500;">${escapeHtml2(status.lastToast.message)}</div>
+        </div>` : "",
     "</section>",
     '<section class="sotl-panel">',
     "<h3>Core configuration status</h3>",
@@ -1312,6 +1386,34 @@ function renderDrawer(state2, status = {}) {
     '<label class="sotl-label">Preset',
     `<select class="sotl-select" data-sotl-field="preset">${renderPresetOptions(state2)}</select>`,
     "</label>",
+    // Collapsible Active Preset Preview & Render (QoL #1)
+    '<details class="sotl-details" style="margin-top: 4px; margin-bottom: 8px;"><summary>\u2139\uFE0F Active Template Preview & Sample Render</summary>',
+    '<div style="margin-top: 8px;">',
+    `  <p class="sotl-note" style="margin-bottom: 8px; color: var(--lv-accent, #3864d9); font-weight: 600;">Template: ${escapeHtml2(state2.activePreset.name)}</p>`,
+    `  <p class="sotl-note" style="margin-bottom: 8px; font-style: italic;">${escapeHtml2(state2.activePreset.description || "No description.")}</p>`,
+    '  <div class="sotl-preview" style="border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.18)); border-radius: 6px; padding: 4px; max-height: 200px; background: rgba(0,0,0,0.05); overflow-y: auto;">',
+    (() => {
+      try {
+        const mockTracker = {
+          version: state2.activePreset.version || "1.0.0",
+          schemaVersion: "1",
+          presetId: state2.activePreset.id,
+          chatId: "preview-chat",
+          generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          source: "manual_edit",
+          placement: state2.activePreset.defaultPlacement,
+          data: state2.activePreset.sampleData || {},
+          compactSummary: "Sample preview for " + state2.activePreset.name,
+          validation: { ok: true, issues: [] }
+        };
+        return renderTrackerHtml(mockTracker, state2.activePreset);
+      } catch (err) {
+        return `<p class="sotl-note sotl-warning" style="color: var(--lv-error-text,#bd2130);">\u26A0\uFE0F Preview Render Failed: ${escapeHtml2(err instanceof Error ? err.message : String(err))}</p>`;
+      }
+    })(),
+    "  </div>",
+    "</div>",
+    "</details>",
     '<label class="sotl-label">Sidecar connection',
     `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state2)}</select>`,
     "</label>",
@@ -1333,6 +1435,20 @@ function renderDrawer(state2, status = {}) {
     `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state2)}</select>`,
     "</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state2.settings.stripTrackerBlocksFromMessages ? "checked" : "") + "> Strip passive tracker blocks when allowed</label>",
+    // Configurable Generation Timeout Dropdown (Issue 7)
+    '<label class="sotl-label">Generation timeout',
+    (() => {
+      const timeoutMs = state2.settings.sidecarGenerationTimeoutMs ?? 18e4;
+      const options = [
+        `<option value="60000"${timeoutMs === 6e4 ? " selected" : ""}>60 seconds</option>`,
+        `<option value="120000"${timeoutMs === 12e4 ? " selected" : ""}>120 seconds</option>`,
+        `<option value="180000"${timeoutMs === 18e4 ? " selected" : ""}>180 seconds (default)</option>`,
+        `<option value="300000"${timeoutMs === 3e5 ? " selected" : ""}>300 seconds</option>`,
+        `<option value="0"${timeoutMs === 0 ? " selected" : ""}>No timeout (manual cancel only)</option>`
+      ];
+      return `<select class="sotl-select" data-sotl-field="sidecarGenerationTimeoutMs">${options.join("")}</select>`;
+    })(),
+    "</label>",
     '<label class="sotl-label">Tracker history limit',
     (() => {
       const limit = state2.settings.trackerHistoryLimit ?? 5;
@@ -1350,12 +1466,35 @@ function renderDrawer(state2, status = {}) {
     "</label>",
     "</div>",
     '<div class="sotl-actions">',
-    button("Generate tracker", "generate", { primary: true, disabled: Boolean(disabledReason), title: disabledReason }),
+    button("Generate tracker", "generate", { primary: true, disabled: Boolean(disabledReason) && !state2.generation.running, title: disabledReason }),
+    state2.generation.running ? button("Cancel Generation", "cancel-generation", { primary: false, style: "background: rgba(220,53,69,0.1); color: var(--lv-error-text,#bd2130); border-color: rgba(220,53,69,0.2);" }) : "",
     button("Refresh", "refresh"),
     button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
     "</div>",
-    disabledReason ? `<p class="sotl-note">${escapeHtml2(disabledReason)}</p>` : '<p class="sotl-note">Ready to track the latest assistant message.</p>',
-    status.lastToast ? `<p class="sotl-note">${escapeHtml2(status.lastToast.message)}</p>` : "",
+    // Refined Generate Status Banner (Issue 7 & QoL #3)
+    (() => {
+      if (state2.generation.running) {
+        return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-accent, #3864d9); background: rgba(56, 100, 217, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-accent, #3864d9);">
+          <span class="sotl-spin" style="display: inline-block;">\u23F3</span>
+          <div style="flex: 1;">${escapeHtml2(state2.generation.message || "Generating tracker...")}</div>
+        </div>`;
+      }
+      if (disabledReason) {
+        return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-warning-border, #b06800); background: rgba(255, 193, 7, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-warning-text, #8a4f00);">
+          <span>\u{1F6AB}</span>
+          <div style="flex: 1;">Blocked: ${escapeHtml2(disabledReason)}</div>
+        </div>`;
+      }
+      return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-success-border, #176b43); background: rgba(27, 126, 80, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-success-text, #176b43);">
+        <span>\u{1F7E2}</span>
+        <div style="flex: 1;">Ready to track the latest assistant message.</div>
+      </div>`;
+    })(),
+    // Refined premium banner toasts (QoL #3)
+    status.lastToast ? `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid ${status.lastToast.level === "success" ? "#176b43" : status.lastToast.level === "error" ? "#bd2130" : "#b06800"}; background: ${status.lastToast.level === "success" ? "rgba(27,126,80,0.07)" : status.lastToast.level === "error" ? "rgba(220,53,69,0.08)" : "rgba(255,193,7,0.08)"}; display: flex; align-items: center; gap: 8px; font-size: 12px;">
+          <span>${status.lastToast.level === "success" ? "\u2705" : status.lastToast.level === "error" ? "\u274C" : "\u26A0\uFE0F"}</span>
+          <div style="flex: 1; line-height: 1.4; color: ${status.lastToast.level === "success" ? "var(--lv-success-text,#176b43)" : status.lastToast.level === "error" ? "var(--lv-error-text,#bd2130)" : "var(--lv-warning-text,#8a4f00)"}; font-weight: 500;">${escapeHtml2(status.lastToast.message)}</div>
+        </div>` : "",
     "</section>",
     '<section class="sotl-panel">',
     "<h3>Current Loom" + (state2.diagnostics.lastRenderStatus?.includes("Stale") ? ' <span style="display: inline-block; background: rgba(255, 193, 7, 0.12); border: 1px solid #ffc107; color: #b58900; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-left: 8px; vertical-align: middle;">\u26A0\uFE0F Stale: New messages sent</span>' : "") + "</h3>",
@@ -1713,18 +1852,22 @@ function attachContainerClickHandler(container, ctx, state2, doc) {
         }
       }
     } else if (action === "drawer") {
-      if (openDrawerCallback) {
-        openDrawerCallback();
-      } else {
-        const ui = ctx.ui && typeof ctx.ui === "object" ? ctx.ui : {};
-        const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
-        if (typeof openDrawer === "function") {
-          openDrawer("state_of_the_loom");
+      isChatLoomPanelExpanded = false;
+      triggerRerender();
+      setTimeout(() => {
+        if (openDrawerCallback) {
+          openDrawerCallback();
         } else {
-          const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]');
-          openBtn?.click();
+          const ui = ctx.ui && typeof ctx.ui === "object" ? ctx.ui : {};
+          const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
+          if (typeof openDrawer === "function") {
+            openDrawer("state_of_the_loom");
+          } else {
+            const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]');
+            openBtn?.click();
+          }
         }
-      }
+      }, 100);
     } else if (action === "generate") {
       if (typeof ctx.sendToBackend === "function") {
         ctx.sendToBackend({ type: "generate_tracker" });
@@ -2142,17 +2285,17 @@ var loomStyles = `
   /*
    * Paw launcher coordinates. Tune these to match the host UI.
    * Target: flush right edge, just below the star/spark side icon.
-   * --sotl-launcher-top: vertical center of the button.
-   * --sotl-launcher-right: distance from right edge (0 = flush right).
-   * --sotl-launcher-size: button size, should match host icon size.
-   * --sotl-launcher-gap: gap below star icon (not directly used in CSS but kept as documentation).
+   * --sotl-launcher-top: vertical position of the button from the top.
+   * --sotl-launcher-right: distance from right edge (12px matches star icon).
+   * --sotl-launcher-size: button size, matches star icon.
+   * --sotl-launcher-gap: gap below star icon.
    */
-  --sotl-launcher-top: 21%;
-  --sotl-launcher-right: 0px;
+  --sotl-launcher-top: 130px;
+  --sotl-launcher-right: 12px;
   --sotl-launcher-size: 36px;
   --sotl-launcher-gap: 8px;
-  --sotl-launcher-top-mobile: 21%;
-  --sotl-launcher-right-mobile: 0px;
+  --sotl-launcher-top-mobile: 130px;
+  --sotl-launcher-right-mobile: 12px;
 
   font-family: var(--lv-font-sans, Inter, ui-sans-serif, system-ui, sans-serif);
   color: var(--lumiverse-text, var(--lv-text, #1e2329));
@@ -2163,11 +2306,11 @@ var loomStyles = `
   position: fixed;
   right: var(--sotl-launcher-right);
   top: var(--sotl-launcher-top);
-  transform: translateY(-50%);
+  transform: none; /* Precise absolute coordinates matching star icon gap */
 }
 .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
   position: fixed;
-  top: 76px;
+  top: 60px;
   right: 16px;
 }
 .sotl-chat-pill {
@@ -2586,6 +2729,10 @@ function handleDrawerEvent(event) {
     const action = actionButton.dataset.sotlAction || "";
     if (action === "open-drawer") activateDrawer();
     if (action === "generate") postToBackend(contextRef, { type: "generate_tracker" });
+    if (action === "cancel-generation") {
+      postToBackend(contextRef, { type: "cancel_generation" });
+      return;
+    }
     if (action === "refresh") requestBackendState({ type: "refresh_state" });
     if (action === "reset-storage") {
       const confirmFn = typeof globalThis.confirm === "function" ? globalThis.confirm : null;
@@ -2637,7 +2784,7 @@ function handleDrawerEvent(event) {
       const newPreset = {
         id: newId,
         name: "New Custom Loom",
-        version: "1.0.7",
+        version: "1.0.8",
         description: "User custom continuity tracker.",
         mode: "hybrid",
         schemaJson: {
@@ -2688,7 +2835,10 @@ function handleDrawerEvent(event) {
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
+      postToBackend(contextRef, { type: "save_preset", preset: newPreset });
+      postToBackend(contextRef, { type: "select_preset", presetId: newPreset.id });
       selectPresetForEditing(newPreset);
+      lastToast = { level: "success", message: `Duplicated and active preset set to custom duplicate '${newPreset.name}'.` };
       rerender();
       return;
     }
@@ -3013,6 +3163,10 @@ function handleDrawerEvent(event) {
   if (fieldName === "trackerHistoryLimit" && field instanceof HTMLSelectElement) {
     const val = parseInt(field.value, 10);
     if (!isNaN(val)) saveSettings({ trackerHistoryLimit: val });
+  }
+  if (fieldName === "sidecarGenerationTimeoutMs" && field instanceof HTMLSelectElement) {
+    const val = parseInt(field.value, 10);
+    if (!isNaN(val)) saveSettings({ sidecarGenerationTimeoutMs: val });
   }
 }
 function handleBackendMessage(message) {

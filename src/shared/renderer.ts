@@ -170,7 +170,11 @@ export function renderTrackerHtml(tracker: LoomTrackerState, preset: LoomPreset)
     // Custom presets undergo strict allowlist DOM sanitization; built-ins remain rich
     const isCustom = !builtInPresets.some((p) => p.id === preset.id);
     if (isCustom) {
-      return sanitizeDomHtml(rawHtml);
+      const sanitized = sanitizeDomHtml(rawHtml);
+      if (!sanitized || sanitized.trim() === '') {
+        throw new Error('Purified HTML is empty. The template might have invalid/unsupported tags or failed sanitization.');
+      }
+      return sanitized;
     }
     return rawHtml;
   } catch (error) {
@@ -181,10 +185,11 @@ export function renderTrackerHtml(tracker: LoomTrackerState, preset: LoomPreset)
       <section class="sotl-card sotl-density-compact sotl-theme-system" data-sotl-card="true">
         <header class="sotl-card__head">
           <div class="sotl-card__header-main">
-            <div class="sotl-card__eyebrow">State of the Loom (Fallback)</div>
+            <div class="sotl-card__eyebrow" style="color: var(--lv-error-text, #bd2130); font-weight: 600;">⚠️ Loom Rendering Failed</div>
             <h3 class="sotl-card__title">${title}</h3>
           </div>
         </header>
+        <p class="sotl-delta" style="color: var(--lv-error-text, #bd2130); font-weight: 600; margin-bottom: 6px;">Error details: ${escapeHtml(error instanceof Error ? error.message : String(error))}</p>
         <p class="sotl-delta">${escapeHtml(tracker.compactSummary || 'Continuity render failed due to a template rendering error.')}</p>
       </section>
     `;

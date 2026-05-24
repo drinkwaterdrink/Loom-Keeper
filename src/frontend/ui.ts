@@ -21,11 +21,12 @@ export function badge(label: string, ok: boolean): string {
   return `<span class="sotl-chip" data-ok="${ok ? 'true' : 'false'}">${escapeHtml(label)}</span>`;
 }
 
-export function button(label: string, action: string, options: { primary?: boolean; disabled?: boolean; title?: string } = {}): string {
+export function button(label: string, action: string, options: { primary?: boolean; disabled?: boolean; title?: string; style?: string } = {}): string {
   const disabled = options.disabled ? ' disabled' : '';
   const primary = options.primary ? ' data-primary="true"' : '';
   const title = options.title ? ` title="${escapeHtml(options.title)}"` : '';
-  return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml(action)}"${primary}${disabled}${title}>${escapeHtml(label)}</button>`;
+  const style = options.style ? ` style="${escapeHtml(options.style)}"` : '';
+  return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml(action)}"${primary}${disabled}${title}${style}>${escapeHtml(label)}</button>`;
 }
 
 export function iconButton(label: string, action: string, id: string): string {

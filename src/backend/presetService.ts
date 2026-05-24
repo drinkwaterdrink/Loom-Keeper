@@ -2,6 +2,7 @@ import { builtInPresets, SLIM_SCENE_PRESET_ID, STORAGE_KEYS } from '../shared/de
 import type { LoomPreset } from '../shared/types.js';
 import type { LoomSpindle } from './lumiverseApi.js';
 import { getJsonWithRecovery, setJsonWithRecovery, type StorageWarningSink } from './storageRecovery.js';
+import { normalizePreset } from '../shared/validation.js';
 
 function isPreset(value: unknown): value is LoomPreset {
   return Boolean(value)
@@ -26,7 +27,7 @@ export class LoomPresetService {
       [],
       this.onStorageWarning,
     );
-    const custom = Array.isArray(stored) ? stored.filter(isPreset) : [];
+    const custom = Array.isArray(stored) ? stored.filter(isPreset).map(normalizePreset) : [];
     const customIds = new Set(custom.map((preset) => preset.id));
     return [
       ...builtInPresets.filter((preset) => !customIds.has(preset.id)),
@@ -52,6 +53,8 @@ export class LoomPresetService {
       throw new Error(`Cannot modify built-in preset: ${preset.id}`);
     }
 
+    const normalized = normalizePreset(preset);
+
     const stored = await getJsonWithRecovery<unknown[]>(
       this.spindle,
       STORAGE_KEYS.presets,
@@ -59,13 +62,13 @@ export class LoomPresetService {
       [],
       this.onStorageWarning,
     );
-    const custom = Array.isArray(stored) ? stored.filter(isPreset) : [];
+    const custom = Array.isArray(stored) ? stored.filter(isPreset).map(normalizePreset) : [];
     
-    const existingIndex = custom.findIndex((p) => p.id === preset.id);
+    const existingIndex = custom.findIndex((p) => p.id === normalized.id);
     if (existingIndex >= 0) {
-      custom[existingIndex] = preset;
+      custom[existingIndex] = normalized;
     } else {
-      custom.push(preset);
+      custom.push(normalized);
     }
 
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, custom);

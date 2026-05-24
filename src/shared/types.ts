@@ -75,6 +75,7 @@ export interface LoomSettings {
   messageCardPlacement: 'top' | 'bottom';
   cardDensity: 'compact' | 'normal';
   trackerHistoryLimit: number;
+  sidecarGenerationTimeoutMs?: number | undefined;
 }
 
 export interface LoomPermissionState {
@@ -142,7 +143,8 @@ export type LoomFrontendMessage =
   | { type: 'export_diagnostics' }
   | { type: 'save_preset'; preset: LoomPreset }
   | { type: 'delete_preset'; presetId: string }
-  | { type: 'reset_presets' };
+  | { type: 'reset_presets' }
+  | { type: 'cancel_generation' };
 
 export type LoomBackendMessage =
   | { type: 'state'; state: LoomFrontendState }

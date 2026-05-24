@@ -272,6 +272,19 @@ class StateOfTheLoomBackend {
         return;
       }
 
+      if (message.type === 'cancel_generation') {
+        const cancelled = this.generationService.cancel(userId);
+        if (cancelled) {
+          await this.send(userId, { type: 'toast', level: 'info', message: 'Generation cancelled.' });
+        } else {
+          this.generationService.clearStuckState();
+          await this.send(userId, { type: 'toast', level: 'info', message: 'Stuck generation state cleared.' });
+        }
+        const state = await this.buildState(userId);
+        await this.send(userId, { type: 'state', state });
+        return;
+      }
+
       if (message.type === 'edit_tracker') {
         await this.saveManualTracker(userId, message.tracker);
         return;
@@ -382,6 +395,14 @@ class StateOfTheLoomBackend {
         chatId: target.chatId,
         message: target.message,
         recentContext: target.recentContext,
+        onProgress: async () => {
+          try {
+            const statePatch = await this.buildState(userId);
+            await this.send(userId, { type: 'state', state: statePatch });
+          } catch {
+            // Ignored
+          }
+        }
       });
 
     await this.trackerService.save(userId, result.tracker, settings.trackerHistoryLimit);

@@ -1,8 +1,8 @@
-# State of the Loom (v1.0.7)
+# State of the Loom (v1.0.8)
 
 State of the Loom is a Lumiverse-native Spindle extension for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.7 is a bugfix pass: fixes template import (both pasted JSON and file upload) so imports actually work, adds a visible import status area with success/failure details, supports single presets / arrays / pack objects, auto-selects imported templates, and moves the paw launcher button to just below the star/spark icon. Also adds tracker history limit controls (1.0.6) and file download/upload for templates.
+Version 1.0.8 is a comprehensive bugfix and UX polish pass: resolves custom/imported preset generation failures, fixes the Duplicate to Edit flow, eliminates HUD/drawer viewport layout split conflicts, repositions the paw launcher directly underneath the star icon with easy tuning, moves the expanded HUD slightly higher, implements settings-based long sidecar timeouts with an elapsed time counter, adds custom preset diagnostics/readiness reports, and introduces dynamic colored toast status messages.
 
 ---
 

@@ -1,4 +1,4 @@
-import type { LoomValidationIssue, LoomValidationReport } from './types.js';
+import type { LoomValidationIssue, LoomValidationReport, LoomPreset } from './types.js';
 
 type Schema = Record<string, unknown>;
 
@@ -55,8 +55,15 @@ function validateNode(value: unknown, schema: Schema, path: string, issues: Loom
 }
 
 export function validateAgainstSchema(data: Record<string, unknown>, schema: Record<string, unknown>): LoomValidationReport {
+  if (!schema || typeof schema !== 'object') {
+    return { ok: false, issues: [{ path: '', message: 'Invalid or missing schema.', severity: 'error' }] };
+  }
   const issues: LoomValidationIssue[] = [];
-  validateNode(data, schema, '', issues);
+  try {
+    validateNode(data, schema, '', issues);
+  } catch (err) {
+    issues.push({ path: '', message: `Validation crash: ${err instanceof Error ? err.message : String(err)}`, severity: 'error' });
+  }
   return {
     ok: !issues.some((issue) => issue.severity === 'error'),
     issues,
@@ -115,4 +122,126 @@ export function validateTemplateSafety(template: string): string[] {
   }
 
   return warnings;
+}
+
+export function normalizePreset(preset: Partial<LoomPreset>): LoomPreset {
+  const now = new Date().toISOString();
+  return {
+    id: String(preset.id || `custom_loom_${Date.now()}`),
+    name: String(preset.name || 'Custom Loom Template'),
+    version: String(preset.version || '1.0.8'),
+    description: String(preset.description || ''),
+    mode: (preset.mode === 'passive_extract' || preset.mode === 'sidecar_generate' || preset.mode === 'hybrid') 
+      ? preset.mode 
+      : 'hybrid',
+    schemaJson: (preset.schemaJson && typeof preset.schemaJson === 'object' && !Array.isArray(preset.schemaJson))
+      ? preset.schemaJson
+      : {
+          type: 'object',
+          required: ['schemaVersion', 'sceneTitle', 'location', 'time', 'mood', 'delta'],
+          properties: {
+            schemaVersion: { type: 'string', default: '1' },
+            sceneTitle: { type: 'string', default: '' },
+            location: { type: 'string', default: '' },
+            time: { type: 'string', default: '' },
+            mood: { type: 'string', default: '' },
+            delta: { type: 'string', default: '' }
+          }
+        },
+    htmlTemplate: String(preset.htmlTemplate || ''),
+    promptInstructions: String(preset.promptInstructions || 'Return valid JSON only. Do not use markdown fences. Update what changed.'),
+    injectionTemplate: String(preset.injectionTemplate || '[Custom Loom]\n{{compactSummary}}'),
+    maxInjectionTokens: typeof preset.maxInjectionTokens === 'number' ? preset.maxInjectionTokens : 150,
+    defaultPlacement: (preset.defaultPlacement === 'top' || preset.defaultPlacement === 'bottom')
+      ? preset.defaultPlacement
+      : 'top',
+    renderOptions: {
+      density: (preset.renderOptions?.density === 'compact' || preset.renderOptions?.density === 'normal' || preset.renderOptions?.density === 'expanded')
+        ? preset.renderOptions.density
+        : 'compact',
+      theme: (preset.renderOptions?.theme === 'system' || preset.renderOptions?.theme === 'glass' || preset.renderOptions?.theme === 'paper' || preset.renderOptions?.theme === 'terminal' || preset.renderOptions?.theme === 'minimal')
+        ? preset.renderOptions.theme
+        : 'system',
+      showControls: typeof preset.renderOptions?.showControls === 'boolean' ? preset.renderOptions.showControls : true
+    },
+    parserOptions: {
+      fenceNames: Array.isArray(preset.parserOptions?.fenceNames) ? preset.parserOptions.fenceNames : ['tracker', 'loom'],
+      strictJson: typeof preset.parserOptions?.strictJson === 'boolean' ? preset.parserOptions.strictJson : true,
+      repairInvalidJson: typeof preset.parserOptions?.repairInvalidJson === 'boolean' ? preset.parserOptions.repairInvalidJson : false
+    },
+    sampleData: (preset.sampleData && typeof preset.sampleData === 'object' && !Array.isArray(preset.sampleData))
+      ? preset.sampleData
+      : { sceneTitle: 'New Scene', location: 'Foyer' },
+    createdAt: String(preset.createdAt || now),
+    updatedAt: now
+  };
+}
+
+export interface LoomPresetReadiness {
+  schemaValid: boolean;
+  schemaError: string | undefined;
+  sampleDataValid: boolean;
+  sampleDataError: string | undefined;
+  templateSafe: boolean;
+  templateWarnings: string[];
+  promptPresent: boolean;
+  ready: boolean;
+  reasons: string[];
+}
+
+export function checkPresetReadiness(preset: LoomPreset): LoomPresetReadiness {
+  const reasons: string[] = [];
+  
+  // 1. Schema JSON check
+  let schemaValid = false;
+  let schemaError: string | undefined;
+  if (!preset.schemaJson || typeof preset.schemaJson !== 'object') {
+    schemaError = 'Schema JSON is missing or not an object.';
+  } else {
+    try {
+      JSON.stringify(preset.schemaJson);
+      schemaValid = true;
+    } catch (err) {
+      schemaError = `Schema JSON error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  if (!schemaValid) reasons.push('Invalid Schema JSON');
+
+  // 2. Sample Data JSON check
+  let sampleDataValid = false;
+  let sampleDataError: string | undefined;
+  if (!preset.sampleData || typeof preset.sampleData !== 'object') {
+    sampleDataError = 'Sample data is missing or not an object.';
+  } else {
+    try {
+      JSON.stringify(preset.sampleData);
+      sampleDataValid = true;
+    } catch (err) {
+      sampleDataError = `Sample data JSON error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  if (!sampleDataValid) reasons.push('Invalid Sample Data');
+
+  // 3. Safe template check
+  const warnings = validateTemplateSafety(preset.htmlTemplate || '');
+  const templateSafe = warnings.length === 0;
+  if (!templateSafe) reasons.push('Unsafe HTML template elements found');
+
+  // 4. Prompt instructions check
+  const promptPresent = Boolean(preset.promptInstructions && preset.promptInstructions.trim());
+  if (!promptPresent) reasons.push('Prompt instructions are missing');
+
+  const ready = schemaValid && sampleDataValid && promptPresent;
+
+  return {
+    schemaValid,
+    schemaError,
+    sampleDataValid,
+    sampleDataError,
+    templateSafe,
+    templateWarnings: warnings,
+    promptPresent,
+    ready,
+    reasons
+  };
 }

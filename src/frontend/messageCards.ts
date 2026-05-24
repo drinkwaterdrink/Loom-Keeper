@@ -413,19 +413,23 @@ function attachContainerClickHandler(
         }
       }
     } else if (action === 'drawer') {
-      if (openDrawerCallback) {
-        openDrawerCallback();
-      } else {
-        const ui = ctx.ui && typeof ctx.ui === 'object' ? ctx.ui as Record<string, unknown> : {};
-        const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
-        if (typeof openDrawer === 'function') {
-          (openDrawer as (id: string) => void)('state_of_the_loom');
+      isChatLoomPanelExpanded = false;
+      triggerRerender();
+      setTimeout(() => {
+        if (openDrawerCallback) {
+          openDrawerCallback();
         } else {
-          // Fallback clicking
-          const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]') as HTMLElement | null;
-          openBtn?.click();
+          const ui = ctx.ui && typeof ctx.ui === 'object' ? ctx.ui as Record<string, unknown> : {};
+          const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
+          if (typeof openDrawer === 'function') {
+            (openDrawer as (id: string) => void)('state_of_the_loom');
+          } else {
+            // Fallback clicking
+            const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]') as HTMLElement | null;
+            openBtn?.click();
+          }
         }
-      }
+      }, 100);
     } else if (action === 'generate') {
       if (typeof ctx.sendToBackend === 'function') {
         ctx.sendToBackend({ type: 'generate_tracker' });

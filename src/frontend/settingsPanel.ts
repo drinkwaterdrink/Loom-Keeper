@@ -70,7 +70,18 @@ export function renderSettingsPanel(state: LoomFrontendState | null, status: Loo
     button('Open Loom Drawer', 'open-drawer', { primary: true }),
     button('Reset Loom Storage', 'reset-storage', { title: 'Resets State of the Loom settings, presets, and trackers for this user.' }),
     '</div>',
-    status.lastToast ? `<p class="sotl-note">${escapeHtml(status.lastToast.message)}</p>` : '',
+    status.lastToast 
+      ? `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid ${
+          status.lastToast.level === 'success' ? '#176b43' : status.lastToast.level === 'error' ? '#bd2130' : '#b06800'
+        }; background: ${
+          status.lastToast.level === 'success' ? 'rgba(27,126,80,0.07)' : status.lastToast.level === 'error' ? 'rgba(220,53,69,0.08)' : 'rgba(255,193,7,0.08)'
+        }; display: flex; align-items: center; gap: 8px; font-size: 12px;">
+          <span>${status.lastToast.level === 'success' ? '✅' : status.lastToast.level === 'error' ? '❌' : '⚠️'}</span>
+          <div style="flex: 1; line-height: 1.4; color: ${
+            status.lastToast.level === 'success' ? 'var(--lv-success-text,#176b43)' : status.lastToast.level === 'error' ? 'var(--lv-error-text,#bd2130)' : 'var(--lv-warning-text,#8a4f00)'
+          }; font-weight: 500;">${escapeHtml(status.lastToast.message)}</div>
+        </div>`
+      : '',
     '</section>',
     '<section class="sotl-panel">',
     '<h3>Core configuration status</h3>',

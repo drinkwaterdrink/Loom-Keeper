@@ -133,6 +133,36 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     '<label class="sotl-label">Preset',
     `<select class="sotl-select" data-sotl-field="preset">${renderPresetOptions(state)}</select>`,
     '</label>',
+    
+    // Collapsible Active Preset Preview & Render (QoL #1)
+    '<details class="sotl-details" style="margin-top: 4px; margin-bottom: 8px;"><summary>ℹ️ Active Template Preview & Sample Render</summary>',
+    '<div style="margin-top: 8px;">',
+    `  <p class="sotl-note" style="margin-bottom: 8px; color: var(--lv-accent, #3864d9); font-weight: 600;">Template: ${escapeHtml(state.activePreset.name)}</p>`,
+    `  <p class="sotl-note" style="margin-bottom: 8px; font-style: italic;">${escapeHtml(state.activePreset.description || 'No description.')}</p>`,
+    '  <div class="sotl-preview" style="border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.18)); border-radius: 6px; padding: 4px; max-height: 200px; background: rgba(0,0,0,0.05); overflow-y: auto;">',
+    (() => {
+      try {
+        const mockTracker = {
+          version: state.activePreset.version || '1.0.0',
+          schemaVersion: '1',
+          presetId: state.activePreset.id,
+          chatId: 'preview-chat',
+          generatedAt: new Date().toISOString(),
+          source: 'manual_edit' as const,
+          placement: state.activePreset.defaultPlacement,
+          data: state.activePreset.sampleData || {},
+          compactSummary: 'Sample preview for ' + state.activePreset.name,
+          validation: { ok: true, issues: [] },
+        };
+        return renderTrackerHtml(mockTracker, state.activePreset);
+      } catch (err) {
+        return `<p class="sotl-note sotl-warning" style="color: var(--lv-error-text,#bd2130);">⚠️ Preview Render Failed: ${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`;
+      }
+    })(),
+    '  </div>',
+    '</div>',
+    '</details>',
+
     '<label class="sotl-label">Sidecar connection',
     `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state)}</select>`,
     '</label>',
@@ -147,18 +177,34 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     `  <option value="full"${state.settings.hudDefaultView === 'full' ? ' selected' : ''}>Full tracker</option>`,
     `</select>`,
     '</label>',
-
+ 
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderInMessages" ' + (state.settings.renderInMessages ? 'checked' : '') + '> Attach tracker cards to messages (Experimental)</label>',
-
+ 
     '<label class="sotl-label">Message card position',
     `<select class="sotl-select" data-sotl-field="messageCardPlacement">${renderPlacementOptions(state)}</select>`,
     '</label>',
-
+ 
     '<label class="sotl-label">Card density',
     `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state)}</select>`,
     '</label>',
-
+ 
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state.settings.stripTrackerBlocksFromMessages ? 'checked' : '') + '> Strip passive tracker blocks when allowed</label>',
+
+    // Configurable Generation Timeout Dropdown (Issue 7)
+    '<label class="sotl-label">Generation timeout',
+    (() => {
+      const timeoutMs = state.settings.sidecarGenerationTimeoutMs ?? 180000;
+      const options = [
+        `<option value="60000"${timeoutMs === 60000 ? ' selected' : ''}>60 seconds</option>`,
+        `<option value="120000"${timeoutMs === 120000 ? ' selected' : ''}>120 seconds</option>`,
+        `<option value="180000"${timeoutMs === 180000 ? ' selected' : ''}>180 seconds (default)</option>`,
+        `<option value="300000"${timeoutMs === 300000 ? ' selected' : ''}>300 seconds</option>`,
+        `<option value="0"${timeoutMs === 0 ? ' selected' : ''}>No timeout (manual cancel only)</option>`,
+      ];
+      return `<select class="sotl-select" data-sotl-field="sidecarGenerationTimeoutMs">${options.join('')}</select>`;
+    })(),
+    '</label>',
+
     '<label class="sotl-label">Tracker history limit',
     (() => {
       const limit = state.settings.trackerHistoryLimit ?? 5;
@@ -176,12 +222,45 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     '</label>',
     '</div>',
     '<div class="sotl-actions">',
-    button('Generate tracker', 'generate', { primary: true, disabled: Boolean(disabledReason), title: disabledReason }),
+    button('Generate tracker', 'generate', { primary: true, disabled: Boolean(disabledReason) && !state.generation.running, title: disabledReason }),
+    state.generation.running ? button('Cancel Generation', 'cancel-generation', { primary: false, style: 'background: rgba(220,53,69,0.1); color: var(--lv-error-text,#bd2130); border-color: rgba(220,53,69,0.2);' }) : '',
     button('Refresh', 'refresh'),
     button('Reset Loom Storage', 'reset-storage', { title: 'Resets State of the Loom settings, presets, and trackers for this user.' }),
     '</div>',
-    disabledReason ? `<p class="sotl-note">${escapeHtml(disabledReason)}</p>` : '<p class="sotl-note">Ready to track the latest assistant message.</p>',
-    status.lastToast ? `<p class="sotl-note">${escapeHtml(status.lastToast.message)}</p>` : '',
+
+    // Refined Generate Status Banner (Issue 7 & QoL #3)
+    (() => {
+      if (state.generation.running) {
+        return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-accent, #3864d9); background: rgba(56, 100, 217, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-accent, #3864d9);">
+          <span class="sotl-spin" style="display: inline-block;">⏳</span>
+          <div style="flex: 1;">${escapeHtml(state.generation.message || 'Generating tracker...')}</div>
+        </div>`;
+      }
+      if (disabledReason) {
+        return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-warning-border, #b06800); background: rgba(255, 193, 7, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-warning-text, #8a4f00);">
+          <span>🚫</span>
+          <div style="flex: 1;">Blocked: ${escapeHtml(disabledReason)}</div>
+        </div>`;
+      }
+      return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-success-border, #176b43); background: rgba(27, 126, 80, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-success-text, #176b43);">
+        <span>🟢</span>
+        <div style="flex: 1;">Ready to track the latest assistant message.</div>
+      </div>`;
+    })(),
+
+    // Refined premium banner toasts (QoL #3)
+    status.lastToast 
+      ? `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid ${
+          status.lastToast.level === 'success' ? '#176b43' : status.lastToast.level === 'error' ? '#bd2130' : '#b06800'
+        }; background: ${
+          status.lastToast.level === 'success' ? 'rgba(27,126,80,0.07)' : status.lastToast.level === 'error' ? 'rgba(220,53,69,0.08)' : 'rgba(255,193,7,0.08)'
+        }; display: flex; align-items: center; gap: 8px; font-size: 12px;">
+          <span>${status.lastToast.level === 'success' ? '✅' : status.lastToast.level === 'error' ? '❌' : '⚠️'}</span>
+          <div style="flex: 1; line-height: 1.4; color: ${
+            status.lastToast.level === 'success' ? 'var(--lv-success-text,#176b43)' : status.lastToast.level === 'error' ? 'var(--lv-error-text,#bd2130)' : 'var(--lv-warning-text,#8a4f00)'
+          }; font-weight: 500;">${escapeHtml(status.lastToast.message)}</div>
+        </div>`
+      : '',
     '</section>',
     '<section class="sotl-panel">',
     '<h3>Current Loom' + (state.diagnostics.lastRenderStatus?.includes('Stale') ? ' <span style="display: inline-block; background: rgba(255, 193, 7, 0.12); border: 1px solid #ffc107; color: #b58900; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-left: 8px; vertical-align: middle;">⚠️ Stale: New messages sent</span>' : '') + '</h3>',

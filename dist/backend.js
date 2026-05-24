@@ -16,7 +16,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.7";
+var LOOM_VERSION = "1.0.8";
 var LOOM_SCHEMA_VERSION = "1";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
 var STORAGE_KEYS = {
@@ -40,7 +40,8 @@ var defaultSettings = {
   renderInMessages: false,
   messageCardPlacement: "top",
   cardDensity: "compact",
-  trackerHistoryLimit: 5
+  trackerHistoryLimit: 5,
+  sidecarGenerationTimeoutMs: 18e4
 };
 var microLoomPreset = {
   id: "micro_loom",
@@ -832,11 +833,58 @@ function validateNode(value, schema, path, issues) {
   }
 }
 function validateAgainstSchema(data, schema) {
+  if (!schema || typeof schema !== "object") {
+    return { ok: false, issues: [{ path: "", message: "Invalid or missing schema.", severity: "error" }] };
+  }
   const issues = [];
-  validateNode(data, schema, "", issues);
+  try {
+    validateNode(data, schema, "", issues);
+  } catch (err) {
+    issues.push({ path: "", message: `Validation crash: ${err instanceof Error ? err.message : String(err)}`, severity: "error" });
+  }
   return {
     ok: !issues.some((issue) => issue.severity === "error"),
     issues
+  };
+}
+function normalizePreset(preset) {
+  const now2 = (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    id: String(preset.id || `custom_loom_${Date.now()}`),
+    name: String(preset.name || "Custom Loom Template"),
+    version: String(preset.version || "1.0.8"),
+    description: String(preset.description || ""),
+    mode: preset.mode === "passive_extract" || preset.mode === "sidecar_generate" || preset.mode === "hybrid" ? preset.mode : "hybrid",
+    schemaJson: preset.schemaJson && typeof preset.schemaJson === "object" && !Array.isArray(preset.schemaJson) ? preset.schemaJson : {
+      type: "object",
+      required: ["schemaVersion", "sceneTitle", "location", "time", "mood", "delta"],
+      properties: {
+        schemaVersion: { type: "string", default: "1" },
+        sceneTitle: { type: "string", default: "" },
+        location: { type: "string", default: "" },
+        time: { type: "string", default: "" },
+        mood: { type: "string", default: "" },
+        delta: { type: "string", default: "" }
+      }
+    },
+    htmlTemplate: String(preset.htmlTemplate || ""),
+    promptInstructions: String(preset.promptInstructions || "Return valid JSON only. Do not use markdown fences. Update what changed."),
+    injectionTemplate: String(preset.injectionTemplate || "[Custom Loom]\n{{compactSummary}}"),
+    maxInjectionTokens: typeof preset.maxInjectionTokens === "number" ? preset.maxInjectionTokens : 150,
+    defaultPlacement: preset.defaultPlacement === "top" || preset.defaultPlacement === "bottom" ? preset.defaultPlacement : "top",
+    renderOptions: {
+      density: preset.renderOptions?.density === "compact" || preset.renderOptions?.density === "normal" || preset.renderOptions?.density === "expanded" ? preset.renderOptions.density : "compact",
+      theme: preset.renderOptions?.theme === "system" || preset.renderOptions?.theme === "glass" || preset.renderOptions?.theme === "paper" || preset.renderOptions?.theme === "terminal" || preset.renderOptions?.theme === "minimal" ? preset.renderOptions.theme : "system",
+      showControls: typeof preset.renderOptions?.showControls === "boolean" ? preset.renderOptions.showControls : true
+    },
+    parserOptions: {
+      fenceNames: Array.isArray(preset.parserOptions?.fenceNames) ? preset.parserOptions.fenceNames : ["tracker", "loom"],
+      strictJson: typeof preset.parserOptions?.strictJson === "boolean" ? preset.parserOptions.strictJson : true,
+      repairInvalidJson: typeof preset.parserOptions?.repairInvalidJson === "boolean" ? preset.parserOptions.repairInvalidJson : false
+    },
+    sampleData: preset.sampleData && typeof preset.sampleData === "object" && !Array.isArray(preset.sampleData) ? preset.sampleData : { sceneTitle: "New Scene", location: "Foyer" },
+    createdAt: String(preset.createdAt || now2),
+    updatedAt: now2
   };
 }
 
@@ -1064,10 +1112,24 @@ var LoomGenerationService = class {
   constructor(spindle2) {
     this.spindle = spindle2;
     this.runningKeys = /* @__PURE__ */ new Set();
+    this.activeGenerations = /* @__PURE__ */ new Map();
     this.status = { running: false };
   }
   getStatus() {
     return { ...this.status };
+  }
+  cancel(userId) {
+    const cancelFn = this.activeGenerations.get(userId);
+    if (cancelFn) {
+      cancelFn();
+      return true;
+    }
+    return false;
+  }
+  clearStuckState() {
+    this.runningKeys.clear();
+    this.activeGenerations.clear();
+    this.status = { running: false };
   }
   async listConnections(userId, permissions) {
     if (!permissions.generation) return [];
@@ -1151,7 +1213,10 @@ var LoomGenerationService = class {
     const key = `${input.chatId}:${messageId}:${input.message.swipe_id ?? "main"}`;
     if (this.runningKeys.has(key)) throw new Error("Generation already running for this message.");
     this.runningKeys.add(key);
-    this.status = { running: true, message: "Generating tracker..." };
+    const startTime = Date.now();
+    this.status = { running: true, message: "Generating tracker... 0s" };
+    let elapsedTimer;
+    let timeoutTimer;
     try {
       const prompt = buildTrackerPrompt({
         preset: input.preset,
@@ -1160,7 +1225,43 @@ var LoomGenerationService = class {
         previousSummaries: input.previousSummaries,
         recentContext: input.recentContext
       });
-      const raw = await runSidecarGeneration(this.spindle, input.userId, prompt, input.settings.sidecarConnectionId);
+      const timeoutMs = typeof input.settings.sidecarGenerationTimeoutMs === "number" ? input.settings.sidecarGenerationTimeoutMs : 18e4;
+      const timeoutPromise = new Promise((_, reject) => {
+        if (timeoutMs > 0) {
+          timeoutTimer = setTimeout(() => {
+            reject(new Error(`Generation timed out after ${timeoutMs / 1e3} seconds.`));
+          }, timeoutMs);
+        }
+      });
+      let cancelFn;
+      const cancelPromise = new Promise((_, reject) => {
+        cancelFn = () => reject(new Error("Generation cancelled by user."));
+      });
+      this.activeGenerations.set(input.userId, cancelFn);
+      elapsedTimer = setInterval(() => {
+        const elapsedSec = Math.floor((Date.now() - startTime) / 1e3);
+        let timeStr = `${elapsedSec}s`;
+        if (elapsedSec >= 60) {
+          const min = Math.floor(elapsedSec / 60);
+          const sec = elapsedSec % 60;
+          timeStr = `${min}m ${sec}s`;
+        }
+        this.status = { running: true, message: `Generating tracker... ${timeStr}` };
+        if (input.onProgress) {
+          try {
+            input.onProgress();
+          } catch {
+          }
+        }
+      }, 1e3);
+      const generationPromise = runSidecarGeneration(this.spindle, input.userId, prompt, input.settings.sidecarConnectionId);
+      const raw = await Promise.race([
+        generationPromise,
+        timeoutPromise,
+        cancelPromise
+      ]);
+      if (elapsedTimer) clearInterval(elapsedTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
       const data = parseJsonObject(raw);
       const validation = validateAgainstSchema(data, input.preset.schemaJson);
       const tracker = {
@@ -1180,7 +1281,10 @@ var LoomGenerationService = class {
       };
       return { tracker };
     } finally {
+      if (elapsedTimer) clearInterval(elapsedTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
       this.runningKeys.delete(key);
+      this.activeGenerations.delete(input.userId);
       this.status = { running: false };
     }
   }
@@ -1242,7 +1346,7 @@ var LoomPresetService = class {
       [],
       this.onStorageWarning
     );
-    const custom = Array.isArray(stored) ? stored.filter(isPreset) : [];
+    const custom = Array.isArray(stored) ? stored.filter(isPreset).map(normalizePreset) : [];
     const customIds = new Set(custom.map((preset) => preset.id));
     return [
       ...builtInPresets.filter((preset) => !customIds.has(preset.id)),
@@ -1261,6 +1365,7 @@ var LoomPresetService = class {
     if (builtInPresets.some((p) => p.id === preset.id)) {
       throw new Error(`Cannot modify built-in preset: ${preset.id}`);
     }
+    const normalized = normalizePreset(preset);
     const stored = await getJsonWithRecovery(
       this.spindle,
       STORAGE_KEYS.presets,
@@ -1268,12 +1373,12 @@ var LoomPresetService = class {
       [],
       this.onStorageWarning
     );
-    const custom = Array.isArray(stored) ? stored.filter(isPreset) : [];
-    const existingIndex = custom.findIndex((p) => p.id === preset.id);
+    const custom = Array.isArray(stored) ? stored.filter(isPreset).map(normalizePreset) : [];
+    const existingIndex = custom.findIndex((p) => p.id === normalized.id);
     if (existingIndex >= 0) {
-      custom[existingIndex] = preset;
+      custom[existingIndex] = normalized;
     } else {
-      custom.push(preset);
+      custom.push(normalized);
     }
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, custom);
     return this.loadAll(userId);
@@ -1688,6 +1793,18 @@ var StateOfTheLoomBackend = class {
         await this.generateTrackerForUser(userId, message.chatId, message.messageId);
         return;
       }
+      if (message.type === "cancel_generation") {
+        const cancelled = this.generationService.cancel(userId);
+        if (cancelled) {
+          await this.send(userId, { type: "toast", level: "info", message: "Generation cancelled." });
+        } else {
+          this.generationService.clearStuckState();
+          await this.send(userId, { type: "toast", level: "info", message: "Stuck generation state cleared." });
+        }
+        const state = await this.buildState(userId);
+        await this.send(userId, { type: "state", state });
+        return;
+      }
       if (message.type === "edit_tracker") {
         await this.saveManualTracker(userId, message.tracker);
         return;
@@ -1777,7 +1894,14 @@ var StateOfTheLoomBackend = class {
       previousSummaries,
       chatId: target.chatId,
       message: target.message,
-      recentContext: target.recentContext
+      recentContext: target.recentContext,
+      onProgress: async () => {
+        try {
+          const statePatch = await this.buildState(userId);
+          await this.send(userId, { type: "state", state: statePatch });
+        } catch {
+        }
+      }
     });
     await this.trackerService.save(userId, result.tracker, settings.trackerHistoryLimit);
     await this.generationService.stripPassiveBlockIfAllowed({

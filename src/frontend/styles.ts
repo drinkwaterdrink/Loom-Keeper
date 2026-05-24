@@ -381,17 +381,17 @@ export const loomStyles = `
   /*
    * Paw launcher coordinates. Tune these to match the host UI.
    * Target: flush right edge, just below the star/spark side icon.
-   * --sotl-launcher-top: vertical center of the button.
-   * --sotl-launcher-right: distance from right edge (0 = flush right).
-   * --sotl-launcher-size: button size, should match host icon size.
-   * --sotl-launcher-gap: gap below star icon (not directly used in CSS but kept as documentation).
+   * --sotl-launcher-top: vertical position of the button from the top.
+   * --sotl-launcher-right: distance from right edge (12px matches star icon).
+   * --sotl-launcher-size: button size, matches star icon.
+   * --sotl-launcher-gap: gap below star icon.
    */
-  --sotl-launcher-top: 21%;
-  --sotl-launcher-right: 0px;
+  --sotl-launcher-top: 130px;
+  --sotl-launcher-right: 12px;
   --sotl-launcher-size: 36px;
   --sotl-launcher-gap: 8px;
-  --sotl-launcher-top-mobile: 21%;
-  --sotl-launcher-right-mobile: 0px;
+  --sotl-launcher-top-mobile: 130px;
+  --sotl-launcher-right-mobile: 12px;
 
   font-family: var(--lv-font-sans, Inter, ui-sans-serif, system-ui, sans-serif);
   color: var(--lumiverse-text, var(--lv-text, #1e2329));
@@ -402,11 +402,11 @@ export const loomStyles = `
   position: fixed;
   right: var(--sotl-launcher-right);
   top: var(--sotl-launcher-top);
-  transform: translateY(-50%);
+  transform: none; /* Precise absolute coordinates matching star icon gap */
 }
 .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
   position: fixed;
-  top: 76px;
+  top: 60px;
   right: 16px;
 }
 .sotl-chat-pill {

@@ -304,6 +304,10 @@ function handleDrawerEvent(event: Event): void {
     const action = actionButton.dataset.sotlAction || '';
     if (action === 'open-drawer') activateDrawer();
     if (action === 'generate') postToBackend(contextRef, { type: 'generate_tracker' });
+    if (action === 'cancel-generation') {
+      postToBackend(contextRef, { type: 'cancel_generation' } as any);
+      return;
+    }
     if (action === 'refresh') requestBackendState({ type: 'refresh_state' });
     if (action === 'reset-storage') {
       const confirmFn = typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
@@ -360,7 +364,7 @@ function handleDrawerEvent(event: Event): void {
       const newPreset = {
         id: newId,
         name: 'New Custom Loom',
-        version: '1.0.7',
+        version: '1.0.8',
         description: 'User custom continuity tracker.',
         mode: 'hybrid' as const,
         schemaJson: {
@@ -412,7 +416,11 @@ function handleDrawerEvent(event: Event): void {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+      // Immediately save to backend, make active, and select for editing
+      postToBackend(contextRef, { type: 'save_preset', preset: newPreset });
+      postToBackend(contextRef, { type: 'select_preset', presetId: newPreset.id });
       selectPresetForEditing(newPreset);
+      lastToast = { level: 'success', message: `Duplicated and active preset set to custom duplicate '${newPreset.name}'.` };
       rerender();
       return;
     }
@@ -756,6 +764,10 @@ function handleDrawerEvent(event: Event): void {
   if (fieldName === 'trackerHistoryLimit' && field instanceof HTMLSelectElement) {
     const val = parseInt(field.value, 10);
     if (!isNaN(val)) saveSettings({ trackerHistoryLimit: val });
+  }
+  if (fieldName === 'sidecarGenerationTimeoutMs' && field instanceof HTMLSelectElement) {
+    const val = parseInt(field.value, 10);
+    if (!isNaN(val)) saveSettings({ sidecarGenerationTimeoutMs: val });
   }
 }
 
