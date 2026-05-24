@@ -97,35 +97,6 @@ function renderPresetDetails(preset) {
 }
 
 // src/frontend/settingsPanel.ts
-function renderPlacementOptions(state2) {
-  return ["top", "bottom", "drawer", "hidden", "disabled"].map((placement) => {
-    const selected = state2.settings.defaultPlacement === placement ? " selected" : "";
-    return `<option value="${placement}"${selected}>${placement}</option>`;
-  }).join("");
-}
-function renderConnectionOptions(state2) {
-  const selected = state2.settings.sidecarConnectionId || "";
-  const options = [
-    `<option value=""${selected ? "" : " selected"}>Default/current connection</option>`,
-    ...state2.connections.map((connection) => {
-      const label = [connection.name, connection.model ? `(${connection.model})` : ""].filter(Boolean).join(" ");
-      return `<option value="${escapeHtml2(connection.id)}"${selected === connection.id ? " selected" : ""}>${escapeHtml2(label)}</option>`;
-    })
-  ];
-  return options.join("");
-}
-function renderTrackerPlacementOptions(state2) {
-  return ["drawer", "chat_panel", "message_card", "both"].map((placement) => {
-    const selected = state2.settings.trackerPlacement === placement ? " selected" : "";
-    return `<option value="${placement}"${selected}>${placement}</option>`;
-  }).join("");
-}
-function renderCardDensityOptions(state2) {
-  return ["compact", "normal"].map((density) => {
-    const selected = state2.settings.cardDensity === density ? " selected" : "";
-    return `<option value="${density}"${selected}>${density}</option>`;
-  }).join("");
-}
 function renderFeatureBreakdown(collapsible = false) {
   const content = [
     '<div class="sotl-feature-grid">',
@@ -159,7 +130,7 @@ function renderFeatureBreakdown(collapsible = false) {
 }
 function renderSettingsPanel(state2, status = {}) {
   if (!state2) {
-    const offlineText = status.backendTimedOut ? "Backend is not responding. The runtime may still be crashed; use Reset Loom Storage, then Refresh after the extension reloads." : "Frontend loaded. Waiting for the backend state packet...";
+    const offlineText = status.backendTimedOut ? "Backend is not responding. Try Reset Loom Storage, then Refresh after the extension reloads." : "Frontend loaded. Waiting for backend state...";
     return [
       '<div class="sotl-root sotl-settings" data-sotl-settings="true">',
       '<section class="sotl-panel">',
@@ -172,78 +143,40 @@ function renderSettingsPanel(state2, status = {}) {
       button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
       "</div>",
       "</section>",
-      renderFeatureBreakdown(),
       "</div>"
     ].join("");
   }
-  const disabledReason = state2.generation.disabledReason || "";
   return [
     '<div class="sotl-root sotl-settings" data-sotl-settings="true">',
     '<section class="sotl-panel">',
     "<h2>State of the Loom</h2>",
-    `<p class="sotl-note">Active chat: ${escapeHtml2(state2.activeChat.name || state2.activeChat.id || "Unavailable")}</p>`,
+    `<p class="sotl-note">Active chat: ${escapeHtml2(state2.activeChat.name || state2.activeChat.id || "None")}</p>`,
     '<div class="sotl-status">',
     badge("Backend ready", state2.backendReady),
     badge("Chats", state2.permissions.chats),
     badge("Chat mutation", state2.permissions.chat_mutation),
     badge("Generation", state2.permissions.generation),
-    badge("Settings UI", Boolean(state2.permissions.app_manipulation)),
     "</div>",
     '<div class="sotl-actions">',
     button("Open Loom Drawer", "open-drawer", { primary: true }),
-    button("Generate tracker", "generate", { disabled: Boolean(disabledReason), title: disabledReason }),
-    button("Refresh", "refresh"),
     button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
     "</div>",
-    disabledReason ? `<p class="sotl-note">${escapeHtml2(disabledReason)}</p>` : '<p class="sotl-note">Ready. Use Generate after an assistant reply, or open the drawer for the full HUD.</p>',
     status.lastToast ? `<p class="sotl-note">${escapeHtml2(status.lastToast.message)}</p>` : "",
     "</section>",
     '<section class="sotl-panel">',
-    "<h3>Core settings</h3>",
+    "<h3>Core configuration status</h3>",
+    '<p class="sotl-note" style="margin-bottom: 12px;">All detailed settings, preset configurations, sidecar connections, and diagnostics are managed within the main Loom Drawer.</p>',
     '<div class="sotl-fields">',
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="enabled" ${state2.settings.enabled ? "checked" : ""}> Extension enabled</label>`,
-    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ${state2.settings.autoGenerate ? "checked" : ""}> Auto-generate after assistant messages</label>`,
-    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="fallback" ${state2.settings.useDefaultConnectionFallback ? "checked" : ""}> Use default/current connection fallback</label>`,
-    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="floating" ${state2.settings.showFloatingButton ? "checked" : ""}> Show desktop floating launcher</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ${state2.settings.showChatLoomPanel ? "checked" : ""}> Show chat-screen Loom panel</label>`,
-    '<label class="sotl-label">HUD Panel View',
-    `<select class="sotl-select" data-sotl-field="trackerHudView">`,
-    `  <option value="compact"${state2.settings.trackerHudView === "compact" ? " selected" : ""}>Compact summary only</option>`,
-    `  <option value="full"${state2.settings.trackerHudView === "full" ? " selected" : ""}>Full rendered tracker</option>`,
-    `</select>`,
-    "</label>",
-    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ${state2.settings.renderTrackersInMessages ? "checked" : ""}> Render trackers inside chat messages</label>`,
-    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="messageButtons" ${state2.settings.showMessageButtons ? "checked" : ""}> Show message card buttons</label>`,
-    '<label class="sotl-label">Sidecar connection',
-    `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state2)}</select>`,
-    "</label>",
-    '<label class="sotl-label">Default placement',
-    `<select class="sotl-select" data-sotl-field="placement">${renderPlacementOptions(state2)}</select>`,
-    "</label>",
-    '<label class="sotl-label">Tracker display scope',
-    `<select class="sotl-select" data-sotl-field="trackerPlacement">${renderTrackerPlacementOptions(state2)}</select>`,
-    "</label>",
-    '<label class="sotl-label">Card density',
-    `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state2)}</select>`,
-    "</label>",
     "</div>",
-    "</section>",
-    renderFeatureBreakdown(),
-    '<section class="sotl-panel">',
-    "<h3>Diagnostics</h3>",
-    state2.diagnostics.storageWarning ? `<p class="sotl-note sotl-warning">${escapeHtml2(state2.diagnostics.storageWarning)}</p>` : "",
-    `<p class="sotl-note">${escapeHtml2(state2.diagnostics.renderLimitation || "")}</p>`,
-    state2.diagnostics.lastError ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastError)}</p>` : "",
-    state2.diagnostics.lastGenerationError ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastGenerationError)}</p>` : "",
-    status.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(status.lastRenderStatus)}</p>` : "",
-    state2.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastRenderStatus)}</p>` : "",
     "</section>",
     "</div>"
   ].join("");
 }
 
 // src/frontend/drawer.ts
-function renderConnectionOptions2(state2) {
+function renderConnectionOptions(state2) {
   const selected = state2.settings.sidecarConnectionId || "";
   const options = [
     `<option value=""${selected ? "" : " selected"}>Use default/current connection</option>`,
@@ -262,6 +195,36 @@ function renderPresetOptions(state2) {
   return state2.presets.map((preset) => {
     const selected = preset.id === state2.settings.activePresetId ? " selected" : "";
     return `<option value="${escapeHtml2(preset.id)}"${selected}>${escapeHtml2(preset.name)}</option>`;
+  }).join("");
+}
+function renderTrackerPlacementOptions(state2) {
+  return ["drawer", "chat_panel", "message_card", "both"].map((placement) => {
+    let label = placement;
+    if (placement === "drawer") label = "Drawer only";
+    if (placement === "chat_panel") label = "Floating HUD only";
+    if (placement === "message_card") label = "Attach to messages";
+    if (placement === "both") label = "Floating HUD + message cards";
+    const selected = state2.settings.trackerPlacement === placement ? " selected" : "";
+    return `<option value="${placement}"${selected}>${label}</option>`;
+  }).join("");
+}
+function renderPlacementOptions(state2) {
+  return ["top", "bottom", "drawer", "hidden", "disabled"].map((placement) => {
+    let label = placement;
+    if (placement === "top") label = "Top of message";
+    if (placement === "bottom") label = "Bottom of message";
+    if (placement === "drawer") label = "Drawer only";
+    if (placement === "hidden") label = "Hidden";
+    if (placement === "disabled") label = "Disabled";
+    const selected = state2.settings.defaultPlacement === placement ? " selected" : "";
+    return `<option value="${placement}"${selected}>${label}</option>`;
+  }).join("");
+}
+function renderCardDensityOptions(state2) {
+  return ["compact", "normal"].map((density) => {
+    let label = density === "compact" ? "Compact density" : "Normal density";
+    const selected = state2.settings.cardDensity === density ? " selected" : "";
+    return `<option value="${density}"${selected}>${label}</option>`;
   }).join("");
 }
 function renderLatestTracker(state2) {
@@ -341,19 +304,28 @@ function renderDrawer(state2, status = {}) {
     `<select class="sotl-select" data-sotl-field="preset">${renderPresetOptions(state2)}</select>`,
     "</label>",
     '<label class="sotl-label">Sidecar connection',
-    `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions2(state2)}</select>`,
+    `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state2)}</select>`,
     "</label>",
     `<p class="sotl-note">Connection: ${escapeHtml2(selectedConnection?.name || (state2.settings.useDefaultConnectionFallback ? "default/current fallback" : "none selected"))}</p>`,
     !state2.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : "",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state2.settings.autoGenerate ? "checked" : "") + "> Auto-generate after assistant messages</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ' + (state2.settings.showChatLoomPanel ? "checked" : "") + "> Show chat-screen Loom panel</label>",
-    '<label class="sotl-label">HUD Panel View',
+    '<label class="sotl-label">HUD detail level',
     `<select class="sotl-select" data-sotl-field="trackerHudView">`,
-    `  <option value="compact"${state2.settings.trackerHudView === "compact" ? " selected" : ""}>Compact summary only</option>`,
-    `  <option value="full"${state2.settings.trackerHudView === "full" ? " selected" : ""}>Full rendered tracker</option>`,
+    `  <option value="compact"${state2.settings.trackerHudView === "compact" ? " selected" : ""}>Compact summary</option>`,
+    `  <option value="full"${state2.settings.trackerHudView === "full" ? " selected" : ""}>Full tracker</option>`,
     `</select>`,
     "</label>",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ' + (state2.settings.renderTrackersInMessages ? "checked" : "") + "> Render trackers inside chat messages</label>",
+    '<label class="sotl-label">Where to show tracker',
+    `<select class="sotl-select" data-sotl-field="trackerPlacement">${renderTrackerPlacementOptions(state2)}</select>`,
+    "</label>",
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ' + (state2.settings.renderTrackersInMessages ? "checked" : "") + "> Render trackers inside chat messages (Experimental)</label>",
+    '<label class="sotl-label">Message card placement',
+    `<select class="sotl-select" data-sotl-field="placement">${renderPlacementOptions(state2)}</select>`,
+    "</label>",
+    '<label class="sotl-label">Card density',
+    `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state2)}</select>`,
+    "</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state2.settings.stripTrackerBlocksFromMessages ? "checked" : "") + "> Strip passive tracker blocks when allowed</label>",
     "</div>",
     '<div class="sotl-actions">',
@@ -455,7 +427,8 @@ function mountMessageCards(ctx, state2) {
   const doc = documentRef();
   if (!doc) return { status: "Message-card renderer unavailable: no document." };
   if (!state2) return { status: "Message-card renderer waiting for backend state." };
-  if (!state2.settings.renderTrackersInMessages) {
+  const showCards = state2.settings.renderTrackersInMessages && (state2.settings.trackerPlacement === "message_card" || state2.settings.trackerPlacement === "both");
+  if (!showCards) {
     cleanupMessageCards(ctx);
     return { status: "Message-card rendering is disabled in settings." };
   }
@@ -596,7 +569,9 @@ function ensureChatLoomPanel(ctx, state2) {
   const doc = documentRef();
   if (!doc) return;
   doc.querySelector(".sotl-chat-panel-container")?.remove();
-  if (!state2 || !state2.settings.showChatLoomPanel) return;
+  if (!state2) return;
+  const showPanel = state2.settings.showChatLoomPanel && (state2.settings.trackerPlacement === "chat_panel" || state2.settings.trackerPlacement === "both");
+  if (!showPanel) return;
   if (isDrawerOpen || isSettingsOpen) return;
   const container = doc.createElement("div");
   container.className = "sotl-chat-panel-container";
@@ -1056,7 +1031,7 @@ var loomStyles = `
 .sotl-chat-panel-container:not(.sotl-chat-panel-container--expanded) {
   position: fixed;
   right: 12px;
-  top: 58%;
+  top: 36%;
   transform: translateY(-50%);
 }
 .sotl-chat-panel-container.sotl-chat-panel-container--expanded {

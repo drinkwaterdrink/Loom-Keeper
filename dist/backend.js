@@ -36,9 +36,9 @@ var defaultSettings = {
   showMessageButtons: true,
   debugMode: false,
   promptInjectionEnabled: false,
-  showChatLoomPanel: false,
-  renderTrackersInMessages: true,
-  trackerPlacement: "both",
+  showChatLoomPanel: true,
+  renderTrackersInMessages: false,
+  trackerPlacement: "chat_panel",
   cardDensity: "compact",
   trackerHudView: "full"
 };

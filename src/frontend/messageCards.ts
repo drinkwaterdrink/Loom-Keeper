@@ -98,7 +98,9 @@ export function mountMessageCards(ctx: FrontendContext, state: LoomFrontendState
   if (!doc) return { status: 'Message-card renderer unavailable: no document.' };
   if (!state) return { status: 'Message-card renderer waiting for backend state.' };
 
-  if (!state.settings.renderTrackersInMessages) {
+  const showCards = state.settings.renderTrackersInMessages && 
+    (state.settings.trackerPlacement === 'message_card' || state.settings.trackerPlacement === 'both');
+  if (!showCards) {
     cleanupMessageCards(ctx);
     return { status: 'Message-card rendering is disabled in settings.' };
   }
@@ -273,7 +275,11 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
   // Clean up any existing panel first
   doc.querySelector('.sotl-chat-panel-container')?.remove();
 
-  if (!state || !state.settings.showChatLoomPanel) return;
+  if (!state) return;
+
+  const showPanel = state.settings.showChatLoomPanel && 
+    (state.settings.trackerPlacement === 'chat_panel' || state.settings.trackerPlacement === 'both');
+  if (!showPanel) return;
 
   // Auto-hide when either the full drawer HUD or settings modal are active
   if (isDrawerOpen || isSettingsOpen) return;

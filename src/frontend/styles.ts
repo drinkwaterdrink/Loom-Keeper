@@ -381,7 +381,7 @@ export const loomStyles = `
 .sotl-chat-panel-container:not(.sotl-chat-panel-container--expanded) {
   position: fixed;
   right: 12px;
-  top: 58%;
+  top: 36%;
   transform: translateY(-50%);
 }
 .sotl-chat-panel-container.sotl-chat-panel-container--expanded {

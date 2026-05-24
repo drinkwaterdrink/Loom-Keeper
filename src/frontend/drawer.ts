@@ -27,6 +27,39 @@ function renderPresetOptions(state: LoomFrontendState): string {
   }).join('');
 }
 
+function renderTrackerPlacementOptions(state: LoomFrontendState): string {
+  return ['drawer', 'chat_panel', 'message_card', 'both'].map((placement) => {
+    let label = placement;
+    if (placement === 'drawer') label = 'Drawer only';
+    if (placement === 'chat_panel') label = 'Floating HUD only';
+    if (placement === 'message_card') label = 'Attach to messages';
+    if (placement === 'both') label = 'Floating HUD + message cards';
+    const selected = state.settings.trackerPlacement === placement ? ' selected' : '';
+    return `<option value="${placement}"${selected}>${label}</option>`;
+  }).join('');
+}
+
+function renderPlacementOptions(state: LoomFrontendState): string {
+  return ['top', 'bottom', 'drawer', 'hidden', 'disabled'].map((placement) => {
+    let label = placement;
+    if (placement === 'top') label = 'Top of message';
+    if (placement === 'bottom') label = 'Bottom of message';
+    if (placement === 'drawer') label = 'Drawer only';
+    if (placement === 'hidden') label = 'Hidden';
+    if (placement === 'disabled') label = 'Disabled';
+    const selected = state.settings.defaultPlacement === placement ? ' selected' : '';
+    return `<option value="${placement}"${selected}>${label}</option>`;
+  }).join('');
+}
+
+function renderCardDensityOptions(state: LoomFrontendState): string {
+  return ['compact', 'normal'].map((density) => {
+    let label = density === 'compact' ? 'Compact density' : 'Normal density';
+    const selected = state.settings.cardDensity === density ? ' selected' : '';
+    return `<option value="${density}"${selected}>${label}</option>`;
+  }).join('');
+}
+
 function renderLatestTracker(state: LoomFrontendState): string {
   if (!state.latestTracker) {
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
@@ -117,13 +150,28 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     !state.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : '',
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state.settings.autoGenerate ? 'checked' : '') + '> Auto-generate after assistant messages</label>',
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ' + (state.settings.showChatLoomPanel ? 'checked' : '') + '> Show chat-screen Loom panel</label>',
-    '<label class="sotl-label">HUD Panel View',
+    
+    '<label class="sotl-label">HUD detail level',
     `<select class="sotl-select" data-sotl-field="trackerHudView">`,
-    `  <option value="compact"${state.settings.trackerHudView === 'compact' ? ' selected' : ''}>Compact summary only</option>`,
-    `  <option value="full"${state.settings.trackerHudView === 'full' ? ' selected' : ''}>Full rendered tracker</option>`,
+    `  <option value="compact"${state.settings.trackerHudView === 'compact' ? ' selected' : ''}>Compact summary</option>`,
+    `  <option value="full"${state.settings.trackerHudView === 'full' ? ' selected' : ''}>Full tracker</option>`,
     `</select>`,
     '</label>',
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ' + (state.settings.renderTrackersInMessages ? 'checked' : '') + '> Render trackers inside chat messages</label>',
+
+    '<label class="sotl-label">Where to show tracker',
+    `<select class="sotl-select" data-sotl-field="trackerPlacement">${renderTrackerPlacementOptions(state)}</select>`,
+    '</label>',
+
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ' + (state.settings.renderTrackersInMessages ? 'checked' : '') + '> Render trackers inside chat messages (Experimental)</label>',
+
+    '<label class="sotl-label">Message card placement',
+    `<select class="sotl-select" data-sotl-field="placement">${renderPlacementOptions(state)}</select>`,
+    '</label>',
+
+    '<label class="sotl-label">Card density',
+    `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state)}</select>`,
+    '</label>',
+
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state.settings.stripTrackerBlocksFromMessages ? 'checked' : '') + '> Strip passive tracker blocks when allowed</label>',
     '</div>',
     '<div class="sotl-actions">',
