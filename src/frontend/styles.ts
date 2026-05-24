@@ -372,7 +372,17 @@ export const loomStyles = `
   color: var(--lv-on-accent, #fff) !important;
   border-color: var(--lv-accent, #3864d9) !important;
 }
+/*
+ * State of the Loom Collapsed Paw Print HUD Launcher Position.
+ * Easily tune the placement coordinates by changing these CSS variables.
+ * They are designed as a safe compatibility overlay, isolated from host DOM.
+ */
 .sotl-chat-panel-container {
+  --sotl-launcher-top: 36%;
+  --sotl-launcher-right: 12px;
+  --sotl-launcher-top-mobile: 36%;
+  --sotl-launcher-right-mobile: 12px;
+
   font-family: var(--lv-font-sans, Inter, ui-sans-serif, system-ui, sans-serif);
   color: var(--lumiverse-text, var(--lv-text, #1e2329));
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -380,8 +390,8 @@ export const loomStyles = `
 }
 .sotl-chat-panel-container:not(.sotl-chat-panel-container--expanded) {
   position: fixed;
-  right: 12px;
-  top: 36%;
+  right: var(--sotl-launcher-right);
+  top: var(--sotl-launcher-top);
   transform: translateY(-50%);
 }
 .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
@@ -534,7 +544,9 @@ export const loomStyles = `
     bottom: 88px;
   }
   .sotl-chat-panel-container:not(.sotl-chat-panel-container--expanded) {
-    display: none !important;
+    right: var(--sotl-launcher-right-mobile);
+    top: var(--sotl-launcher-top-mobile);
+    display: flex !important;
   }
   .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
     right: 12px;

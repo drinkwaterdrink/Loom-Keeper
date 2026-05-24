@@ -34,13 +34,39 @@ export class LoomSettingsService {
   }
 
   private merge(value: unknown): LoomSettings {
-    const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Partial<LoomSettings> : {};
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? { ...value as Record<string, any> } : {};
+
+    // 1. Conservative Settings Migration: map old layout/display keys to new keys
+    if ('showChatLoomPanel' in raw && typeof raw.showChatLoomPanel === 'boolean') {
+      raw.showChatHudLauncher = raw.showChatLoomPanel;
+    }
+    if ('trackerHudView' in raw && (raw.trackerHudView === 'compact' || raw.trackerHudView === 'full')) {
+      raw.hudDefaultView = raw.trackerHudView;
+    }
+    if ('renderTrackersInMessages' in raw && typeof raw.renderTrackersInMessages === 'boolean') {
+      raw.renderInMessages = raw.renderTrackersInMessages;
+    }
+    if ('defaultPlacement' in raw) {
+      if (raw.defaultPlacement === 'top' || raw.defaultPlacement === 'bottom') {
+        raw.messageCardPlacement = raw.defaultPlacement;
+      }
+    }
+
+    // Clean up deprecated layout keys
+    delete raw.showChatLoomPanel;
+    delete raw.trackerHudView;
+    delete raw.renderTrackersInMessages;
+    delete raw.defaultPlacement;
+    delete raw.trackerPlacement;
+    delete raw.trackerDisplayScope;
+
     const next: LoomSettings = {
       ...defaultSettings,
-      ...record,
-    };
+      ...raw,
+    } as unknown as LoomSettings;
+
     if (!next.activePresetId) next.activePresetId = defaultSettings.activePresetId;
-    if (!next.defaultPlacement) next.defaultPlacement = defaultSettings.defaultPlacement;
+    if (!next.messageCardPlacement) next.messageCardPlacement = defaultSettings.messageCardPlacement;
     return next;
   }
 }

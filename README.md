@@ -1,6 +1,6 @@
 # State of the Loom
 
-State of the Loom is a Lumiverse-native Spindle extension for roleplay state continuity tracking. Version 1.0.3 implements the stable foundation: extension settings UI, drawer UI, input-bar actions, settings persistence with corrupt-storage recovery, a Slim Scene Loom preset, passive tracker parsing, manual/sidecar tracker generation, latest-state storage, and best-effort message-card rendering.
+State of the Loom is a Lumiverse-native Spindle extension for roleplay state continuity tracking. Version 1.0.4 implements the stable foundation: extension settings UI, drawer UI, input-bar actions, settings persistence with corrupt-storage recovery, a Slim Scene Loom preset, passive tracker parsing, manual/sidecar tracker generation, latest-state storage, and best-effort message-card rendering.
 
 ## How to turn it on
 

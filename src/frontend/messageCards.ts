@@ -98,8 +98,7 @@ export function mountMessageCards(ctx: FrontendContext, state: LoomFrontendState
   if (!doc) return { status: 'Message-card renderer unavailable: no document.' };
   if (!state) return { status: 'Message-card renderer waiting for backend state.' };
 
-  const showCards = state.settings.renderTrackersInMessages && 
-    (state.settings.trackerPlacement === 'message_card' || state.settings.trackerPlacement === 'both');
+  const showCards = state.settings.renderInMessages;
   if (!showCards) {
     cleanupMessageCards(ctx);
     return { status: 'Message-card rendering is disabled in settings.' };
@@ -188,7 +187,7 @@ export function mountMessageCards(ctx: FrontendContext, state: LoomFrontendState
 
 function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFrontendState): string {
   const isGenerating = state.generation.running;
-  const isCompact = state.settings.trackerHudView === 'compact';
+  const isCompact = state.settings.hudDefaultView === 'compact';
 
   // Top header icons next to Close button
   const drawerIcon = `
@@ -229,7 +228,8 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
       '<div class="sotl-chat-panel">',
       header,
       '  <div class="sotl-chat-panel__body">',
-      '    <p class="sotl-chat-panel__desc">No tracker has been stored for this chat yet. Click the Generate icon above to start tracking.</p>',
+      '    <p class="sotl-chat-panel__desc">No tracker has been stored for this chat yet.</p>',
+      `    <button class="sotl-button" data-sotl-panel-action="generate" ${isGenerating || state.generation.disabledReason ? 'disabled' : ''} style="margin-top: 6px; width: 100%; justify-content: center;">Generate Tracker</button>`,
       '  </div>',
       '</div>'
     ].join('\n');
@@ -277,12 +277,30 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
 
   if (!state) return;
 
-  const showPanel = state.settings.showChatLoomPanel && 
-    (state.settings.trackerPlacement === 'chat_panel' || state.settings.trackerPlacement === 'both');
+  // Enforce new simplified display model
+  const showPanel = state.settings.showChatHudLauncher;
   if (!showPanel) return;
 
-  // Auto-hide when either the full drawer HUD or settings modal are active
-  if (isDrawerOpen || isSettingsOpen) return;
+  // Self-healing Soft Conflict Detection Strategy
+  const visibleDrawer = doc.querySelector('.lumiverse-drawer, .drawer, [data-drawer], #drawer, .sotl-drawer');
+  const visibleSettings = doc.querySelector('.lumiverse-settings, .settings-modal, [data-settings], #settings, .sotl-settings');
+  
+  let softHide = false;
+  if (visibleDrawer) {
+    const rect = visibleDrawer.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) softHide = true;
+  }
+  if (visibleSettings) {
+    const rect = visibleSettings.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) softHide = true;
+  }
+
+  // Heal state flags dynamically if DOM confirms drawer/settings are absent
+  if (!visibleDrawer && isDrawerOpen) isDrawerOpen = false;
+  if (!visibleSettings && isSettingsOpen) isSettingsOpen = false;
+
+  // Supplemental soft hide based on state flags
+  if (isDrawerOpen || isSettingsOpen) softHide = true;
 
   const container = doc.createElement('div');
   container.className = 'sotl-chat-panel-container';
@@ -290,6 +308,10 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
     container.classList.add('sotl-chat-panel-container--expanded');
   }
   container.dataset.sotlChatPanel = 'true';
+
+  if (softHide) {
+    container.style.setProperty('display', 'none', 'important');
+  }
 
   if (!isChatLoomPanelExpanded) {
     // Round animal-track paw SVG button

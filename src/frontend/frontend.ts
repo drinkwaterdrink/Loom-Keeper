@@ -360,23 +360,20 @@ function handleDrawerEvent(event: Event): void {
   if (fieldName === 'stripBlocks' && field instanceof HTMLInputElement) {
     saveSettings({ stripTrackerBlocksFromMessages: field.checked });
   }
-  if (fieldName === 'placement' && field instanceof HTMLSelectElement) {
-    saveSettings({ defaultPlacement: field.value as LoomSettings['defaultPlacement'] });
+  if (fieldName === 'messageCardPlacement' && field instanceof HTMLSelectElement) {
+    saveSettings({ messageCardPlacement: field.value as LoomSettings['messageCardPlacement'] });
   }
-  if (fieldName === 'showChatLoomPanel' && field instanceof HTMLInputElement) {
-    saveSettings({ showChatLoomPanel: field.checked });
+  if (fieldName === 'showChatHudLauncher' && field instanceof HTMLInputElement) {
+    saveSettings({ showChatHudLauncher: field.checked });
   }
-  if (fieldName === 'renderTrackersInMessages' && field instanceof HTMLInputElement) {
-    saveSettings({ renderTrackersInMessages: field.checked });
-  }
-  if (fieldName === 'trackerPlacement' && field instanceof HTMLSelectElement) {
-    saveSettings({ trackerPlacement: field.value as LoomSettings['trackerPlacement'] });
+  if (fieldName === 'renderInMessages' && field instanceof HTMLInputElement) {
+    saveSettings({ renderInMessages: field.checked });
   }
   if (fieldName === 'cardDensity' && field instanceof HTMLSelectElement) {
     saveSettings({ cardDensity: field.value as LoomSettings['cardDensity'] });
   }
-  if (fieldName === 'trackerHudView' && field instanceof HTMLSelectElement) {
-    saveSettings({ trackerHudView: field.value as LoomSettings['trackerHudView'] });
+  if (fieldName === 'hudDefaultView' && field instanceof HTMLSelectElement) {
+    saveSettings({ hudDefaultView: field.value as LoomSettings['hudDefaultView'] });
   }
 }
 

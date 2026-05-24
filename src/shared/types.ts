@@ -64,17 +64,16 @@ export interface LoomSettings {
   autoGenerate: boolean;
   sidecarConnectionId?: string | undefined;
   useDefaultConnectionFallback: boolean;
-  defaultPlacement: LoomPlacement;
   stripTrackerBlocksFromMessages: boolean;
   showFloatingButton: boolean;
   showMessageButtons: boolean;
   debugMode: boolean;
   promptInjectionEnabled: boolean;
-  showChatLoomPanel: boolean;
-  renderTrackersInMessages: boolean;
-  trackerPlacement: 'drawer' | 'chat_panel' | 'message_card' | 'both';
+  showChatHudLauncher: boolean;
+  hudDefaultView: 'compact' | 'full';
+  renderInMessages: boolean;
+  messageCardPlacement: 'top' | 'bottom';
   cardDensity: 'compact' | 'normal';
-  trackerHudView: 'compact' | 'full';
 }
 
 export interface LoomPermissionState {

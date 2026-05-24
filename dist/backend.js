@@ -16,7 +16,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.3";
+var LOOM_VERSION = "1.0.4";
 var LOOM_SCHEMA_VERSION = "1";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
 var STORAGE_KEYS = {
@@ -30,17 +30,16 @@ var defaultSettings = {
   activePresetId: SLIM_SCENE_PRESET_ID,
   autoGenerate: false,
   useDefaultConnectionFallback: true,
-  defaultPlacement: "top",
   stripTrackerBlocksFromMessages: false,
   showFloatingButton: false,
   showMessageButtons: true,
   debugMode: false,
   promptInjectionEnabled: false,
-  showChatLoomPanel: true,
-  renderTrackersInMessages: false,
-  trackerPlacement: "chat_panel",
-  cardDensity: "compact",
-  trackerHudView: "full"
+  showChatHudLauncher: true,
+  hudDefaultView: "full",
+  renderInMessages: false,
+  messageCardPlacement: "top",
+  cardDensity: "compact"
 };
 var microLoomPreset = {
   id: "micro_loom",
@@ -1133,7 +1132,7 @@ var LoomGenerationService = class {
       swipeId: input.message.swipe_id,
       generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
       source: "passive_extract",
-      placement: input.settings.defaultPlacement === "disabled" ? "hidden" : input.settings.defaultPlacement,
+      placement: input.settings.messageCardPlacement || "top",
       data: parse.data,
       compactSummary: makeCompactSummary(parse.data),
       validation,
@@ -1169,7 +1168,7 @@ var LoomGenerationService = class {
         swipeId: input.message.swipe_id,
         generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
         source: "sidecar_generate",
-        placement: input.settings.defaultPlacement === "disabled" ? "hidden" : input.settings.defaultPlacement,
+        placement: input.settings.messageCardPlacement || "top",
         data,
         compactSummary: makeCompactSummary(data),
         validation,
@@ -1284,13 +1283,33 @@ var LoomSettingsService = class {
     return next;
   }
   merge(value) {
-    const record = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const raw = value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
+    if ("showChatLoomPanel" in raw && typeof raw.showChatLoomPanel === "boolean") {
+      raw.showChatHudLauncher = raw.showChatLoomPanel;
+    }
+    if ("trackerHudView" in raw && (raw.trackerHudView === "compact" || raw.trackerHudView === "full")) {
+      raw.hudDefaultView = raw.trackerHudView;
+    }
+    if ("renderTrackersInMessages" in raw && typeof raw.renderTrackersInMessages === "boolean") {
+      raw.renderInMessages = raw.renderTrackersInMessages;
+    }
+    if ("defaultPlacement" in raw) {
+      if (raw.defaultPlacement === "top" || raw.defaultPlacement === "bottom") {
+        raw.messageCardPlacement = raw.defaultPlacement;
+      }
+    }
+    delete raw.showChatLoomPanel;
+    delete raw.trackerHudView;
+    delete raw.renderTrackersInMessages;
+    delete raw.defaultPlacement;
+    delete raw.trackerPlacement;
+    delete raw.trackerDisplayScope;
     const next = {
       ...defaultSettings,
-      ...record
+      ...raw
     };
     if (!next.activePresetId) next.activePresetId = defaultSettings.activePresetId;
-    if (!next.defaultPlacement) next.defaultPlacement = defaultSettings.defaultPlacement;
+    if (!next.messageCardPlacement) next.messageCardPlacement = defaultSettings.messageCardPlacement;
     return next;
   }
 };

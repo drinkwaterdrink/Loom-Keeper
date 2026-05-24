@@ -77,7 +77,7 @@ export function renderSettingsPanel(state: LoomFrontendState | null, status: Loo
     '<p class="sotl-note" style="margin-bottom: 12px;">All detailed settings, preset configurations, sidecar connections, and diagnostics are managed within the main Loom Drawer.</p>',
     '<div class="sotl-fields">',
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="enabled" ${state.settings.enabled ? 'checked' : ''}> Extension enabled</label>`,
-    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ${state.settings.showChatLoomPanel ? 'checked' : ''}> Show chat-screen Loom panel</label>`,
+    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatHudLauncher" ${state.settings.showChatHudLauncher ? 'checked' : ''}> Show chat HUD button</label>`,
     '</div>',
     '</section>',
     '</div>',
