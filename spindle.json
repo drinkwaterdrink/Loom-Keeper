@@ -1,0 +1,19 @@
+{
+  "version": "1.0.3",
+  "name": "State of the Loom",
+  "identifier": "state_of_the_loom",
+  "author": "Loom Architect",
+  "github": "https://github.com/drinkwaterdrink/State-Of-The-Loom",
+  "homepage": "https://github.com/drinkwaterdrink/State-Of-The-Loom",
+  "description": "A Lumiverse-native continuity tracker, visual state HUD, and optional narrative simulation engine for roleplay chats.",
+  "permissions": [
+    "chats",
+    "chat_mutation",
+    "generation",
+    "app_manipulation"
+  ],
+  "requested_capabilities": [],
+  "entry_backend": "dist/backend.js",
+  "entry_frontend": "dist/frontend.js",
+  "minimum_lumiverse_version": "0.8.8"
+}
