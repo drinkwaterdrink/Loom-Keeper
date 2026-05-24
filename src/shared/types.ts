@@ -74,6 +74,7 @@ export interface LoomSettings {
   renderTrackersInMessages: boolean;
   trackerPlacement: 'drawer' | 'chat_panel' | 'message_card' | 'both';
   cardDensity: 'compact' | 'normal';
+  trackerHudView: 'compact' | 'full';
 }
 
 export interface LoomPermissionState {

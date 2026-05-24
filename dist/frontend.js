@@ -1,6 +1,28 @@
 // src/shared/renderer.ts
+function safeObjectToString(val) {
+  if (val === null || val === void 0) return "";
+  if (typeof val !== "object") return String(val);
+  if (Array.isArray(val)) {
+    return val.map(safeObjectToString).join(", ");
+  }
+  const obj = val;
+  const keys = ["text", "value", "label", "name", "title", "summary", "description"];
+  for (const key of keys) {
+    if (key in obj && obj[key] !== void 0 && obj[key] !== null) {
+      const fieldVal = obj[key];
+      if (typeof fieldVal !== "object") {
+        return String(fieldVal);
+      }
+    }
+  }
+  try {
+    return JSON.stringify(obj);
+  } catch {
+    return "[Object]";
+  }
+}
 function escapeHtml(value) {
-  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return safeObjectToString(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function readPath(data, path) {
   if (path === ".") return data;
@@ -184,6 +206,12 @@ function renderSettingsPanel(state2, status = {}) {
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="fallback" ${state2.settings.useDefaultConnectionFallback ? "checked" : ""}> Use default/current connection fallback</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="floating" ${state2.settings.showFloatingButton ? "checked" : ""}> Show desktop floating launcher</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ${state2.settings.showChatLoomPanel ? "checked" : ""}> Show chat-screen Loom panel</label>`,
+    '<label class="sotl-label">HUD Panel View',
+    `<select class="sotl-select" data-sotl-field="trackerHudView">`,
+    `  <option value="compact"${state2.settings.trackerHudView === "compact" ? " selected" : ""}>Compact summary only</option>`,
+    `  <option value="full"${state2.settings.trackerHudView === "full" ? " selected" : ""}>Full rendered tracker</option>`,
+    `</select>`,
+    "</label>",
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ${state2.settings.renderTrackersInMessages ? "checked" : ""}> Render trackers inside chat messages</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="messageButtons" ${state2.settings.showMessageButtons ? "checked" : ""}> Show message card buttons</label>`,
     '<label class="sotl-label">Sidecar connection',
@@ -319,6 +347,12 @@ function renderDrawer(state2, status = {}) {
     !state2.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : "",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state2.settings.autoGenerate ? "checked" : "") + "> Auto-generate after assistant messages</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatLoomPanel" ' + (state2.settings.showChatLoomPanel ? "checked" : "") + "> Show chat-screen Loom panel</label>",
+    '<label class="sotl-label">HUD Panel View',
+    `<select class="sotl-select" data-sotl-field="trackerHudView">`,
+    `  <option value="compact"${state2.settings.trackerHudView === "compact" ? " selected" : ""}>Compact summary only</option>`,
+    `  <option value="full"${state2.settings.trackerHudView === "full" ? " selected" : ""}>Full rendered tracker</option>`,
+    `</select>`,
+    "</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderTrackersInMessages" ' + (state2.settings.renderTrackersInMessages ? "checked" : "") + "> Render trackers inside chat messages</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state2.settings.stripTrackerBlocksFromMessages ? "checked" : "") + "> Strip passive tracker blocks when allowed</label>",
     "</div>",
@@ -365,6 +399,10 @@ var isChatLoomPanelExpanded = false;
 var isDrawerOpen = false;
 var isSettingsOpen = false;
 var rerenderCallback = null;
+var openDrawerCallback = null;
+function registerOpenDrawerCallback(cb) {
+  openDrawerCallback = cb;
+}
 function documentRef() {
   return typeof document === "undefined" ? null : document;
 }
@@ -487,40 +525,69 @@ function mountMessageCards(ctx, state2) {
     messageId: lastMissing
   };
 }
-function renderCompactPanel(tracker) {
+function renderCompactPanel(tracker, state2) {
+  const isGenerating = state2.generation.running;
+  const isCompact = state2.settings.trackerHudView === "compact";
+  const drawerIcon = `
+    <button class="sotl-chat-panel__action-btn" data-sotl-panel-action="drawer" title="Open Loom Drawer" aria-label="Open Loom Drawer">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <line x1="9" y1="3" x2="9" y2="21"/>
+      </svg>
+    </button>
+  `;
+  const generateIcon = `
+    <button class="sotl-chat-panel__action-btn" data-sotl-panel-action="generate" ${isGenerating || state2.generation.disabledReason ? "disabled" : ""} title="${escapeHtml3(state2.generation.disabledReason || "Generate Tracker State")}" aria-label="Generate Tracker State">
+      <svg class="${isGenerating ? "sotl-spin" : ""}" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+        <path d="M23 4v6h-6"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+    </button>
+  `;
+  const closeIcon = `
+    <button class="sotl-chat-panel__action-btn sotl-chat-panel__action-btn--close" data-sotl-panel-action="collapse" title="Close Panel" aria-label="Close Panel">\u2715</button>
+  `;
+  const header = `
+    <header class="sotl-chat-panel__head">
+      <span class="sotl-chat-panel__title">Loom HUD</span>
+      <div class="sotl-chat-panel__head-actions">
+        ${drawerIcon}
+        ${generateIcon}
+        ${closeIcon}
+      </div>
+    </header>
+  `;
   if (!tracker) {
     return [
       '<div class="sotl-chat-panel">',
-      '  <header class="sotl-chat-panel__head">',
-      '    <span class="sotl-chat-panel__title">Loom HUD</span>',
-      '    <button class="sotl-chat-panel__close" data-sotl-panel-action="collapse" title="Collapse panel">\u2715</button>',
-      "  </header>",
+      header,
       '  <div class="sotl-chat-panel__body">',
-      '    <p class="sotl-chat-panel__desc">No tracker has been stored for this chat yet. Click Generate below to start tracking.</p>',
-      "  </div>",
-      '  <div class="sotl-chat-panel__actions">',
-      '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="drawer">Open Drawer</button>',
-      '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="generate" style="background: var(--lv-accent, #3864d9); color: var(--lv-on-accent, #fff); border-color: var(--lv-accent, #3864d9);">Generate</button>',
+      '    <p class="sotl-chat-panel__desc">No tracker has been stored for this chat yet. Click the Generate icon above to start tracking.</p>',
       "  </div>",
       "</div>"
     ].join("\n");
   }
-  const castChips = Array.isArray(tracker.data.cast) && tracker.data.cast.length > 0 ? `<div class="sotl-cast-grid" style="margin-top: 4px;">` + tracker.data.cast.slice(0, 3).map((c) => `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml3(c.name || "Cast")}</span>`).join("") + (tracker.data.cast.length > 3 ? `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">+${tracker.data.cast.length - 3}</span>` : "") + `</div>` : "";
+  let bodyContent = "";
+  if (isCompact) {
+    const castChips = Array.isArray(tracker.data.cast) && tracker.data.cast.length > 0 ? `<div class="sotl-cast-grid" style="margin-top: 4px;">` + tracker.data.cast.slice(0, 3).map((c) => `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml3(c.name || c || "Cast")}</span>`).join("") + (tracker.data.cast.length > 3 ? `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">+${tracker.data.cast.length - 3}</span>` : "") + `</div>` : "";
+    bodyContent = [
+      `    <p class="sotl-chat-panel__scene">${escapeHtml3(tracker.data.sceneTitle || "Active Scene")}</p>`,
+      `    <div class="sotl-chat-panel__meta">\u{1F4CD} ${escapeHtml3(tracker.data.location || "Unknown")} \u2022 \u{1F552} ${escapeHtml3(tracker.data.time || "Unknown")}</div>`,
+      `    <p class="sotl-chat-panel__desc">${escapeHtml3(tracker.data.delta || "No deltas recorded.")}</p>`,
+      castChips
+    ].join("\n");
+  } else {
+    bodyContent = `
+      <div class="sotl-chat-panel__scroll-body">
+        ${renderTrackerHtml(tracker, state2.activePreset)}
+      </div>
+    `;
+  }
   return [
     '<div class="sotl-chat-panel">',
-    '  <header class="sotl-chat-panel__head">',
-    '    <span class="sotl-chat-panel__title">Loom HUD</span>',
-    '    <button class="sotl-chat-panel__close" data-sotl-panel-action="collapse" title="Collapse panel">\u2715</button>',
-    "  </header>",
+    header,
     '  <div class="sotl-chat-panel__body">',
-    `    <p class="sotl-chat-panel__scene">${escapeHtml3(tracker.data.sceneTitle || "Active Scene")}</p>`,
-    `    <div class="sotl-chat-panel__meta">\u{1F4CD} ${escapeHtml3(tracker.data.location || "Unknown")} \u2022 \u{1F552} ${escapeHtml3(tracker.data.time || "Unknown")}</div>`,
-    `    <p class="sotl-chat-panel__desc">${escapeHtml3(tracker.data.delta || "No deltas recorded.")}</p>`,
-    castChips,
-    "  </div>",
-    '  <div class="sotl-chat-panel__actions">',
-    '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="drawer">Open Drawer</button>',
-    '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="generate" style="background: var(--lv-accent, #3864d9); color: var(--lv-on-accent, #fff); border-color: var(--lv-accent, #3864d9);">Generate</button>',
+    bodyContent,
     "  </div>",
     "</div>"
   ].join("\n");
@@ -533,11 +600,20 @@ function ensureChatLoomPanel(ctx, state2) {
   if (isDrawerOpen || isSettingsOpen) return;
   const container = doc.createElement("div");
   container.className = "sotl-chat-panel-container";
+  if (isChatLoomPanelExpanded) {
+    container.classList.add("sotl-chat-panel-container--expanded");
+  }
   container.dataset.sotlChatPanel = "true";
   if (!isChatLoomPanelExpanded) {
-    container.innerHTML = `<div class="sotl-chat-pill" data-sotl-panel-action="expand">Loom HUD</div>`;
+    container.innerHTML = `
+      <div class="sotl-chat-pill" data-sotl-panel-action="expand" title="Open Loom HUD">
+        <svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" style="display: block;">
+          <path d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/>
+        </svg>
+      </div>
+    `;
   } else {
-    container.innerHTML = renderCompactPanel(state2.latestTracker);
+    container.innerHTML = renderCompactPanel(state2.latestTracker, state2);
   }
   container.addEventListener("click", (e) => {
     const target = e.target;
@@ -550,13 +626,17 @@ function ensureChatLoomPanel(ctx, state2) {
       isChatLoomPanelExpanded = true;
       triggerRerender();
     } else if (action === "drawer") {
-      const ui = ctx.ui && typeof ctx.ui === "object" ? ctx.ui : {};
-      const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
-      if (typeof openDrawer === "function") {
-        openDrawer("state_of_the_loom");
+      if (openDrawerCallback) {
+        openDrawerCallback();
       } else {
-        const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]');
-        openBtn?.click();
+        const ui = ctx.ui && typeof ctx.ui === "object" ? ctx.ui : {};
+        const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
+        if (typeof openDrawer === "function") {
+          openDrawer("state_of_the_loom");
+        } else {
+          const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]');
+          openBtn?.click();
+        }
       }
     } else if (action === "generate") {
       if (typeof ctx.sendToBackend === "function") {
@@ -968,43 +1048,45 @@ var loomStyles = `
   border-color: var(--lv-accent, #3864d9) !important;
 }
 .sotl-chat-panel-container {
-  position: fixed;
-  top: 76px;
-  right: 16px;
-  z-index: 25;
   font-family: var(--lv-font-sans, Inter, ui-sans-serif, system-ui, sans-serif);
   color: var(--lumiverse-text, var(--lv-text, #1e2329));
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 9999;
+}
+.sotl-chat-panel-container:not(.sotl-chat-panel-container--expanded) {
+  position: fixed;
+  right: 12px;
+  top: 58%;
+  transform: translateY(-50%);
+}
+.sotl-chat-panel-container.sotl-chat-panel-container--expanded {
+  position: fixed;
+  top: 76px;
+  right: 16px;
 }
 .sotl-chat-pill {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   background: var(--lumiverse-fill, var(--lv-surface-raised, rgba(255, 255, 255, 0.85)));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.25)));
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(20, 24, 32, 0.12);
   user-select: none;
   transition: all 0.2s ease;
+  padding: 0;
+  color: var(--lumiverse-text, var(--lv-text, #1e2329));
 }
 .sotl-chat-pill:hover {
-  transform: translateY(-1px);
+  transform: scale(1.08);
   box-shadow: 0 6px 20px rgba(20, 24, 32, 0.18);
   border-color: var(--lv-accent, #3864d9);
-}
-.sotl-chat-pill::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--lv-success-text, #1b7e50);
-  box-shadow: 0 0 6px var(--lv-success-text, #1b7e50);
+  color: var(--lv-accent, #3864d9);
 }
 .sotl-chat-panel {
   width: 320px;
@@ -1031,19 +1113,65 @@ var loomStyles = `
   font-size: 13px;
   font-weight: 700;
 }
-.sotl-chat-panel__close {
-  border: none;
-  background: transparent;
+.sotl-chat-panel__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sotl-chat-panel__action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.18)));
+  background: var(--lumiverse-fill-subtle, var(--lv-surface-subtle, rgba(255, 255, 255, 0.2)));
+  color: var(--lumiverse-text, var(--lv-text, #1e2329));
   cursor: pointer;
-  padding: 2px;
-  font-size: 12px;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+.sotl-chat-panel__action-btn:hover {
+  background: var(--lumiverse-fill, var(--lv-surface, rgba(255, 255, 255, 0.8)));
+  border-color: var(--lv-accent, #3864d9);
+  color: var(--lv-accent, #3864d9);
+}
+.sotl-chat-panel__action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sotl-chat-panel__action-btn--close {
   color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+  font-size: 12px;
+}
+.sotl-chat-panel__action-btn--close:hover {
+  color: var(--lv-warning-text, #b06800);
+  border-color: var(--lv-warning-text, #b06800);
 }
 .sotl-chat-panel__body {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: 12px;
+}
+.sotl-chat-panel__scroll-body {
+  overflow-y: auto;
+  max-height: 280px;
+  padding-right: 4px;
+}
+.sotl-chat-panel__scroll-body::-webkit-scrollbar {
+  width: 5px;
+}
+.sotl-chat-panel__scroll-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sotl-chat-panel__scroll-body::-webkit-scrollbar-thumb {
+  background: var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.2)));
+  border-radius: 99px;
+}
+.sotl-chat-panel__scroll-body::-webkit-scrollbar-thumb:hover {
+  background: var(--lv-accent, #3864d9);
 }
 .sotl-chat-panel__scene {
   font-weight: 700;
@@ -1059,16 +1187,12 @@ var loomStyles = `
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
-.sotl-chat-panel__actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 4px;
+@keyframes sotl-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
-.sotl-chat-panel__btn {
-  flex: 1;
-  font-size: 11px;
-  min-height: 28px;
-  padding: 0 8px;
+.sotl-spin {
+  animation: sotl-spin 1.2s linear infinite;
 }
 @media (max-width: 520px) {
   .sotl-root {
@@ -1084,7 +1208,10 @@ var loomStyles = `
     right: 12px;
     bottom: 88px;
   }
-  .sotl-chat-panel-container {
+  .sotl-chat-panel-container:not(.sotl-chat-panel-container--expanded) {
+    display: none !important;
+  }
+  .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
     right: 12px;
     top: 70px;
     max-width: calc(100vw - 24px);
@@ -1093,6 +1220,7 @@ var loomStyles = `
     width: 100%;
   }
 }
+
 `;
 
 // src/frontend/frontend.ts
@@ -1287,10 +1415,20 @@ function registerInputActions(ctx) {
 function activateDrawer() {
   if (drawerHandle?.activate) {
     drawerHandle.activate();
-    return;
   }
-  drawerRoot?.scrollIntoView({ block: "start" });
-  fallbackRoot?.scrollIntoView({ block: "start" });
+  const doc = documentRef2();
+  if (doc) {
+    setTimeout(() => {
+      const currentLoom = doc.querySelector(".sotl-card") ?? doc.querySelector('[data-sotl-card="true"]') ?? drawerRoot?.querySelector(".sotl-card");
+      if (currentLoom) {
+        currentLoom.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        if (currentLoom instanceof HTMLElement) currentLoom.focus?.();
+      } else {
+        drawerRoot?.scrollIntoView({ behavior: "smooth", block: "start" });
+        fallbackRoot?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 120);
+  }
 }
 function paint(status) {
   renderInto(drawerRoot, renderDrawer(state, status));
@@ -1419,6 +1557,9 @@ function handleDrawerEvent(event) {
   if (fieldName === "cardDensity" && field instanceof HTMLSelectElement) {
     saveSettings({ cardDensity: field.value });
   }
+  if (fieldName === "trackerHudView" && field instanceof HTMLSelectElement) {
+    saveSettings({ trackerHudView: field.value });
+  }
 }
 function handleBackendMessage(message) {
   if (message.type === "state") state = message.state;
@@ -1462,6 +1603,7 @@ function registerFrontendEvents(ctx) {
 function setup(ctx) {
   contextRef = ctx;
   registerRerenderCallback(() => rerender());
+  registerOpenDrawerCallback(() => activateDrawer());
   installStyle(ctx);
   registerDrawer(ctx);
   registerSettingsMount(ctx);

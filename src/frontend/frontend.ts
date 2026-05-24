@@ -1,6 +1,6 @@
 import type { LoomBackendMessage, LoomFrontendMessage, LoomFrontendState, LoomSettings } from '../shared/types.js';
 import { renderDrawer } from './drawer.js';
-import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState } from './messageCards.js';
+import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback } from './messageCards.js';
 import { renderSettingsPanel } from './settingsPanel.js';
 import { loomStyles } from './styles.js';
 import type { LoomUiStatus } from './ui.js';
@@ -224,10 +224,22 @@ function registerInputActions(ctx: FrontendContext): void {
 function activateDrawer(): void {
   if (drawerHandle?.activate) {
     drawerHandle.activate();
-    return;
   }
-  drawerRoot?.scrollIntoView({ block: 'start' });
-  fallbackRoot?.scrollIntoView({ block: 'start' });
+  const doc = documentRef();
+  if (doc) {
+    setTimeout(() => {
+      const currentLoom = doc.querySelector('.sotl-card') 
+        ?? doc.querySelector('[data-sotl-card="true"]')
+        ?? drawerRoot?.querySelector('.sotl-card');
+      if (currentLoom) {
+        currentLoom.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (currentLoom instanceof HTMLElement) currentLoom.focus?.();
+      } else {
+        drawerRoot?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        fallbackRoot?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 120);
+  }
 }
 
 function paint(status: LoomUiStatus): void {
@@ -363,6 +375,9 @@ function handleDrawerEvent(event: Event): void {
   if (fieldName === 'cardDensity' && field instanceof HTMLSelectElement) {
     saveSettings({ cardDensity: field.value as LoomSettings['cardDensity'] });
   }
+  if (fieldName === 'trackerHudView' && field instanceof HTMLSelectElement) {
+    saveSettings({ trackerHudView: field.value as LoomSettings['trackerHudView'] });
+  }
 }
 
 function handleBackendMessage(message: LoomBackendMessage): void {
@@ -411,6 +426,7 @@ function registerFrontendEvents(ctx: FrontendContext): void {
 export function setup(ctx: FrontendContext): () => void {
   contextRef = ctx;
   registerRerenderCallback(() => rerender());
+  registerOpenDrawerCallback(() => activateDrawer());
   installStyle(ctx);
   registerDrawer(ctx);
   registerSettingsMount(ctx);

@@ -1,7 +1,30 @@
 import type { LoomPreset, LoomTrackerState } from './types.js';
 
+export function safeObjectToString(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val !== 'object') return String(val);
+  if (Array.isArray(val)) {
+    return val.map(safeObjectToString).join(', ');
+  }
+  const obj = val as Record<string, unknown>;
+  const keys = ['text', 'value', 'label', 'name', 'title', 'summary', 'description'];
+  for (const key of keys) {
+    if (key in obj && obj[key] !== undefined && obj[key] !== null) {
+      const fieldVal = obj[key];
+      if (typeof fieldVal !== 'object') {
+        return String(fieldVal);
+      }
+    }
+  }
+  try {
+    return JSON.stringify(obj);
+  } catch {
+    return '[Object]';
+  }
+}
+
 function escapeHtml(value: unknown): string {
-  return String(value ?? '')
+  return safeObjectToString(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

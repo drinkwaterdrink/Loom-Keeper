@@ -14,6 +14,11 @@ let isChatLoomPanelExpanded = false;
 let isDrawerOpen = false;
 let isSettingsOpen = false;
 let rerenderCallback: (() => void) | null = null;
+let openDrawerCallback: (() => void) | null = null;
+
+export function registerOpenDrawerCallback(cb: () => void): void {
+  openDrawerCallback = cb;
+}
 
 function documentRef(): Document | null {
   return typeof document === 'undefined' ? null : document;
@@ -179,47 +184,83 @@ export function mountMessageCards(ctx: FrontendContext, state: LoomFrontendState
   };
 }
 
-function renderCompactPanel(tracker: LoomTrackerState | null): string {
+function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFrontendState): string {
+  const isGenerating = state.generation.running;
+  const isCompact = state.settings.trackerHudView === 'compact';
+
+  // Top header icons next to Close button
+  const drawerIcon = `
+    <button class="sotl-chat-panel__action-btn" data-sotl-panel-action="drawer" title="Open Loom Drawer" aria-label="Open Loom Drawer">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <line x1="9" y1="3" x2="9" y2="21"/>
+      </svg>
+    </button>
+  `;
+
+  const generateIcon = `
+    <button class="sotl-chat-panel__action-btn" data-sotl-panel-action="generate" ${isGenerating || state.generation.disabledReason ? 'disabled' : ''} title="${escapeHtml(state.generation.disabledReason || 'Generate Tracker State')}" aria-label="Generate Tracker State">
+      <svg class="${isGenerating ? 'sotl-spin' : ''}" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+        <path d="M23 4v6h-6"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+    </button>
+  `;
+
+  const closeIcon = `
+    <button class="sotl-chat-panel__action-btn sotl-chat-panel__action-btn--close" data-sotl-panel-action="collapse" title="Close Panel" aria-label="Close Panel">✕</button>
+  `;
+
+  const header = `
+    <header class="sotl-chat-panel__head">
+      <span class="sotl-chat-panel__title">Loom HUD</span>
+      <div class="sotl-chat-panel__head-actions">
+        ${drawerIcon}
+        ${generateIcon}
+        ${closeIcon}
+      </div>
+    </header>
+  `;
+
   if (!tracker) {
     return [
       '<div class="sotl-chat-panel">',
-      '  <header class="sotl-chat-panel__head">',
-      '    <span class="sotl-chat-panel__title">Loom HUD</span>',
-      '    <button class="sotl-chat-panel__close" data-sotl-panel-action="collapse" title="Collapse panel">✕</button>',
-      '  </header>',
+      header,
       '  <div class="sotl-chat-panel__body">',
-      '    <p class="sotl-chat-panel__desc">No tracker has been stored for this chat yet. Click Generate below to start tracking.</p>',
-      '  </div>',
-      '  <div class="sotl-chat-panel__actions">',
-      '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="drawer">Open Drawer</button>',
-      '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="generate" style="background: var(--lv-accent, #3864d9); color: var(--lv-on-accent, #fff); border-color: var(--lv-accent, #3864d9);">Generate</button>',
+      '    <p class="sotl-chat-panel__desc">No tracker has been stored for this chat yet. Click the Generate icon above to start tracking.</p>',
       '  </div>',
       '</div>'
     ].join('\n');
   }
 
-  const castChips = Array.isArray(tracker.data.cast) && tracker.data.cast.length > 0
-    ? `<div class="sotl-cast-grid" style="margin-top: 4px;">` +
-      tracker.data.cast.slice(0, 3).map((c: any) => `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml(c.name || 'Cast')}</span>`).join('') +
-      (tracker.data.cast.length > 3 ? `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">+${tracker.data.cast.length - 3}</span>` : '') +
-      `</div>`
-    : '';
+  let bodyContent = '';
+  if (isCompact) {
+    const castChips = Array.isArray(tracker.data.cast) && tracker.data.cast.length > 0
+      ? `<div class="sotl-cast-grid" style="margin-top: 4px;">` +
+        tracker.data.cast.slice(0, 3).map((c: any) => `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml(c.name || c || 'Cast')}</span>`).join('') +
+        (tracker.data.cast.length > 3 ? `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">+${tracker.data.cast.length - 3}</span>` : '') +
+        `</div>`
+      : '';
+
+    bodyContent = [
+      `    <p class="sotl-chat-panel__scene">${escapeHtml(tracker.data.sceneTitle || 'Active Scene')}</p>`,
+      `    <div class="sotl-chat-panel__meta">📍 ${escapeHtml(tracker.data.location || 'Unknown')} • 🕒 ${escapeHtml(tracker.data.time || 'Unknown')}</div>`,
+      `    <p class="sotl-chat-panel__desc">${escapeHtml(tracker.data.delta || 'No deltas recorded.')}</p>`,
+      castChips,
+    ].join('\n');
+  } else {
+    bodyContent = `
+      <div class="sotl-chat-panel__scroll-body">
+        ${renderTrackerHtml(tracker, state.activePreset)}
+      </div>
+    `;
+  }
 
   return [
     '<div class="sotl-chat-panel">',
-    '  <header class="sotl-chat-panel__head">',
-    '    <span class="sotl-chat-panel__title">Loom HUD</span>',
-    '    <button class="sotl-chat-panel__close" data-sotl-panel-action="collapse" title="Collapse panel">✕</button>',
-    '  </header>',
+    header,
     '  <div class="sotl-chat-panel__body">',
-    `    <p class="sotl-chat-panel__scene">${escapeHtml(tracker.data.sceneTitle || 'Active Scene')}</p>`,
-    `    <div class="sotl-chat-panel__meta">📍 ${escapeHtml(tracker.data.location || 'Unknown')} • 🕒 ${escapeHtml(tracker.data.time || 'Unknown')}</div>`,
-    `    <p class="sotl-chat-panel__desc">${escapeHtml(tracker.data.delta || 'No deltas recorded.')}</p>`,
-    castChips,
-    '  </div>',
-    '  <div class="sotl-chat-panel__actions">',
-    '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="drawer">Open Drawer</button>',
-    '    <button class="sotl-button sotl-chat-panel__btn" data-sotl-panel-action="generate" style="background: var(--lv-accent, #3864d9); color: var(--lv-on-accent, #fff); border-color: var(--lv-accent, #3864d9);">Generate</button>',
+    bodyContent,
     '  </div>',
     '</div>'
   ].join('\n');
@@ -239,12 +280,22 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
 
   const container = doc.createElement('div');
   container.className = 'sotl-chat-panel-container';
+  if (isChatLoomPanelExpanded) {
+    container.classList.add('sotl-chat-panel-container--expanded');
+  }
   container.dataset.sotlChatPanel = 'true';
 
   if (!isChatLoomPanelExpanded) {
-    container.innerHTML = `<div class="sotl-chat-pill" data-sotl-panel-action="expand">Loom HUD</div>`;
+    // Round animal-track paw SVG button
+    container.innerHTML = `
+      <div class="sotl-chat-pill" data-sotl-panel-action="expand" title="Open Loom HUD">
+        <svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" style="display: block;">
+          <path d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/>
+        </svg>
+      </div>
+    `;
   } else {
-    container.innerHTML = renderCompactPanel(state.latestTracker);
+    container.innerHTML = renderCompactPanel(state.latestTracker, state);
   }
 
   container.addEventListener('click', (e) => {
@@ -259,14 +310,18 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
       isChatLoomPanelExpanded = true;
       triggerRerender();
     } else if (action === 'drawer') {
-      const ui = ctx.ui && typeof ctx.ui === 'object' ? ctx.ui as Record<string, unknown> : {};
-      const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
-      if (typeof openDrawer === 'function') {
-        (openDrawer as (id: string) => void)('state_of_the_loom');
+      if (openDrawerCallback) {
+        openDrawerCallback();
       } else {
-        // Fallback clicking
-        const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]') as HTMLElement | null;
-        openBtn?.click();
+        const ui = ctx.ui && typeof ctx.ui === 'object' ? ctx.ui as Record<string, unknown> : {};
+        const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
+        if (typeof openDrawer === 'function') {
+          (openDrawer as (id: string) => void)('state_of_the_loom');
+        } else {
+          // Fallback clicking
+          const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]') as HTMLElement | null;
+          openBtn?.click();
+        }
       }
     } else if (action === 'generate') {
       if (typeof ctx.sendToBackend === 'function') {

@@ -39,7 +39,81 @@ var defaultSettings = {
   showChatLoomPanel: false,
   renderTrackersInMessages: true,
   trackerPlacement: "both",
-  cardDensity: "compact"
+  cardDensity: "compact",
+  trackerHudView: "full"
+};
+var microLoomPreset = {
+  id: "micro_loom",
+  name: "Micro Loom",
+  version: "1.0.0",
+  description: "Smallest, fastest tracker. Best for low token usage and fast models.",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "location", "time", "mood", "delta"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneTitle: { type: "string", default: "" },
+      location: { type: "string", default: "" },
+      time: { type: "string", default: "" },
+      mood: { type: "string", default: "" },
+      delta: { type: "string", default: "" },
+      cast: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      activeThread: { type: "string", default: "" }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    '  <header class="sotl-card__head">',
+    '    <div class="sotl-card__header-main">',
+    '      <div class="sotl-card__eyebrow">Micro Loom</div>',
+    '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+    "    </div>",
+    '    <span class="sotl-pill sotl-pill--mood">{{mood}}</span>',
+    "  </header>",
+    '  <dl class="sotl-grid">',
+    '    <div class="sotl-grid-item"><dt>Location</dt><dd>{{location}}</dd></div>',
+    '    <div class="sotl-grid-item"><dt>Time</dt><dd>{{time}}</dd></div>',
+    "  </dl>",
+    '  <p class="sotl-delta">{{delta}}</p>',
+    '  <details class="sotl-card-details" open><summary>Cast Present</summary><ul class="sotl-anchors-list">{{#each cast}}<li>{{.}}</li>{{/each}}</ul></details>',
+    '  {{#if activeThread}}<details class="sotl-card-details" open><summary>Active Thread</summary><p class="sotl-thread-desc">{{activeThread}}</p></details>{{/if}}',
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom, a micro-sized continuity tracker for an AI roleplay chat.",
+    "Return valid JSON only. Do not use markdown fences.",
+    "Use the Micro Loom schema exactly.",
+    "Preserve stable facts from the previous tracker unless the latest assistant message clearly changes them.",
+    "Only update what changed this turn. Do not invent missing details.",
+    "Use empty strings and [] for unknowns.",
+    "Keep cast array under 4 items."
+  ].join("\n"),
+  injectionTemplate: "[Micro Loom]\n{{compactSummary}}",
+  maxInjectionTokens: 150,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "compact",
+    theme: "system",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneTitle: "Quick word in the foyer",
+    location: "Foyer",
+    time: "Late evening",
+    mood: "tense",
+    delta: "Mira entered quietly without shaking off her wet coat.",
+    cast: ["Mira", "Josh"],
+    activeThread: "Learn what Mira is hiding."
+  },
+  createdAt: now,
+  updatedAt: now
 };
 var slimSceneSampleData = {
   schemaVersion: LOOM_SCHEMA_VERSION,
@@ -154,7 +228,458 @@ var slimScenePreset = {
   createdAt: now,
   updatedAt: now
 };
-var builtInPresets = [slimScenePreset];
+var balancedStoryPreset = {
+  id: "balanced_story_loom",
+  name: "Balanced Story Loom",
+  version: "1.0.0",
+  description: "Medium-detail continuity tracker. Monitors environment, relationships, and cast pockets.",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "location", "environment", "time", "mood", "delta"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneTitle: { type: "string", default: "" },
+      location: { type: "string", default: "" },
+      environment: { type: "string", default: "" },
+      time: { type: "string", default: "" },
+      mood: { type: "string", default: "" },
+      delta: { type: "string", default: "" },
+      cast: {
+        type: "array",
+        maxItems: 5,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            role: { type: "string", default: "" },
+            position: { type: "string", default: "" },
+            outfit: { type: "string", default: "" },
+            emotion: { type: "string", default: "" },
+            pockets: { type: "array", maxItems: 4, default: [], items: { type: "string" } }
+          }
+        }
+      },
+      relationships: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            parties: { type: "string", default: "" },
+            tone: { type: "string", default: "" },
+            details: { type: "string", default: "" }
+          }
+        }
+      },
+      inventory: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+      activeThread: { type: "string", default: "" },
+      anchors: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+      contradictions: { type: "array", maxItems: 4, default: [], items: { type: "string" } }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    '  <header class="sotl-card__head">',
+    '    <div class="sotl-card__header-main">',
+    '      <div class="sotl-card__eyebrow">Balanced Story Loom</div>',
+    '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+    "    </div>",
+    '    <span class="sotl-pill sotl-pill--mood">{{mood}}</span>',
+    "  </header>",
+    '  <p class="sotl-delta" style="font-size: 11px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d)); margin-bottom: 8px;"><strong>Environment:</strong> {{environment}}</p>',
+    '  <dl class="sotl-grid">',
+    '    <div class="sotl-grid-item"><dt>Location</dt><dd>{{location}}</dd></div>',
+    '    <div class="sotl-grid-item"><dt>Time</dt><dd>{{time}}</dd></div>',
+    "  </dl>",
+    '  <p class="sotl-delta">{{delta}}</p>',
+    '  <div class="sotl-section sotl-cast-section">',
+    "    <h4>Cast Details</h4>",
+    '    <div class="sotl-cast-grid">',
+    "      {{#each cast}}",
+    '      <article class="sotl-cast-chip" style="flex-direction: column; align-items: flex-start; gap: 2px;">',
+    '        <div><strong>{{name}}</strong> <span class="sotl-cast-role">({{role}})</span></div>',
+    '        <div style="font-size: 11px;">\u{1F4CD} {{position}} \u2022 \u{1F455} {{outfit}}</div>',
+    '        <div style="font-size: 11px;">\u{1F3AD} <em class="sotl-cast-emo">{{emotion}}</em></div>',
+    '        {{#if pockets}}<div style="font-size: 10px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));">\u{1F392} Pockets: {{pockets}}</div>{{/if}}',
+    "      </article>",
+    "      {{/each}}",
+    "    </div>",
+    "  </div>",
+    "  {{#if relationships}}",
+    '  <details class="sotl-card-details" open><summary>Relationships</summary>',
+    '    <ul class="sotl-anchors-list">',
+    "      {{#each relationships}}",
+    "      <li><strong>{{parties}}</strong>: <em>{{tone}}</em> \u2014 {{details}}</li>",
+    "      {{/each}}",
+    "    </ul>",
+    "  </details>",
+    "  {{/if}}",
+    '  <details class="sotl-card-details"><summary>Inventory Items</summary><ul class="sotl-inventory-list">{{#each inventory}}<li>{{.}}</li>{{/each}}</ul></details>',
+    '  {{#if activeThread}}<details class="sotl-card-details" open><summary>Active Thread</summary><p class="sotl-thread-desc">{{activeThread}}</p></details>{{/if}}',
+    '  <details class="sotl-card-details" open><summary>Scene Anchors</summary><ul class="sotl-anchors-list">{{#each anchors}}<li>{{.}}</li>{{/each}}</ul></details>',
+    '  {{#if contradictions}}<details class="sotl-card-details"><summary>Contradictions</summary><ul class="sotl-anchors-list">{{#each contradictions}}<li>{{.}}</li>{{/each}}</ul></details>{{/if}}',
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom, a medium-detail story tracking system.",
+    "Return valid JSON only. Do not use markdown fences.",
+    "Use the Balanced Story Loom schema exactly.",
+    "Provide stable facts, tracking details, and active threads.",
+    "Keep arrays capped. Empty strings and [] are used for unknown or empty blocks."
+  ].join("\n"),
+  injectionTemplate: "[Balanced Story Loom]\n{{compactSummary}}",
+  maxInjectionTokens: 400,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "normal",
+    theme: "system",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneTitle: "A shared secret in Lantern Hall",
+    location: "Lantern Hall",
+    environment: "Dimly lit, warm hearth, rain drumming on high windows",
+    time: "Late evening",
+    mood: "intimate but guarded",
+    delta: "Mira showed Josh the letter but refused to let him hold it.",
+    cast: [
+      {
+        name: "Mira",
+        role: "barkeep",
+        position: "by the fireplace",
+        outfit: "dark woolen coat, damp leather boots",
+        emotion: "hesitant",
+        pockets: ["sealed letter"]
+      },
+      {
+        name: "Josh",
+        role: "guest",
+        position: "sitting on the rug",
+        outfit: "casual knits",
+        emotion: "curious",
+        pockets: ["pocket knife"]
+      }
+    ],
+    relationships: [
+      { parties: "Mira & Josh", tone: "cautious trust", details: "Mira shared the letter but is holding back its full history." }
+    ],
+    inventory: ["sealed letter", "brass key", "pocket knife"],
+    activeThread: "Find out who wrote the letter.",
+    anchors: ["The cellar door remains locked.", "The storm outside is intensifying."],
+    contradictions: ["None."]
+  },
+  createdAt: now,
+  updatedAt: now
+};
+var castContinuityPreset = {
+  id: "cast_continuity_loom",
+  name: "Cast Continuity Loom",
+  version: "1.0.0",
+  description: "Focuses entirely on character consistency: posture, proximity, intent, and speech traits.",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "location", "time", "delta"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneTitle: { type: "string", default: "" },
+      location: { type: "string", default: "" },
+      time: { type: "string", default: "" },
+      delta: { type: "string", default: "" },
+      cast: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            appearance: { type: "string", default: "" },
+            outfit: { type: "string", default: "" },
+            posture: { type: "string", default: "" },
+            proximity: { type: "string", default: "" },
+            hands: { type: "string", default: "" },
+            emotion: { type: "string", default: "" },
+            intent: { type: "string", default: "" },
+            dialogueColor: { type: "string", default: "" },
+            pockets: { type: "array", maxItems: 4, default: [], items: { type: "string" } }
+          }
+        }
+      }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    '  <header class="sotl-card__head">',
+    '    <div class="sotl-card__header-main">',
+    '      <div class="sotl-card__eyebrow">Cast Continuity Loom</div>',
+    '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+    "    </div>",
+    '    <span class="sotl-pill sotl-pill--mood">{{time}}</span>',
+    "  </header>",
+    '  <p class="sotl-delta" style="margin-top: 6px;">\u{1F4CD} <strong>Location:</strong> {{location}}</p>',
+    '  <p class="sotl-delta">{{delta}}</p>',
+    '  <div class="sotl-section sotl-cast-section">',
+    "    <h4>Character Continuities</h4>",
+    '    <div style="display: grid; gap: 10px; margin-top: 6px;">',
+    "      {{#each cast}}",
+    '      <article class="sotl-panel" style="background: var(--lumiverse-fill-subtle, rgba(255,255,255,0.3)); padding: 10px; display: grid; gap: 4px;">',
+    '        <h4 style="font-size: 13px; color: var(--lv-accent, #3864d9);">{{name}}</h4>',
+    '        <div style="font-size: 12px; line-height: 1.4;">',
+    "          <strong>Look:</strong> {{appearance}}<br>",
+    "          <strong>Outfit:</strong> {{outfit}}<br>",
+    "          <strong>Posture:</strong> {{posture}}<br>",
+    "          <strong>Proximity:</strong> {{proximity}}<br>",
+    "          <strong>Hands:</strong> {{hands}}<br>",
+    '          <strong>Emotion:</strong> <em class="sotl-cast-emo">{{emotion}}</em><br>',
+    "          <strong>Intent:</strong> {{intent}}<br>",
+    '          <strong>Dialogue:</strong> <span style="font-style: italic;">{{dialogueColor}}</span>',
+    "        </div>",
+    '        {{#if pockets}}<div style="font-size: 11px; margin-top: 4px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));">\u{1F392} Pockets: {{pockets}}</div>{{/if}}',
+    "      </article>",
+    "      {{/each}}",
+    "    </div>",
+    "  </div>",
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom, focusing entirely on roleplay character continuity details.",
+    "Return valid JSON only. Do not use markdown fences.",
+    "Use the Cast Continuity Loom schema exactly.",
+    "Document precise character appearances, outfits, gestures, distance, emotional states, goals, and dialogue details.",
+    "Only record facts grounded in active dialogue and physical actions."
+  ].join("\n"),
+  injectionTemplate: "[Cast Continuity Loom]\n{{compactSummary}}",
+  maxInjectionTokens: 400,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "normal",
+    theme: "system",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneTitle: "Anxious alignment",
+    location: "Hallway entry",
+    time: "Sunset",
+    delta: "Mira crossed her arms tightly, avoiding Josh\u2019s direct gaze.",
+    cast: [
+      {
+        name: "Mira",
+        appearance: "pale, brown hair tied back messily",
+        outfit: "damp green sweater",
+        posture: "arms crossed, shoulders hunched",
+        proximity: "two feet from door frame",
+        hands: "clutching her elbows",
+        emotion: "apprehensive",
+        intent: "deflect questions about the key",
+        dialogueColor: "hushed, clipped tone",
+        pockets: ["brass key"]
+      }
+    ]
+  },
+  createdAt: now,
+  updatedAt: now
+};
+var fullContinuityLedgerPreset = {
+  id: "full_continuity_ledger",
+  name: "Full Continuity Ledger",
+  version: "1.0.0",
+  description: "Largest preset tracking weather, lighting, secrets, relationships, meters, and anchors.",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "location", "time", "weather", "lighting", "mood", "delta"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneTitle: { type: "string", default: "" },
+      location: { type: "string", default: "" },
+      time: { type: "string", default: "" },
+      weather: { type: "string", default: "" },
+      lighting: { type: "string", default: "" },
+      mood: { type: "string", default: "" },
+      delta: { type: "string", default: "" },
+      cast: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            outfit: { type: "string", default: "" },
+            emotion: { type: "string", default: "" },
+            pockets: { type: "array", maxItems: 4, default: [], items: { type: "string" } }
+          }
+        }
+      },
+      inventory: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+      relationships: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            parties: { type: "string", default: "" },
+            status: { type: "string", default: "" }
+          }
+        }
+      },
+      activeThread: { type: "string", default: "" },
+      secrets: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      rumors: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      anchors: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+      contradictions: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      avoidNext: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      meters: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            value: { type: "string", default: "" }
+          }
+        }
+      }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    '  <header class="sotl-card__head">',
+    '    <div class="sotl-card__header-main">',
+    '      <div class="sotl-card__eyebrow">Full Continuity Ledger</div>',
+    '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+    "    </div>",
+    '    <span class="sotl-pill sotl-pill--mood">{{mood}}</span>',
+    "  </header>",
+    '  <dl class="sotl-grid" style="grid-template-columns: repeat(3, 1fr); gap: 4px;">',
+    '    <div class="sotl-grid-item"><dt>Location</dt><dd style="font-size: 11px;">{{location}}</dd></div>',
+    '    <div class="sotl-grid-item"><dt>Time/Weather</dt><dd style="font-size: 11px;">{{time}} \u2022 {{weather}}</dd></div>',
+    '    <div class="sotl-grid-item"><dt>Lighting</dt><dd style="font-size: 11px;">{{lighting}}</dd></div>',
+    "  </dl>",
+    '  <p class="sotl-delta">{{delta}}</p>',
+    '  <div class="sotl-section sotl-cast-section">',
+    "    <h4>Cast Continuity</h4>",
+    '    <div class="sotl-cast-grid">',
+    "      {{#each cast}}",
+    '      <article class="sotl-cast-chip">',
+    '        <strong>{{name}}</strong> <em class="sotl-cast-emo">({{emotion}})</em> <span style="font-size: 11px; margin-left: 4px;">\u{1F455} {{outfit}}</span>',
+    '        {{#if pockets}}<span style="font-size: 10px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d)); margin-left: 6px;">\u{1F392} {{pockets}}</span>{{/if}}',
+    "      </article>",
+    "      {{/each}}",
+    "    </div>",
+    "  </div>",
+    "  {{#if meters}}",
+    '  <div style="margin-top: 8px;">',
+    '    <h4 style="margin: 0 0 4px; font-size: 11px; text-transform: uppercase; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));">Meters</h4>',
+    '    <div style="display: flex; flex-wrap: wrap; gap: 6px;">',
+    '      {{#each meters}}<span class="sotl-chip" style="background: rgba(220,10,10,0.06); border-color: rgba(220,10,10,0.15);">\u{1F525} {{name}}: {{value}}</span>{{/each}}',
+    "    </div>",
+    "  </div>",
+    "  {{/if}}",
+    '  <details class="sotl-card-details" open><summary>Inventory & Relationships</summary>',
+    '    <div style="font-size: 12px; margin-top: 4px;">',
+    "      <strong>Inventory:</strong> {{inventory}}<br>",
+    "      {{#each relationships}}<strong>{{parties}}</strong>: {{status}}<br>{{/each}}",
+    "    </div>",
+    "  </details>",
+    '  <details class="sotl-card-details" open><summary>Story Continuum</summary>',
+    '    <div style="font-size: 12px; line-height: 1.4; display: grid; gap: 4px;">',
+    "      {{#if activeThread}}<div><strong>Active Thread:</strong> {{activeThread}}</div>{{/if}}",
+    "      {{#if secrets}}<div><strong>Secrets:</strong> {{secrets}}</div>{{/if}}",
+    "      {{#if rumors}}<div><strong>Rumors:</strong> {{rumors}}</div>{{/if}}",
+    "      {{#if anchors}}<div><strong>Anchors:</strong> {{anchors}}</div>{{/if}}",
+    "      {{#if contradictions}}<div><strong>Contradictions:</strong> {{contradictions}}</div>{{/if}}",
+    "      {{#if avoidNext}}<div><strong>Avoid Next:</strong> {{avoidNext}}</div>{{/if}}",
+    "    </div>",
+    "  </details>",
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom, tracking full roleplay continuity details.",
+    "Return valid JSON only. Do not use markdown fences.",
+    "Use the Full Continuity Ledger schema exactly.",
+    "Preserve long-running secrets, rumors, active story arcs, lighting changes, weather state, and relationships.",
+    "Keep arrays capped. Empty strings and [] are used for unknown or empty blocks."
+  ].join("\n"),
+  injectionTemplate: "[Full Continuity Ledger]\n{{compactSummary}}",
+  maxInjectionTokens: 450,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "normal",
+    theme: "system",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneTitle: "Storm over Ward House",
+    location: "Ward House Kitchen",
+    time: "5:45 PM",
+    weather: "heavy rain, thunder",
+    lighting: "dim, flickering overhead fixture",
+    mood: "tense, electric",
+    delta: "Bridget\u2019s sudden questioning spiked the tension in the room.",
+    cast: [
+      {
+        name: "Bridget Hanley",
+        outfit: "dark knit sweater",
+        emotion: "wryly curious",
+        pockets: ["lighter"]
+      },
+      {
+        name: "Diane Ward",
+        outfit: "denim shorts, simple tee",
+        emotion: "tolerant but weary",
+        pockets: ["keyring"]
+      }
+    ],
+    inventory: ["letter", "keyring", "lighter"],
+    relationships: [
+      { parties: "Bridget & Diane", status: "playful tension" }
+    ],
+    activeThread: "Resolve Marcus\u2019s sudden absence.",
+    secrets: ["Marcus left under threat."],
+    rumors: ["The cellar door leads to an old drainage system."],
+    anchors: ["The house is locked from inside."],
+    contradictions: ["None."],
+    avoidNext: ["Do not reveal Marcus\u2019s whereabouts yet."],
+    meters: [
+      { name: "Tension", value: "High" },
+      { name: "Rain intensity", value: "Severe" }
+    ]
+  },
+  createdAt: now,
+  updatedAt: now
+};
+var builtInPresets = [
+  microLoomPreset,
+  slimScenePreset,
+  balancedStoryPreset,
+  castContinuityPreset,
+  fullContinuityLedgerPreset
+];
 
 // src/shared/parser.ts
 function findMatchingBrace(text, start) {
