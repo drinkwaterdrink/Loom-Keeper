@@ -64,7 +64,7 @@ export class LoomTrackerStateService {
       .slice(0, 20);
   }
 
-  async save(userId: string, tracker: LoomTrackerState): Promise<void> {
+  async save(userId: string, tracker: LoomTrackerState, limit: number = 5): Promise<void> {
     const index = await this.loadIndex(userId);
     const existing = index[tracker.chatId] ?? { messages: {} };
     const key = makeMessageKey(tracker.messageId, tracker.swipeId);
@@ -72,6 +72,41 @@ export class LoomTrackerStateService {
     existing.latest = tracker;
     index[tracker.chatId] = existing;
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.trackerStates, userId, index);
+
+    if (limit > 0) {
+      await this.pruneChatHistory(userId, tracker.chatId, limit);
+    }
+  }
+
+  async pruneChatHistory(userId: string, chatId: string | null, limit: number): Promise<void> {
+    if (!chatId || limit <= 0) return;
+    const index = await this.loadIndex(userId);
+    const existing = index[chatId];
+    if (!existing || !existing.messages) return;
+
+    const allTrackers = Object.entries(existing.messages)
+      .map(([k, t]) => ({ k, t }))
+      .sort((a, b) => b.t.generatedAt.localeCompare(a.t.generatedAt));
+
+    if (allTrackers.length > limit) {
+      const kept = allTrackers.slice(0, limit);
+      const keptKeys = new Set(kept.map((item) => item.k));
+
+      // Always protect the latest Current Loom tracker state
+      if (existing.latest) {
+        keptKeys.add(makeMessageKey(existing.latest.messageId, existing.latest.swipeId));
+      }
+
+      const newMessages: Record<string, LoomTrackerState> = {};
+      for (const [k, t] of Object.entries(existing.messages)) {
+        if (keptKeys.has(k)) {
+          newMessages[k] = t;
+        }
+      }
+      existing.messages = newMessages;
+      index[chatId] = existing;
+      await setJsonWithRecovery(this.spindle, STORAGE_KEYS.trackerStates, userId, index);
+    }
   }
 
   async delete(userId: string, chatId: string, messageId?: string): Promise<void> {

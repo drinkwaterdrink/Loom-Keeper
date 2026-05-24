@@ -117,7 +117,7 @@ export function renderPresetEditor(state: LoomFrontendState): string {
     button('Duplicate to Edit', 'editor-duplicate', { primary: isBuiltIn }),
     button('Save Template', 'editor-save', { disabled: isBuiltIn, primary: !isBuiltIn, title: isBuiltIn ? 'Built-in templates are read-only' : 'Save edits' }),
     button('Delete Custom', 'editor-delete', { disabled: isBuiltIn, title: isBuiltIn ? 'Built-in templates cannot be deleted' : 'Delete custom template' }),
-    button('Reset All Custom', 'editor-reset', { title: 'Delete all custom templates' }),
+    button('Reset Custom Templates', 'editor-reset', { title: 'Delete all custom templates' }),
     '</div>',
 
     // Collapsible Details Sections (All collapsed by default)
@@ -180,9 +180,17 @@ export function renderPresetEditor(state: LoomFrontendState): string {
 
     '<details class="sotl-details" style="margin-top: 8px;"><summary>Import / Export</summary>',
     '<div class="sotl-fields" style="margin-top: 8px;">',
-    '  <div class="sotl-actions" style="margin-bottom: 8px;">',
+    '  <div class="sotl-actions" style="margin-bottom: 8px; flex-wrap: wrap;">',
     button('Copy Template JSON', 'editor-export'),
+    button('Download Template JSON', 'editor-download', { title: 'Download current template as a .json file' }),
     '  </div>',
+    '  <div class="sotl-actions" style="margin-bottom: 8px; flex-wrap: wrap;">',
+    button('Upload Template JSON', 'editor-upload-single', { title: 'Upload a template .json file from your device' }),
+    button('Download All Custom', 'editor-download-all', { title: 'Download all custom templates as a pack .json file' }),
+    button('Upload Template Pack', 'editor-upload-pack', { title: 'Upload a template pack .json file' }),
+    '  </div>',
+    '  <input type="file" id="sotl-upload-single" accept=".json" style="display:none;" data-sotl-action="file-upload-single">',
+    '  <input type="file" id="sotl-upload-pack" accept=".json" style="display:none;" data-sotl-action="file-upload-pack">',
     '  <label class="sotl-label">Paste Template JSON to Import',
     '    <textarea class="sotl-textarea" data-sotl-editor-field="importJson" placeholder=\'Paste preset JSON here...\'></textarea>',
     '  </label>',

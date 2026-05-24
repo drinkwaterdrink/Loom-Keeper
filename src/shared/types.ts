@@ -74,6 +74,7 @@ export interface LoomSettings {
   renderInMessages: boolean;
   messageCardPlacement: 'top' | 'bottom';
   cardDensity: 'compact' | 'normal';
+  trackerHistoryLimit: number;
 }
 
 export interface LoomPermissionState {

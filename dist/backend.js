@@ -16,7 +16,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.5";
+var LOOM_VERSION = "1.0.6";
 var LOOM_SCHEMA_VERSION = "1";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
 var STORAGE_KEYS = {
@@ -39,7 +39,8 @@ var defaultSettings = {
   hudDefaultView: "full",
   renderInMessages: false,
   messageCardPlacement: "top",
-  cardDensity: "compact"
+  cardDensity: "compact",
+  trackerHistoryLimit: 5
 };
 var microLoomPreset = {
   id: "micro_loom",
@@ -748,6 +749,7 @@ function extractTrackerBlock(content, fenceNames) {
 function buildTrackerPrompt(input) {
   const previous = input.previousTracker ? JSON.stringify(input.previousTracker.data, null, 2) : "{}";
   const schema = JSON.stringify(input.preset.schemaJson, null, 2);
+  const histories = input.previousSummaries && input.previousSummaries.length > 0 ? "\n\nRecent tracker history:\n" + input.previousSummaries.map((s, idx) => `[T-${idx + 1}] ${s}`).join("\n") : "";
   return [
     {
       role: "system",
@@ -761,6 +763,7 @@ function buildTrackerPrompt(input) {
         "",
         "Previous tracker state:",
         previous,
+        histories,
         "",
         "Recent context:",
         input.recentContext || "(none)",
@@ -1154,6 +1157,7 @@ var LoomGenerationService = class {
         preset: input.preset,
         latestAssistantMessage: input.message.content || "",
         previousTracker: input.previousTracker,
+        previousSummaries: input.previousSummaries,
         recentContext: input.recentContext
       });
       const raw = await runSidecarGeneration(this.spindle, input.userId, prompt, input.settings.sidecarConnectionId);
@@ -1401,7 +1405,7 @@ var LoomTrackerStateService = class {
     const index = await this.loadIndex(userId);
     return Object.values(index[chatId]?.messages ?? {}).filter((tracker) => tracker.version === LOOM_VERSION).sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)).slice(0, 20);
   }
-  async save(userId, tracker) {
+  async save(userId, tracker, limit = 5) {
     const index = await this.loadIndex(userId);
     const existing = index[tracker.chatId] ?? { messages: {} };
     const key = makeMessageKey(tracker.messageId, tracker.swipeId);
@@ -1409,6 +1413,32 @@ var LoomTrackerStateService = class {
     existing.latest = tracker;
     index[tracker.chatId] = existing;
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.trackerStates, userId, index);
+    if (limit > 0) {
+      await this.pruneChatHistory(userId, tracker.chatId, limit);
+    }
+  }
+  async pruneChatHistory(userId, chatId, limit) {
+    if (!chatId || limit <= 0) return;
+    const index = await this.loadIndex(userId);
+    const existing = index[chatId];
+    if (!existing || !existing.messages) return;
+    const allTrackers = Object.entries(existing.messages).map(([k, t]) => ({ k, t })).sort((a, b) => b.t.generatedAt.localeCompare(a.t.generatedAt));
+    if (allTrackers.length > limit) {
+      const kept = allTrackers.slice(0, limit);
+      const keptKeys = new Set(kept.map((item) => item.k));
+      if (existing.latest) {
+        keptKeys.add(makeMessageKey(existing.latest.messageId, existing.latest.swipeId));
+      }
+      const newMessages = {};
+      for (const [k, t] of Object.entries(existing.messages)) {
+        if (keptKeys.has(k)) {
+          newMessages[k] = t;
+        }
+      }
+      existing.messages = newMessages;
+      index[chatId] = existing;
+      await setJsonWithRecovery(this.spindle, STORAGE_KEYS.trackerStates, userId, index);
+    }
   }
   async delete(userId, chatId, messageId) {
     const index = await this.loadIndex(userId);
@@ -1634,12 +1664,22 @@ var StateOfTheLoomBackend = class {
       }
       if (message.type === "save_settings") {
         const settings = await this.settingsService.save(userId, message.settings);
+        const active = await getActiveChat(this.spindle, userId).catch(() => null);
+        const activeChatId = active?.chat?.id;
+        if (activeChatId && settings.trackerHistoryLimit > 0) {
+          await this.trackerService.pruneChatHistory(userId, activeChatId, settings.trackerHistoryLimit);
+        }
         await this.send(userId, { type: "settings_saved", settings });
         await this.send(userId, { type: "state", state: await this.buildState(userId) });
         return;
       }
       if (message.type === "select_preset") {
         const settings = await this.settingsService.save(userId, { activePresetId: message.presetId });
+        const active = await getActiveChat(this.spindle, userId).catch(() => null);
+        const activeChatId = active?.chat?.id;
+        if (activeChatId && settings.trackerHistoryLimit > 0) {
+          await this.trackerService.pruneChatHistory(userId, activeChatId, settings.trackerHistoryLimit);
+        }
         await this.send(userId, { type: "settings_saved", settings });
         await this.send(userId, { type: "state", state: await this.buildState(userId) });
         return;
@@ -1726,16 +1766,20 @@ var StateOfTheLoomBackend = class {
       });
       return;
     }
+    const recentTrackers = await this.trackerService.listForChat(userId, target.chatId);
+    const contextLimit = settings.trackerHistoryLimit > 0 ? settings.trackerHistoryLimit : 5;
+    const previousSummaries = recentTrackers.slice(1, contextLimit).map((t) => `${t.generatedAt}: ${t.compactSummary}`);
     const result = passive ?? await this.generationService.generateSidecar({
       userId,
       settings,
       preset,
       previousTracker: state.latestTracker,
+      previousSummaries,
       chatId: target.chatId,
       message: target.message,
       recentContext: target.recentContext
     });
-    await this.trackerService.save(userId, result.tracker);
+    await this.trackerService.save(userId, result.tracker, settings.trackerHistoryLimit);
     await this.generationService.stripPassiveBlockIfAllowed({
       permissions: state.permissions,
       settings,

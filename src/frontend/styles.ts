@@ -379,9 +379,9 @@ export const loomStyles = `
  */
 .sotl-chat-panel-container {
   --sotl-launcher-top: 36%;
-  --sotl-launcher-right: 12px;
+  --sotl-launcher-right: 0px;
   --sotl-launcher-top-mobile: 36%;
-  --sotl-launcher-right-mobile: 12px;
+  --sotl-launcher-right-mobile: 0px;
 
   font-family: var(--lv-font-sans, Inter, ui-sans-serif, system-ui, sans-serif);
   color: var(--lumiverse-text, var(--lv-text, #1e2329));

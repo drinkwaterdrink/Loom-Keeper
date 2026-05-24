@@ -159,6 +159,21 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     '</label>',
 
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state.settings.stripTrackerBlocksFromMessages ? 'checked' : '') + '> Strip passive tracker blocks when allowed</label>',
+    '<label class="sotl-label">Tracker history limit',
+    (() => {
+      const limit = state.settings.trackerHistoryLimit ?? 5;
+      const options = [
+        `<option value="1"${limit === 1 ? ' selected' : ''}>Last 1 tracker</option>`,
+        `<option value="3"${limit === 3 ? ' selected' : ''}>Last 3 trackers</option>`,
+        `<option value="5"${limit === 5 ? ' selected' : ''}>Last 5 trackers (default)</option>`,
+        `<option value="10"${limit === 10 ? ' selected' : ''}>Last 10 trackers</option>`,
+        `<option value="20"${limit === 20 ? ' selected' : ''}>Last 20 trackers</option>`,
+        `<option value="0"${limit === 0 ? ' selected' : ''}>Unlimited (keep all)</option>`,
+      ];
+      return `<select class="sotl-select" data-sotl-field="trackerHistoryLimit">${options.join('')}</select>`;
+    })(),
+    `<p class="sotl-note">Controls how many tracker snapshots are kept per chat. Generation context always uses a safe compact subset. Latest tracker is always preserved.</p>`,
+    '</label>',
     '</div>',
     '<div class="sotl-actions">',
     button('Generate tracker', 'generate', { primary: true, disabled: Boolean(disabledReason), title: disabledReason }),

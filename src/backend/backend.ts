@@ -245,6 +245,11 @@ class StateOfTheLoomBackend {
 
       if (message.type === 'save_settings') {
         const settings = await this.settingsService.save(userId, message.settings);
+        const active = await getActiveChat(this.spindle, userId).catch(() => null);
+        const activeChatId = active?.chat?.id;
+        if (activeChatId && settings.trackerHistoryLimit > 0) {
+          await this.trackerService.pruneChatHistory(userId, activeChatId, settings.trackerHistoryLimit);
+        }
         await this.send(userId, { type: 'settings_saved', settings });
         await this.send(userId, { type: 'state', state: await this.buildState(userId) });
         return;
@@ -252,6 +257,11 @@ class StateOfTheLoomBackend {
 
       if (message.type === 'select_preset') {
         const settings = await this.settingsService.save(userId, { activePresetId: message.presetId });
+        const active = await getActiveChat(this.spindle, userId).catch(() => null);
+        const activeChatId = active?.chat?.id;
+        if (activeChatId && settings.trackerHistoryLimit > 0) {
+          await this.trackerService.pruneChatHistory(userId, activeChatId, settings.trackerHistoryLimit);
+        }
         await this.send(userId, { type: 'settings_saved', settings });
         await this.send(userId, { type: 'state', state: await this.buildState(userId) });
         return;
@@ -356,18 +366,25 @@ class StateOfTheLoomBackend {
       });
       return;
     }
+    const recentTrackers = await this.trackerService.listForChat(userId, target.chatId);
+    const contextLimit = settings.trackerHistoryLimit > 0 ? settings.trackerHistoryLimit : 5;
+    const previousSummaries = recentTrackers
+      .slice(1, contextLimit)
+      .map((t) => `${t.generatedAt}: ${t.compactSummary}`);
+
     const result = passive
       ?? await this.generationService.generateSidecar({
         userId,
         settings,
         preset,
         previousTracker: state.latestTracker,
+        previousSummaries,
         chatId: target.chatId,
         message: target.message,
         recentContext: target.recentContext,
       });
 
-    await this.trackerService.save(userId, result.tracker);
+    await this.trackerService.save(userId, result.tracker, settings.trackerHistoryLimit);
     await this.generationService.stripPassiveBlockIfAllowed({
       permissions: state.permissions,
       settings,

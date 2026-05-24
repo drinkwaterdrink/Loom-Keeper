@@ -157,6 +157,7 @@ export class LoomGenerationService {
     settings: LoomSettings;
     preset: LoomPreset;
     previousTracker: LoomTrackerState | null;
+    previousSummaries?: string[] | undefined;
     chatId: string;
     message: LoomChatMessage;
     recentContext: string;
@@ -171,6 +172,7 @@ export class LoomGenerationService {
         preset: input.preset,
         latestAssistantMessage: input.message.content || '',
         previousTracker: input.previousTracker,
+        previousSummaries: input.previousSummaries,
         recentContext: input.recentContext,
       });
       const raw = await runSidecarGeneration(this.spindle, input.userId, prompt, input.settings.sidecarConnectionId);

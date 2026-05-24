@@ -995,7 +995,7 @@ function renderPresetEditor(state2) {
     button("Duplicate to Edit", "editor-duplicate", { primary: isBuiltIn }),
     button("Save Template", "editor-save", { disabled: isBuiltIn, primary: !isBuiltIn, title: isBuiltIn ? "Built-in templates are read-only" : "Save edits" }),
     button("Delete Custom", "editor-delete", { disabled: isBuiltIn, title: isBuiltIn ? "Built-in templates cannot be deleted" : "Delete custom template" }),
-    button("Reset All Custom", "editor-reset", { title: "Delete all custom templates" }),
+    button("Reset Custom Templates", "editor-reset", { title: "Delete all custom templates" }),
     "</div>",
     // Collapsible Details Sections (All collapsed by default)
     '<details class="sotl-details" style="margin-top: 8px;"><summary>Metadata (Name, Description, Mode)</summary>',
@@ -1051,9 +1051,17 @@ function renderPresetEditor(state2) {
     "</details>",
     '<details class="sotl-details" style="margin-top: 8px;"><summary>Import / Export</summary>',
     '<div class="sotl-fields" style="margin-top: 8px;">',
-    '  <div class="sotl-actions" style="margin-bottom: 8px;">',
+    '  <div class="sotl-actions" style="margin-bottom: 8px; flex-wrap: wrap;">',
     button("Copy Template JSON", "editor-export"),
+    button("Download Template JSON", "editor-download", { title: "Download current template as a .json file" }),
     "  </div>",
+    '  <div class="sotl-actions" style="margin-bottom: 8px; flex-wrap: wrap;">',
+    button("Upload Template JSON", "editor-upload-single", { title: "Upload a template .json file from your device" }),
+    button("Download All Custom", "editor-download-all", { title: "Download all custom templates as a pack .json file" }),
+    button("Upload Template Pack", "editor-upload-pack", { title: "Upload a template pack .json file" }),
+    "  </div>",
+    '  <input type="file" id="sotl-upload-single" accept=".json" style="display:none;" data-sotl-action="file-upload-single">',
+    '  <input type="file" id="sotl-upload-pack" accept=".json" style="display:none;" data-sotl-action="file-upload-pack">',
     '  <label class="sotl-label">Paste Template JSON to Import',
     `    <textarea class="sotl-textarea" data-sotl-editor-field="importJson" placeholder='Paste preset JSON here...'></textarea>`,
     "  </label>",
@@ -1308,6 +1316,21 @@ function renderDrawer(state2, status = {}) {
     `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state2)}</select>`,
     "</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state2.settings.stripTrackerBlocksFromMessages ? "checked" : "") + "> Strip passive tracker blocks when allowed</label>",
+    '<label class="sotl-label">Tracker history limit',
+    (() => {
+      const limit = state2.settings.trackerHistoryLimit ?? 5;
+      const options = [
+        `<option value="1"${limit === 1 ? " selected" : ""}>Last 1 tracker</option>`,
+        `<option value="3"${limit === 3 ? " selected" : ""}>Last 3 trackers</option>`,
+        `<option value="5"${limit === 5 ? " selected" : ""}>Last 5 trackers (default)</option>`,
+        `<option value="10"${limit === 10 ? " selected" : ""}>Last 10 trackers</option>`,
+        `<option value="20"${limit === 20 ? " selected" : ""}>Last 20 trackers</option>`,
+        `<option value="0"${limit === 0 ? " selected" : ""}>Unlimited (keep all)</option>`
+      ];
+      return `<select class="sotl-select" data-sotl-field="trackerHistoryLimit">${options.join("")}</select>`;
+    })(),
+    `<p class="sotl-note">Controls how many tracker snapshots are kept per chat. Generation context always uses a safe compact subset. Latest tracker is always preserved.</p>`,
+    "</label>",
     "</div>",
     '<div class="sotl-actions">',
     button("Generate tracker", "generate", { primary: true, disabled: Boolean(disabledReason), title: disabledReason }),
@@ -2073,9 +2096,9 @@ var loomStyles = `
  */
 .sotl-chat-panel-container {
   --sotl-launcher-top: 36%;
-  --sotl-launcher-right: 12px;
+  --sotl-launcher-right: 0px;
   --sotl-launcher-top-mobile: 36%;
-  --sotl-launcher-right-mobile: 12px;
+  --sotl-launcher-right-mobile: 0px;
 
   font-family: var(--lv-font-sans, Inter, ui-sans-serif, system-ui, sans-serif);
   color: var(--lumiverse-text, var(--lv-text, #1e2329));
@@ -2560,7 +2583,7 @@ function handleDrawerEvent(event) {
       const newPreset = {
         id: newId,
         name: "New Custom Loom",
-        version: "1.0.5",
+        version: "1.0.6",
         description: "User custom continuity tracker.",
         mode: "hybrid",
         schemaJson: {
@@ -2652,6 +2675,68 @@ function handleDrawerEvent(event) {
       }
       return;
     }
+    if (action === "editor-download" && editingPreset) {
+      try {
+        const jsonText = JSON.stringify(editingPreset, null, 2);
+        const blob = new Blob([jsonText], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${editingPreset.id}.json`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 200);
+      } catch (err) {
+        console.error("Failed to download template:", err);
+      }
+      return;
+    }
+    if (action === "editor-download-all") {
+      try {
+        const customPresets = state?.presets.filter((p) => !builtInPresets.some((bp) => bp.id === p.id)) ?? [];
+        if (customPresets.length === 0) {
+          const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
+          alertFn?.("No custom templates to download.");
+          return;
+        }
+        const jsonText = JSON.stringify({ presets: customPresets }, null, 2);
+        const blob = new Blob([jsonText], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "loom-custom-templates.json";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 200);
+      } catch (err) {
+        console.error("Failed to download custom templates pack:", err);
+      }
+      return;
+    }
+    if (action === "editor-upload-single") {
+      const doc = documentRef2();
+      const fileInput = doc?.getElementById("sotl-upload-single");
+      if (fileInput) {
+        fileInput.value = "";
+        fileInput.click();
+      }
+      return;
+    }
+    if (action === "editor-upload-pack") {
+      const doc = documentRef2();
+      const fileInput = doc?.getElementById("sotl-upload-pack");
+      if (fileInput) {
+        fileInput.value = "";
+        fileInput.click();
+      }
+      return;
+    }
     if (action === "editor-import") {
       const doc = documentRef2();
       const textarea = doc?.querySelector('[data-sotl-editor-field="importJson"]');
@@ -2677,6 +2762,63 @@ function handleDrawerEvent(event) {
       }
       return;
     }
+    return;
+  }
+  if (event.type === "change" && target instanceof HTMLInputElement && target.type === "file") {
+    const fileAction = target.dataset.sotlAction || target.getAttribute("data-sotl-action") || "";
+    const file = target.files?.[0];
+    if (!file || !contextRef) return;
+    markedEvent.__sotlHandled = true;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = typeof reader.result === "string" ? reader.result : "";
+        const parsed = JSON.parse(text);
+        if (fileAction === "file-upload-single") {
+          if (isPresetValid(parsed)) {
+            if (builtInPresets.some((bp) => bp.id === parsed.id)) {
+              parsed.id = `${parsed.id}_imported_${Date.now()}`;
+              parsed.name = `${parsed.name} (Imported)`;
+            }
+            if (contextRef) postToBackend(contextRef, { type: "save_preset", preset: parsed });
+            selectPresetForEditing(parsed);
+            rerender();
+          } else {
+            throw new Error("File is missing required template fields (id, name, htmlTemplate).");
+          }
+        } else if (fileAction === "file-upload-pack") {
+          const packData = parsed;
+          const presets = Array.isArray(packData?.presets) ? packData.presets : [];
+          if (presets.length === 0) throw new Error("Pack file has no presets array or it is empty.");
+          let imported = 0;
+          for (const p of presets) {
+            if (!isPresetValid(p)) continue;
+            const preset = p;
+            if (builtInPresets.some((bp) => bp.id === preset.id)) {
+              preset.id = `${preset.id}_imported_${Date.now()}`;
+              preset.name = `${preset.name} (Imported)`;
+            }
+            if (contextRef) postToBackend(contextRef, { type: "save_preset", preset });
+            imported++;
+          }
+          if (imported === 0) throw new Error("No valid presets found in the pack file.");
+          const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
+          alertFn?.(`Imported ${imported} template(s) from pack.`);
+          rerender();
+        }
+      } catch (err) {
+        const text = err instanceof Error ? err.message : String(err);
+        const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
+        alertFn?.(`Template upload failed: ${text}`);
+      }
+      target.value = "";
+    };
+    reader.onerror = () => {
+      const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
+      alertFn?.("Failed to read the uploaded file.");
+      target.value = "";
+    };
+    reader.readAsText(file);
     return;
   }
   const editorField = target.closest("[data-sotl-editor-field]");
@@ -2738,6 +2880,10 @@ function handleDrawerEvent(event) {
   }
   if (fieldName === "hudDefaultView" && field instanceof HTMLSelectElement) {
     saveSettings({ hudDefaultView: field.value });
+  }
+  if (fieldName === "trackerHistoryLimit" && field instanceof HTMLSelectElement) {
+    const val = parseInt(field.value, 10);
+    if (!isNaN(val)) saveSettings({ trackerHistoryLimit: val });
   }
 }
 function handleBackendMessage(message) {

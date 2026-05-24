@@ -358,7 +358,7 @@ function handleDrawerEvent(event: Event): void {
       const newPreset = {
         id: newId,
         name: 'New Custom Loom',
-        version: '1.0.5',
+        version: '1.0.6',
         description: 'User custom continuity tracker.',
         mode: 'hybrid' as const,
         schemaJson: {
@@ -459,6 +459,66 @@ function handleDrawerEvent(event: Event): void {
       return;
     }
 
+    if (action === 'editor-download' && editingPreset) {
+      try {
+        const jsonText = JSON.stringify(editingPreset, null, 2);
+        const blob = new Blob([jsonText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${editingPreset.id}.json`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+      } catch (err) {
+        console.error('Failed to download template:', err);
+      }
+      return;
+    }
+
+    if (action === 'editor-download-all') {
+      try {
+        const customPresets = state?.presets.filter((p) => !builtInPresets.some((bp) => bp.id === p.id)) ?? [];
+        if (customPresets.length === 0) {
+          const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
+          alertFn?.('No custom templates to download.');
+          return;
+        }
+        const jsonText = JSON.stringify({ presets: customPresets }, null, 2);
+        const blob = new Blob([jsonText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'loom-custom-templates.json';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+      } catch (err) {
+        console.error('Failed to download custom templates pack:', err);
+      }
+      return;
+    }
+
+    if (action === 'editor-upload-single') {
+      const doc = documentRef();
+      const fileInput = doc?.getElementById('sotl-upload-single') as HTMLInputElement | null;
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+      }
+      return;
+    }
+
+    if (action === 'editor-upload-pack') {
+      const doc = documentRef();
+      const fileInput = doc?.getElementById('sotl-upload-pack') as HTMLInputElement | null;
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+      }
+      return;
+    }
+
     if (action === 'editor-import') {
       const doc = documentRef();
       const textarea = doc?.querySelector<HTMLTextAreaElement>('[data-sotl-editor-field="importJson"]');
@@ -485,6 +545,68 @@ function handleDrawerEvent(event: Event): void {
       return;
     }
 
+    return;
+  }
+
+  // File input change handlers (hidden file inputs rendered in the template editor)
+  if (event.type === 'change' && target instanceof HTMLInputElement && target.type === 'file') {
+    const fileAction = target.dataset.sotlAction || target.getAttribute('data-sotl-action') || '';
+    const file = target.files?.[0];
+    if (!file || !contextRef) return;
+    markedEvent.__sotlHandled = true;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = typeof reader.result === 'string' ? reader.result : '';
+        const parsed: unknown = JSON.parse(text);
+
+        if (fileAction === 'file-upload-single') {
+          // Single preset file
+          if (isPresetValid(parsed)) {
+            if (builtInPresets.some((bp) => bp.id === (parsed as any).id)) {
+              (parsed as any).id = `${(parsed as any).id}_imported_${Date.now()}`;
+              (parsed as any).name = `${(parsed as any).name} (Imported)`;
+            }
+            if (contextRef) postToBackend(contextRef, { type: 'save_preset', preset: parsed as any });
+            selectPresetForEditing(parsed as any);
+            rerender();
+          } else {
+            throw new Error('File is missing required template fields (id, name, htmlTemplate).');
+          }
+        } else if (fileAction === 'file-upload-pack') {
+          // Pack file: { presets: LoomPreset[] }
+          const packData = parsed as Record<string, unknown>;
+          const presets: unknown[] = Array.isArray(packData?.presets) ? packData.presets : [];
+          if (presets.length === 0) throw new Error('Pack file has no presets array or it is empty.');
+          let imported = 0;
+          for (const p of presets) {
+            if (!isPresetValid(p)) continue;
+            const preset = p as any;
+            if (builtInPresets.some((bp) => bp.id === preset.id)) {
+              preset.id = `${preset.id}_imported_${Date.now()}`;
+              preset.name = `${preset.name} (Imported)`;
+            }
+            if (contextRef) postToBackend(contextRef, { type: 'save_preset', preset });
+            imported++;
+          }
+          if (imported === 0) throw new Error('No valid presets found in the pack file.');
+          const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
+          alertFn?.(`Imported ${imported} template(s) from pack.`);
+          rerender();
+        }
+      } catch (err) {
+        const text = err instanceof Error ? err.message : String(err);
+        const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
+        alertFn?.(`Template upload failed: ${text}`);
+      }
+      target.value = '';
+    };
+    reader.onerror = () => {
+      const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
+      alertFn?.('Failed to read the uploaded file.');
+      target.value = '';
+    };
+    reader.readAsText(file);
     return;
   }
 
@@ -549,6 +671,10 @@ function handleDrawerEvent(event: Event): void {
   }
   if (fieldName === 'hudDefaultView' && field instanceof HTMLSelectElement) {
     saveSettings({ hudDefaultView: field.value as LoomSettings['hudDefaultView'] });
+  }
+  if (fieldName === 'trackerHistoryLimit' && field instanceof HTMLSelectElement) {
+    const val = parseInt(field.value, 10);
+    if (!isNaN(val)) saveSettings({ trackerHistoryLimit: val });
   }
 }
 
