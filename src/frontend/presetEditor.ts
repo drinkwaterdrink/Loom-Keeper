@@ -8,6 +8,15 @@ export let editingPreset: LoomPreset | null = null;
 export let lastPreviewHtml: string = '';
 export let lastSanitizerWarnings: string[] = [];
 export let lastJsonParseError: string | null = null;
+export let lastImportStatus: { ok: boolean; message: string; presetName?: string; presetId?: string } | null = null;
+
+export function clearImportStatus(): void {
+  lastImportStatus = null;
+}
+
+export function setImportStatus(status: { ok: boolean; message: string; presetName?: string; presetId?: string }): void {
+  lastImportStatus = status;
+}
 
 export function selectPresetForEditing(preset: LoomPreset): void {
   editingPreset = JSON.parse(JSON.stringify(preset));
@@ -189,14 +198,26 @@ export function renderPresetEditor(state: LoomFrontendState): string {
     button('Download All Custom', 'editor-download-all', { title: 'Download all custom templates as a pack .json file' }),
     button('Upload Template Pack', 'editor-upload-pack', { title: 'Upload a template pack .json file' }),
     '  </div>',
-    '  <input type="file" id="sotl-upload-single" accept=".json" style="display:none;" data-sotl-action="file-upload-single">',
-    '  <input type="file" id="sotl-upload-pack" accept=".json" style="display:none;" data-sotl-action="file-upload-pack">',
+    '  <input type="file" id="sotl-upload-single" accept=".json" style="display:none;" data-sotl-file-action="file-upload-single">',
+    '  <input type="file" id="sotl-upload-pack" accept=".json" style="display:none;" data-sotl-file-action="file-upload-pack">',
     '  <label class="sotl-label">Paste Template JSON to Import',
-    '    <textarea class="sotl-textarea" data-sotl-editor-field="importJson" placeholder=\'Paste preset JSON here...\'></textarea>',
+    '    <textarea class="sotl-textarea" id="sotl-import-paste" placeholder=\'Paste preset JSON here (single preset or array of presets)...\'></textarea>',
     '  </label>',
     '  <div class="sotl-actions">',
     button('Import Pasted Template', 'editor-import', { primary: true }),
     '  </div>',
+    lastImportStatus
+      ? [
+          `<div style="margin-top: 10px; padding: 8px 10px; border-radius: 6px; border-left: 3px solid ${lastImportStatus.ok ? 'var(--lv-success-text,#176b43)' : '#dc3545'}; background: ${lastImportStatus.ok ? 'rgba(27,126,80,0.07)' : 'rgba(220,53,69,0.08)'};">`,
+          `  <strong style="font-size: 11px; color: ${lastImportStatus.ok ? 'var(--lv-success-text,#176b43)' : 'var(--lv-error-text,#bd2130)'};">`,
+          lastImportStatus.ok ? '✅ Import succeeded' : '❌ Import failed',
+          '</strong>',
+          `  <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.4;">${escapeHtml(lastImportStatus.message)}</p>`,
+          lastImportStatus.presetName ? `  <p style="margin: 4px 0 0; font-size: 11px; color: var(--lumiverse-text-muted,#64707d);">Template: <strong>${escapeHtml(lastImportStatus.presetName)}</strong></p>` : '',
+          lastImportStatus.presetId ? `  <p style="margin: 2px 0 0; font-size: 11px; color: var(--lumiverse-text-muted,#64707d);">ID: <code>${escapeHtml(lastImportStatus.presetId)}</code></p>` : '',
+          '</div>',
+        ].join('')
+      : '',
     '</div>',
     '</details>',
 

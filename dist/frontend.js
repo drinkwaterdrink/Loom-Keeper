@@ -909,6 +909,13 @@ var editingPreset = null;
 var lastPreviewHtml = "";
 var lastSanitizerWarnings = [];
 var lastJsonParseError = null;
+var lastImportStatus = null;
+function clearImportStatus() {
+  lastImportStatus = null;
+}
+function setImportStatus(status) {
+  lastImportStatus = status;
+}
 function selectPresetForEditing(preset) {
   editingPreset = JSON.parse(JSON.stringify(preset));
   lastPreviewHtml = "";
@@ -1060,14 +1067,24 @@ function renderPresetEditor(state2) {
     button("Download All Custom", "editor-download-all", { title: "Download all custom templates as a pack .json file" }),
     button("Upload Template Pack", "editor-upload-pack", { title: "Upload a template pack .json file" }),
     "  </div>",
-    '  <input type="file" id="sotl-upload-single" accept=".json" style="display:none;" data-sotl-action="file-upload-single">',
-    '  <input type="file" id="sotl-upload-pack" accept=".json" style="display:none;" data-sotl-action="file-upload-pack">',
+    '  <input type="file" id="sotl-upload-single" accept=".json" style="display:none;" data-sotl-file-action="file-upload-single">',
+    '  <input type="file" id="sotl-upload-pack" accept=".json" style="display:none;" data-sotl-file-action="file-upload-pack">',
     '  <label class="sotl-label">Paste Template JSON to Import',
-    `    <textarea class="sotl-textarea" data-sotl-editor-field="importJson" placeholder='Paste preset JSON here...'></textarea>`,
+    `    <textarea class="sotl-textarea" id="sotl-import-paste" placeholder='Paste preset JSON here (single preset or array of presets)...'></textarea>`,
     "  </label>",
     '  <div class="sotl-actions">',
     button("Import Pasted Template", "editor-import", { primary: true }),
     "  </div>",
+    lastImportStatus ? [
+      `<div style="margin-top: 10px; padding: 8px 10px; border-radius: 6px; border-left: 3px solid ${lastImportStatus.ok ? "var(--lv-success-text,#176b43)" : "#dc3545"}; background: ${lastImportStatus.ok ? "rgba(27,126,80,0.07)" : "rgba(220,53,69,0.08)"};">`,
+      `  <strong style="font-size: 11px; color: ${lastImportStatus.ok ? "var(--lv-success-text,#176b43)" : "var(--lv-error-text,#bd2130)"};">`,
+      lastImportStatus.ok ? "\u2705 Import succeeded" : "\u274C Import failed",
+      "</strong>",
+      `  <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.4;">${escapeHtml2(lastImportStatus.message)}</p>`,
+      lastImportStatus.presetName ? `  <p style="margin: 4px 0 0; font-size: 11px; color: var(--lumiverse-text-muted,#64707d);">Template: <strong>${escapeHtml2(lastImportStatus.presetName)}</strong></p>` : "",
+      lastImportStatus.presetId ? `  <p style="margin: 2px 0 0; font-size: 11px; color: var(--lumiverse-text-muted,#64707d);">ID: <code>${escapeHtml2(lastImportStatus.presetId)}</code></p>` : "",
+      "</div>"
+    ].join("") : "",
     "</div>",
     "</details>",
     // Preview / Validation Section
@@ -1633,17 +1650,45 @@ function ensureChatLoomPanel(ctx, state2) {
   if (softHide) {
     container.style.setProperty("display", "none", "important");
   }
+  const pawSvg = `<svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" style="display: block;" aria-hidden="true"><path d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/></svg>`;
   if (!isChatLoomPanelExpanded) {
     container.innerHTML = `
-      <div class="sotl-chat-pill" data-sotl-panel-action="expand" title="Open Loom HUD">
-        <svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" style="display: block;">
-          <path d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/>
-        </svg>
+      <div class="sotl-chat-pill" data-sotl-panel-action="expand" title="Open Loom HUD" role="button" aria-label="Open Loom HUD" tabindex="0">
+        ${pawSvg}
       </div>
     `;
+    if (!isChatLoomPanelExpanded && !softHide) {
+      const hostSelectors = [
+        ".chat-action-buttons",
+        ".chat-actions",
+        ".message-actions",
+        ".right-actions",
+        "[data-chat-actions]",
+        "[data-message-actions]",
+        ".lv-chat-actions",
+        ".lv-action-strip"
+      ];
+      let hostContainer = null;
+      for (const sel of hostSelectors) {
+        hostContainer = doc.querySelector(sel);
+        if (hostContainer) break;
+      }
+      if (hostContainer) {
+        container.style.removeProperty("position");
+        container.style.setProperty("display", "block");
+        container.style.setProperty("margin-top", "8px");
+        hostContainer.append(container);
+        attachContainerClickHandler(container, ctx, state2, doc);
+        return;
+      }
+    }
   } else {
     container.innerHTML = renderCompactPanel(state2.latestTracker, state2);
   }
+  attachContainerClickHandler(container, ctx, state2, doc);
+  doc.body.append(container);
+}
+function attachContainerClickHandler(container, ctx, state2, doc) {
   container.addEventListener("click", (e) => {
     const target = e.target;
     if (!target) return;
@@ -1689,7 +1734,6 @@ function ensureChatLoomPanel(ctx, state2) {
       }
     }
   });
-  doc.body.append(container);
 }
 function ensureFloatingButton(ctx, state2) {
   const doc = documentRef();
@@ -2095,9 +2139,19 @@ var loomStyles = `
  * They are designed as a safe compatibility overlay, isolated from host DOM.
  */
 .sotl-chat-panel-container {
-  --sotl-launcher-top: 36%;
+  /*
+   * Paw launcher coordinates. Tune these to match the host UI.
+   * Target: flush right edge, just below the star/spark side icon.
+   * --sotl-launcher-top: vertical center of the button.
+   * --sotl-launcher-right: distance from right edge (0 = flush right).
+   * --sotl-launcher-size: button size, should match host icon size.
+   * --sotl-launcher-gap: gap below star icon (not directly used in CSS but kept as documentation).
+   */
+  --sotl-launcher-top: 21%;
   --sotl-launcher-right: 0px;
-  --sotl-launcher-top-mobile: 36%;
+  --sotl-launcher-size: 36px;
+  --sotl-launcher-gap: 8px;
+  --sotl-launcher-top-mobile: 21%;
   --sotl-launcher-right-mobile: 0px;
 
   font-family: var(--lv-font-sans, Inter, ui-sans-serif, system-ui, sans-serif);
@@ -2583,7 +2637,7 @@ function handleDrawerEvent(event) {
       const newPreset = {
         id: newId,
         name: "New Custom Loom",
-        version: "1.0.6",
+        version: "1.0.7",
         description: "User custom continuity tracker.",
         mode: "hybrid",
         schemaJson: {
@@ -2725,6 +2779,9 @@ function handleDrawerEvent(event) {
       if (fileInput) {
         fileInput.value = "";
         fileInput.click();
+      } else {
+        setImportStatus({ ok: false, message: "File upload is unavailable in this environment. Use the Paste import instead." });
+        rerender();
       }
       return;
     }
@@ -2734,88 +2791,160 @@ function handleDrawerEvent(event) {
       if (fileInput) {
         fileInput.value = "";
         fileInput.click();
+      } else {
+        setImportStatus({ ok: false, message: "File upload is unavailable in this environment. Use the Paste import instead." });
+        rerender();
       }
       return;
     }
     if (action === "editor-import") {
       const doc = documentRef2();
-      const textarea = doc?.querySelector('[data-sotl-editor-field="importJson"]');
-      if (!textarea || !textarea.value.trim()) return;
+      const textarea = doc?.getElementById("sotl-import-paste");
+      const rawText = textarea?.value?.trim() ?? "";
+      if (!rawText) {
+        setImportStatus({ ok: false, message: "Paste area is empty. Paste valid template JSON above then click Import." });
+        rerender();
+        return;
+      }
       try {
-        const parsed = JSON.parse(textarea.value);
-        if (isPresetValid(parsed)) {
-          if (builtInPresets.some((bp) => bp.id === parsed.id)) {
-            parsed.id = `${parsed.id}_imported_${Date.now()}`;
-            parsed.name = `${parsed.name} (Imported)`;
-          }
-          postToBackend(contextRef, { type: "save_preset", preset: parsed });
-          selectPresetForEditing(parsed);
-          textarea.value = "";
-          rerender();
+        const parsed = JSON.parse(rawText);
+        let candidates;
+        if (Array.isArray(parsed)) {
+          candidates = parsed;
+        } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.presets)) {
+          candidates = parsed.presets;
         } else {
-          throw new Error("JSON is missing required fields (id, name, htmlTemplate, etc.)");
+          candidates = [parsed];
         }
+        const valid = [];
+        const failures = [];
+        for (const candidate of candidates) {
+          if (!isPresetValid(candidate)) {
+            failures.push("One item is missing required fields (id, name, htmlTemplate).");
+            continue;
+          }
+          const p = { ...candidate };
+          if (builtInPresets.some((bp) => bp.id === p.id)) {
+            p.id = `${p.id}_custom_${Date.now()}`;
+            p.name = `${p.name} (Custom Copy)`;
+          }
+          if (!p.createdAt) p.createdAt = (/* @__PURE__ */ new Date()).toISOString();
+          p.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+          valid.push(p);
+        }
+        if (valid.length === 0) {
+          const failMsg = failures.length > 0 ? failures[0] : "No valid presets found in the pasted JSON.";
+          setImportStatus({ ok: false, message: failMsg });
+          rerender();
+          return;
+        }
+        for (const p of valid) {
+          postToBackend(contextRef, { type: "save_preset", preset: p });
+        }
+        const first = valid[0];
+        selectPresetForEditing(first);
+        postToBackend(contextRef, { type: "select_preset", presetId: first.id });
+        if (textarea) textarea.value = "";
+        const plural = valid.length > 1 ? `${valid.length} templates` : `"${first.name}"`;
+        const failNote = failures.length > 0 ? ` (${failures.length} item(s) skipped \u2014 missing required fields)` : "";
+        setImportStatus({
+          ok: true,
+          message: `Imported ${plural} successfully. Now auto-selected as active preset.${failNote}`,
+          presetName: first.name,
+          presetId: first.id
+        });
+        rerender();
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
-        const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
-        alertFn?.(`Template import failed: ${text}`);
+        setImportStatus({ ok: false, message: `JSON parse error: ${text}` });
+        rerender();
       }
       return;
     }
     return;
   }
   if (event.type === "change" && target instanceof HTMLInputElement && target.type === "file") {
-    const fileAction = target.dataset.sotlAction || target.getAttribute("data-sotl-action") || "";
+    const fileAction = target.dataset.sotlFileAction || target.getAttribute("data-sotl-file-action") || "";
     const file = target.files?.[0];
-    if (!file || !contextRef) return;
+    if (!file || !contextRef) {
+      setImportStatus({ ok: false, message: "No file was selected or file upload is unavailable." });
+      rerender();
+      return;
+    }
     markedEvent.__sotlHandled = true;
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const text = typeof reader.result === "string" ? reader.result : "";
         const parsed = JSON.parse(text);
-        if (fileAction === "file-upload-single") {
-          if (isPresetValid(parsed)) {
-            if (builtInPresets.some((bp) => bp.id === parsed.id)) {
-              parsed.id = `${parsed.id}_imported_${Date.now()}`;
-              parsed.name = `${parsed.name} (Imported)`;
-            }
-            if (contextRef) postToBackend(contextRef, { type: "save_preset", preset: parsed });
-            selectPresetForEditing(parsed);
-            rerender();
+        let candidates;
+        if (fileAction === "file-upload-pack") {
+          if (Array.isArray(parsed)) {
+            candidates = parsed;
+          } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.presets)) {
+            candidates = parsed.presets;
+          } else if (isPresetValid(parsed)) {
+            candidates = [parsed];
           } else {
-            throw new Error("File is missing required template fields (id, name, htmlTemplate).");
+            throw new Error('Pack file must be a JSON array or an object with a "presets" array.');
           }
-        } else if (fileAction === "file-upload-pack") {
-          const packData = parsed;
-          const presets = Array.isArray(packData?.presets) ? packData.presets : [];
-          if (presets.length === 0) throw new Error("Pack file has no presets array or it is empty.");
-          let imported = 0;
-          for (const p of presets) {
-            if (!isPresetValid(p)) continue;
-            const preset = p;
-            if (builtInPresets.some((bp) => bp.id === preset.id)) {
-              preset.id = `${preset.id}_imported_${Date.now()}`;
-              preset.name = `${preset.name} (Imported)`;
-            }
-            if (contextRef) postToBackend(contextRef, { type: "save_preset", preset });
-            imported++;
+        } else {
+          if (Array.isArray(parsed)) {
+            candidates = parsed;
+          } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.presets)) {
+            candidates = parsed.presets;
+          } else {
+            candidates = [parsed];
           }
-          if (imported === 0) throw new Error("No valid presets found in the pack file.");
-          const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
-          alertFn?.(`Imported ${imported} template(s) from pack.`);
-          rerender();
         }
+        const valid = [];
+        const failures = [];
+        for (const candidate of candidates) {
+          if (!isPresetValid(candidate)) {
+            failures.push("One item is missing required fields.");
+            continue;
+          }
+          const p = { ...candidate };
+          if (builtInPresets.some((bp) => bp.id === p.id)) {
+            p.id = `${p.id}_custom_${Date.now()}`;
+            p.name = `${p.name} (Custom Copy)`;
+          }
+          if (!p.createdAt) p.createdAt = (/* @__PURE__ */ new Date()).toISOString();
+          p.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+          valid.push(p);
+        }
+        if (valid.length === 0) {
+          const failMsg = failures.length > 0 ? failures[0] : "No valid presets found in the file.";
+          setImportStatus({ ok: false, message: failMsg });
+          rerender();
+          target.value = "";
+          return;
+        }
+        for (const p of valid) {
+          if (contextRef) postToBackend(contextRef, { type: "save_preset", preset: p });
+        }
+        const first = valid[0];
+        selectPresetForEditing(first);
+        if (contextRef) postToBackend(contextRef, { type: "select_preset", presetId: first.id });
+        const plural = valid.length > 1 ? `${valid.length} templates` : `"${first.name}"`;
+        const failNote = failures.length > 0 ? ` (${failures.length} skipped \u2014 missing fields)` : "";
+        setImportStatus({
+          ok: true,
+          message: `Imported ${plural} from file. Auto-selected as active preset.${failNote}`,
+          presetName: first.name,
+          presetId: first.id
+        });
+        rerender();
       } catch (err) {
         const text = err instanceof Error ? err.message : String(err);
-        const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
-        alertFn?.(`Template upload failed: ${text}`);
+        setImportStatus({ ok: false, message: `File parse error: ${text}` });
+        rerender();
       }
       target.value = "";
     };
     reader.onerror = () => {
-      const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
-      alertFn?.("Failed to read the uploaded file.");
+      setImportStatus({ ok: false, message: "Failed to read the uploaded file. Please try again." });
+      rerender();
       target.value = "";
     };
     reader.readAsText(file);
@@ -2891,6 +3020,7 @@ function handleBackendMessage(message) {
   if (message.type === "tracker_generated" || message.type === "tracker_updated" || message.type === "tracker_deleted" || message.type === "tracker_error" || message.type === "permissions_changed" || message.type === "storage_reset") {
     state = message.state;
   }
+  if (message.type === "storage_reset") clearImportStatus();
   if (message.type === "settings_saved" && state) state = { ...state, settings: message.settings };
   if (message.type === "error") lastFrontendError = message.message;
   if (message.type === "toast") lastToast = { level: message.level, message: message.message };

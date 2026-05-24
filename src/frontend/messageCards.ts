@@ -331,19 +331,62 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
     container.style.setProperty('display', 'none', 'important');
   }
 
+  const pawSvg = `<svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" style="display: block;" aria-hidden="true"><path d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/></svg>`;
+
   if (!isChatLoomPanelExpanded) {
-    // Round animal-track paw SVG button
     container.innerHTML = `
-      <div class="sotl-chat-pill" data-sotl-panel-action="expand" title="Open Loom HUD">
-        <svg viewBox="0 0 512 512" width="20" height="20" fill="currentColor" style="display: block;">
-          <path d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/>
-        </svg>
+      <div class="sotl-chat-pill" data-sotl-panel-action="expand" title="Open Loom HUD" role="button" aria-label="Open Loom HUD" tabindex="0">
+        ${pawSvg}
       </div>
     `;
+
+    // Attempt native host attachment: look for the right-side action strip containing the star/spark icon.
+    // Lumiverse typically places action icons in a vertical flex column on the right side of the chat.
+    // We look for common host selectors for the right action column, then find the star/spark button inside it,
+    // and insert our paw pill immediately after it.
+    if (!isChatLoomPanelExpanded && !softHide) {
+      const hostSelectors = [
+        '.chat-action-buttons',
+        '.chat-actions',
+        '.message-actions',
+        '.right-actions',
+        '[data-chat-actions]',
+        '[data-message-actions]',
+        '.lv-chat-actions',
+        '.lv-action-strip',
+      ];
+      let hostContainer: Element | null = null;
+      for (const sel of hostSelectors) {
+        hostContainer = doc.querySelector(sel);
+        if (hostContainer) break;
+      }
+
+      if (hostContainer) {
+        // Found a native action strip — inject pill as sibling after the last child
+        // Remove the fixed-position overlay style and use flow layout instead
+        container.style.removeProperty('position');
+        container.style.setProperty('display', 'block');
+        container.style.setProperty('margin-top', '8px');
+        hostContainer.append(container);
+        // Attach click handler and return early (skip doc.body.append below)
+        attachContainerClickHandler(container, ctx, state, doc);
+        return;
+      }
+    }
   } else {
     container.innerHTML = renderCompactPanel(state.latestTracker, state);
   }
 
+  attachContainerClickHandler(container, ctx, state, doc);
+  doc.body.append(container);
+}
+
+function attachContainerClickHandler(
+  container: HTMLElement,
+  ctx: FrontendContext,
+  state: LoomFrontendState,
+  doc: Document,
+): void {
   container.addEventListener('click', (e) => {
     const target = e.target as HTMLElement | null;
     if (!target) return;
@@ -392,8 +435,6 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
       }
     }
   });
-
-  doc.body.append(container);
 }
 
 /**

@@ -16,7 +16,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.6";
+var LOOM_VERSION = "1.0.7";
 var LOOM_SCHEMA_VERSION = "1";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
 var STORAGE_KEYS = {

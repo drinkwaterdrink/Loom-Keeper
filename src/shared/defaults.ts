@@ -1,6 +1,6 @@
 import type { LoomPreset, LoomSettings } from './types.js';
 
-export const LOOM_VERSION = '1.0.6';
+export const LOOM_VERSION = '1.0.7';
 export const LOOM_SCHEMA_VERSION = '1';
 export const SLIM_SCENE_PRESET_ID = 'slim_scene_loom';
 export const STORAGE_KEYS = {

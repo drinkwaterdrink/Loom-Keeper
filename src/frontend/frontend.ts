@@ -10,6 +10,8 @@ import {
   updateEditingField,
   runPreview,
   isPresetValid,
+  setImportStatus,
+  clearImportStatus,
 } from './presetEditor.js';
 import { builtInPresets } from '../shared/defaults.js';
 
@@ -358,7 +360,7 @@ function handleDrawerEvent(event: Event): void {
       const newPreset = {
         id: newId,
         name: 'New Custom Loom',
-        version: '1.0.6',
+        version: '1.0.7',
         description: 'User custom continuity tracker.',
         mode: 'hybrid' as const,
         schemaJson: {
@@ -505,6 +507,9 @@ function handleDrawerEvent(event: Event): void {
       if (fileInput) {
         fileInput.value = '';
         fileInput.click();
+      } else {
+        setImportStatus({ ok: false, message: 'File upload is unavailable in this environment. Use the Paste import instead.' });
+        rerender();
       }
       return;
     }
@@ -515,32 +520,79 @@ function handleDrawerEvent(event: Event): void {
       if (fileInput) {
         fileInput.value = '';
         fileInput.click();
+      } else {
+        setImportStatus({ ok: false, message: 'File upload is unavailable in this environment. Use the Paste import instead.' });
+        rerender();
       }
       return;
     }
 
     if (action === 'editor-import') {
       const doc = documentRef();
-      const textarea = doc?.querySelector<HTMLTextAreaElement>('[data-sotl-editor-field="importJson"]');
-      if (!textarea || !textarea.value.trim()) return;
+      // Read from the id-based paste textarea (not data-sotl-editor-field, which is reserved for live-edit fields)
+      const textarea = doc?.getElementById('sotl-import-paste') as HTMLTextAreaElement | null;
+      const rawText = textarea?.value?.trim() ?? '';
+      if (!rawText) {
+        setImportStatus({ ok: false, message: 'Paste area is empty. Paste valid template JSON above then click Import.' });
+        rerender();
+        return;
+      }
       try {
-        const parsed: unknown = JSON.parse(textarea.value);
-        if (isPresetValid(parsed)) {
-          if (builtInPresets.some((bp) => bp.id === parsed.id)) {
-            parsed.id = `${parsed.id}_imported_${Date.now()}`;
-            parsed.name = `${parsed.name} (Imported)`;
-          }
-          postToBackend(contextRef, { type: 'save_preset', preset: parsed });
-          selectPresetForEditing(parsed);
-          textarea.value = '';
-          rerender();
+        const parsed: unknown = JSON.parse(rawText);
+        // Normalize to array: support single object, array, or { presets: [] } pack shape
+        let candidates: unknown[];
+        if (Array.isArray(parsed)) {
+          candidates = parsed;
+        } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).presets)) {
+          candidates = (parsed as Record<string, unknown>).presets as unknown[];
         } else {
-          throw new Error('JSON is missing required fields (id, name, htmlTemplate, etc.)');
+          candidates = [parsed];
         }
+        const valid: any[] = [];
+        const failures: string[] = [];
+        for (const candidate of candidates) {
+          if (!isPresetValid(candidate)) {
+            failures.push('One item is missing required fields (id, name, htmlTemplate).');
+            continue;
+          }
+          const p = { ...candidate } as any;
+          if (builtInPresets.some((bp) => bp.id === p.id)) {
+            p.id = `${p.id}_custom_${Date.now()}`;
+            p.name = `${p.name} (Custom Copy)`;
+          }
+          // Ensure required timestamps exist
+          if (!p.createdAt) p.createdAt = new Date().toISOString();
+          p.updatedAt = new Date().toISOString();
+          valid.push(p);
+        }
+        if (valid.length === 0) {
+          const failMsg = failures.length > 0 ? failures[0] : 'No valid presets found in the pasted JSON.';
+          setImportStatus({ ok: false, message: failMsg });
+          rerender();
+          return;
+        }
+        // Save all valid presets; auto-select the first one
+        for (const p of valid) {
+          postToBackend(contextRef, { type: 'save_preset', preset: p });
+        }
+        const first = valid[0];
+        selectPresetForEditing(first);
+        // Also select it as the active preset so it appears in the main dropdown immediately
+        postToBackend(contextRef, { type: 'select_preset', presetId: first.id });
+        if (textarea) textarea.value = '';
+        const plural = valid.length > 1 ? `${valid.length} templates` : `"${first.name}"`;
+        const failNote = failures.length > 0 ? ` (${failures.length} item(s) skipped — missing required fields)` : '';
+        setImportStatus({
+          ok: true,
+          message: `Imported ${plural} successfully. Now auto-selected as active preset.${failNote}`,
+          presetName: first.name,
+          presetId: first.id,
+        });
+        rerender();
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
-        const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
-        alertFn?.(`Template import failed: ${text}`);
+        setImportStatus({ ok: false, message: `JSON parse error: ${text}` });
+        rerender();
       }
       return;
     }
@@ -548,62 +600,91 @@ function handleDrawerEvent(event: Event): void {
     return;
   }
 
-  // File input change handlers (hidden file inputs rendered in the template editor)
+  // File input change handlers — file inputs use data-sotl-file-action to avoid collision with click routing
   if (event.type === 'change' && target instanceof HTMLInputElement && target.type === 'file') {
-    const fileAction = target.dataset.sotlAction || target.getAttribute('data-sotl-action') || '';
+    const fileAction = target.dataset.sotlFileAction || target.getAttribute('data-sotl-file-action') || '';
     const file = target.files?.[0];
-    if (!file || !contextRef) return;
+    if (!file || !contextRef) {
+      setImportStatus({ ok: false, message: 'No file was selected or file upload is unavailable.' });
+      rerender();
+      return;
+    }
     markedEvent.__sotlHandled = true;
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const text = typeof reader.result === 'string' ? reader.result : '';
         const parsed: unknown = JSON.parse(text);
-
-        if (fileAction === 'file-upload-single') {
-          // Single preset file
-          if (isPresetValid(parsed)) {
-            if (builtInPresets.some((bp) => bp.id === (parsed as any).id)) {
-              (parsed as any).id = `${(parsed as any).id}_imported_${Date.now()}`;
-              (parsed as any).name = `${(parsed as any).name} (Imported)`;
-            }
-            if (contextRef) postToBackend(contextRef, { type: 'save_preset', preset: parsed as any });
-            selectPresetForEditing(parsed as any);
-            rerender();
+        // Normalize: single preset, array, or pack { presets: [] }
+        let candidates: unknown[];
+        if (fileAction === 'file-upload-pack') {
+          if (Array.isArray(parsed)) {
+            candidates = parsed;
+          } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).presets)) {
+            candidates = (parsed as Record<string, unknown>).presets as unknown[];
+          } else if (isPresetValid(parsed)) {
+            candidates = [parsed];
           } else {
-            throw new Error('File is missing required template fields (id, name, htmlTemplate).');
+            throw new Error('Pack file must be a JSON array or an object with a "presets" array.');
           }
-        } else if (fileAction === 'file-upload-pack') {
-          // Pack file: { presets: LoomPreset[] }
-          const packData = parsed as Record<string, unknown>;
-          const presets: unknown[] = Array.isArray(packData?.presets) ? packData.presets : [];
-          if (presets.length === 0) throw new Error('Pack file has no presets array or it is empty.');
-          let imported = 0;
-          for (const p of presets) {
-            if (!isPresetValid(p)) continue;
-            const preset = p as any;
-            if (builtInPresets.some((bp) => bp.id === preset.id)) {
-              preset.id = `${preset.id}_imported_${Date.now()}`;
-              preset.name = `${preset.name} (Imported)`;
-            }
-            if (contextRef) postToBackend(contextRef, { type: 'save_preset', preset });
-            imported++;
+        } else {
+          // Single file: support single object, array, or pack
+          if (Array.isArray(parsed)) {
+            candidates = parsed;
+          } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).presets)) {
+            candidates = (parsed as Record<string, unknown>).presets as unknown[];
+          } else {
+            candidates = [parsed];
           }
-          if (imported === 0) throw new Error('No valid presets found in the pack file.');
-          const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
-          alertFn?.(`Imported ${imported} template(s) from pack.`);
-          rerender();
         }
+        const valid: any[] = [];
+        const failures: string[] = [];
+        for (const candidate of candidates) {
+          if (!isPresetValid(candidate)) {
+            failures.push('One item is missing required fields.');
+            continue;
+          }
+          const p = { ...candidate } as any;
+          if (builtInPresets.some((bp) => bp.id === p.id)) {
+            p.id = `${p.id}_custom_${Date.now()}`;
+            p.name = `${p.name} (Custom Copy)`;
+          }
+          if (!p.createdAt) p.createdAt = new Date().toISOString();
+          p.updatedAt = new Date().toISOString();
+          valid.push(p);
+        }
+        if (valid.length === 0) {
+          const failMsg = failures.length > 0 ? failures[0] : 'No valid presets found in the file.';
+          setImportStatus({ ok: false, message: failMsg });
+          rerender();
+          target.value = '';
+          return;
+        }
+        for (const p of valid) {
+          if (contextRef) postToBackend(contextRef, { type: 'save_preset', preset: p });
+        }
+        const first = valid[0];
+        selectPresetForEditing(first);
+        if (contextRef) postToBackend(contextRef, { type: 'select_preset', presetId: first.id });
+        const plural = valid.length > 1 ? `${valid.length} templates` : `"${first.name}"`;
+        const failNote = failures.length > 0 ? ` (${failures.length} skipped — missing fields)` : '';
+        setImportStatus({
+          ok: true,
+          message: `Imported ${plural} from file. Auto-selected as active preset.${failNote}`,
+          presetName: first.name,
+          presetId: first.id,
+        });
+        rerender();
       } catch (err) {
         const text = err instanceof Error ? err.message : String(err);
-        const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
-        alertFn?.(`Template upload failed: ${text}`);
+        setImportStatus({ ok: false, message: `File parse error: ${text}` });
+        rerender();
       }
       target.value = '';
     };
     reader.onerror = () => {
-      const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
-      alertFn?.('Failed to read the uploaded file.');
+      setImportStatus({ ok: false, message: 'Failed to read the uploaded file. Please try again.' });
+      rerender();
       target.value = '';
     };
     reader.readAsText(file);
@@ -683,6 +764,7 @@ function handleBackendMessage(message: LoomBackendMessage): void {
   if (message.type === 'tracker_generated' || message.type === 'tracker_updated' || message.type === 'tracker_deleted' || message.type === 'tracker_error' || message.type === 'permissions_changed' || message.type === 'storage_reset') {
     state = message.state;
   }
+  if (message.type === 'storage_reset') clearImportStatus();
   if (message.type === 'settings_saved' && state) state = { ...state, settings: message.settings };
   if (message.type === 'error') lastFrontendError = message.message;
   if (message.type === 'toast') lastToast = { level: message.level, message: message.message };

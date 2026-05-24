@@ -1,14 +1,14 @@
-# State of the Loom (v1.0.5)
+# State of the Loom (v1.0.7)
 
 State of the Loom is a Lumiverse-native Spindle extension for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.5 introduces a polished, native-style launcher button, dynamic detail level toggles, an interactive template dashboard with a strict allowlist-based DOM HTML sanitizer, stale-state indicators, and clipboard conveniences.
+Version 1.0.7 is a bugfix pass: fixes template import (both pasted JSON and file upload) so imports actually work, adds a visible import status area with success/failure details, supports single presets / arrays / pack objects, auto-selects imported templates, and moves the paw launcher button to just below the star/spark icon. Also adds tracker history limit controls (1.0.6) and file download/upload for templates.
 
 ---
 
 ## Key Features
 
-1. **Native-Style Paw Launcher**: Redesigned from a circular pill into a polished, rounded-square button (`border-radius: 8px; width: 36px; height: 36px;`) that fits seamlessly into the Lumiverse action button strip. Uses absolute positioning fallback (`top: 36%; right: 12px;`) that can be customized or hidden entirely.
+1. **Native-Style Paw Launcher**: A rounded-square button (`border-radius: 8px; width: 36px; height: 36px;`) positioned just below the star/spark icon on the right side. CSS variable `--sotl-launcher-top: 21%` controls placement.
 2. **Floating HUD Panel**: An overlay panel showing the current chat's continuity status.
    - **View Toggle**: Switch between **Compact Summary** (scene title, location, time, delta, cast chips) and **Full Tracker** (HTML rendering based on the active template) directly in the HUD header. Changes save immediately without a full page refresh.
 3. **Custom Template Editor**: An interactive dashboard in the viewport drawer under **Custom Template Editor**:

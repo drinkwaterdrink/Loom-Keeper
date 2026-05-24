@@ -378,9 +378,19 @@ export const loomStyles = `
  * They are designed as a safe compatibility overlay, isolated from host DOM.
  */
 .sotl-chat-panel-container {
-  --sotl-launcher-top: 36%;
+  /*
+   * Paw launcher coordinates. Tune these to match the host UI.
+   * Target: flush right edge, just below the star/spark side icon.
+   * --sotl-launcher-top: vertical center of the button.
+   * --sotl-launcher-right: distance from right edge (0 = flush right).
+   * --sotl-launcher-size: button size, should match host icon size.
+   * --sotl-launcher-gap: gap below star icon (not directly used in CSS but kept as documentation).
+   */
+  --sotl-launcher-top: 21%;
   --sotl-launcher-right: 0px;
-  --sotl-launcher-top-mobile: 36%;
+  --sotl-launcher-size: 36px;
+  --sotl-launcher-gap: 8px;
+  --sotl-launcher-top-mobile: 21%;
   --sotl-launcher-right-mobile: 0px;
 
   font-family: var(--lv-font-sans, Inter, ui-sans-serif, system-ui, sans-serif);
