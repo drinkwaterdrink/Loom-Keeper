@@ -45,4 +45,50 @@ export class LoomPresetService {
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, []);
     return this.loadAll(userId);
   }
+
+  async save(userId: string, preset: LoomPreset): Promise<LoomPreset[]> {
+    // Prevent editing built-in presets
+    if (builtInPresets.some((p) => p.id === preset.id)) {
+      throw new Error(`Cannot modify built-in preset: ${preset.id}`);
+    }
+
+    const stored = await getJsonWithRecovery<unknown[]>(
+      this.spindle,
+      STORAGE_KEYS.presets,
+      userId,
+      [],
+      this.onStorageWarning,
+    );
+    const custom = Array.isArray(stored) ? stored.filter(isPreset) : [];
+    
+    const existingIndex = custom.findIndex((p) => p.id === preset.id);
+    if (existingIndex >= 0) {
+      custom[existingIndex] = preset;
+    } else {
+      custom.push(preset);
+    }
+
+    await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, custom);
+    return this.loadAll(userId);
+  }
+
+  async delete(userId: string, presetId: string): Promise<LoomPreset[]> {
+    // Prevent deleting built-in presets
+    if (builtInPresets.some((p) => p.id === presetId)) {
+      throw new Error(`Cannot delete built-in preset: ${presetId}`);
+    }
+
+    const stored = await getJsonWithRecovery<unknown[]>(
+      this.spindle,
+      STORAGE_KEYS.presets,
+      userId,
+      [],
+      this.onStorageWarning,
+    );
+    const custom = Array.isArray(stored) ? stored.filter(isPreset) : [];
+    const filtered = custom.filter((p) => p.id !== presetId);
+
+    await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, filtered);
+    return this.loadAll(userId);
+  }
 }

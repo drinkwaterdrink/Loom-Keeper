@@ -1,6 +1,6 @@
 import { renderTrackerHtml } from '../shared/renderer.js';
 import type { LoomFrontendState } from '../shared/types.js';
-import { renderPresetDetails } from './presetEditor.js';
+import { renderPresetEditor } from './presetEditor.js';
 import { renderFeatureBreakdown } from './settingsPanel.js';
 import { badge, button, escapeHtml, type LoomUiStatus } from './ui.js';
 
@@ -23,7 +23,13 @@ function renderConnectionOptions(state: LoomFrontendState): string {
 function renderPresetOptions(state: LoomFrontendState): string {
   return state.presets.map((preset) => {
     const selected = preset.id === state.settings.activePresetId ? ' selected' : '';
-    return `<option value="${escapeHtml(preset.id)}"${selected}>${escapeHtml(preset.name)}</option>`;
+    let suffix = `[~${preset.maxInjectionTokens || 200}t - Custom]`;
+    if (preset.id === 'micro_loom') suffix = '[~150t - Tiny]';
+    else if (preset.id === 'slim_scene_loom') suffix = '[~350t - Slim]';
+    else if (preset.id === 'balanced_story_loom') suffix = '[~400t - Balanced]';
+    else if (preset.id === 'cast_continuity_loom') suffix = '[~400t - Detailed]';
+    else if (preset.id === 'full_continuity_ledger') suffix = '[~450t - Full]';
+    return `<option value="${escapeHtml(preset.id)}"${selected}>${escapeHtml(preset.name)} ${suffix}</option>`;
   }).join('');
 }
 
@@ -61,6 +67,7 @@ function renderLatestTracker(state: LoomFrontendState): string {
     `<textarea class="sotl-textarea" data-sotl-field="latestJson">${escapeHtml(JSON.stringify(state.latestTracker.data, null, 2))}</textarea>`,
     '<div class="sotl-actions">',
     button('Save JSON', 'save-json'),
+    button('Copy JSON', 'copy-json', { title: 'Copy Loom JSON to clipboard' }),
     '</div>',
     '</div>',
     '</details>',
@@ -162,7 +169,7 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     status.lastToast ? `<p class="sotl-note">${escapeHtml(status.lastToast.message)}</p>` : '',
     '</section>',
     '<section class="sotl-panel">',
-    '<h3>Current Loom</h3>',
+    '<h3>Current Loom' + (state.diagnostics.lastRenderStatus?.includes('Stale') ? ' <span style="display: inline-block; background: rgba(255, 193, 7, 0.12); border: 1px solid #ffc107; color: #b58900; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-left: 8px; vertical-align: middle;">⚠️ Stale: New messages sent</span>' : '') + '</h3>',
     renderLatestTracker(state),
     '</section>',
     '<section class="sotl-panel">',
@@ -171,9 +178,9 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     '</section>',
     renderFeatureBreakdown(true),
     '<section class="sotl-panel">',
-    '<details class="sotl-details"><summary>Preset Details</summary>',
+    '<details class="sotl-details"><summary>Custom Template Editor</summary>',
     '<div style="margin-top: 10px;">',
-    renderPresetDetails(state.activePreset),
+    renderPresetEditor(state),
     '</div>',
     '</details>',
     '</section>',

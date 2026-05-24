@@ -69,3 +69,50 @@ export function makeRecoverableErrorReport(message: string): LoomValidationRepor
     issues: [{ path: '', message, severity: 'error' }],
   };
 }
+
+export function validateTemplateSafety(template: string): string[] {
+  const warnings: string[] = [];
+  const lower = template.toLowerCase();
+  
+  if (lower.includes('<script')) {
+    warnings.push('Script tags (<script>) are blocked for safety.');
+  }
+  if (lower.includes('<iframe')) {
+    warnings.push('Iframe tags (<iframe>) are blocked for safety.');
+  }
+  if (lower.includes('<object') || lower.includes('<embed')) {
+    warnings.push('Object and embed tags are blocked for safety.');
+  }
+  if (lower.includes('style=')) {
+    warnings.push('Inline style attributes (style=) are stripped. Use CSS classes instead.');
+  }
+  if (/\bon[a-zA-Z]+\s*=/i.test(template)) {
+    warnings.push('Inline event handlers (e.g. onclick=) are blocked for safety.');
+  }
+  if (lower.includes('javascript:') || lower.includes('data:')) {
+    warnings.push('javascript: and data: URIs inside attributes are blocked for safety.');
+  }
+
+  // Check tags in template to see if any are not in our allowlist
+  const allowedTags = new Set([
+    'div', 'section', 'article', 'header', 'footer', 'span', 'p', 'b', 'strong', 
+    'i', 'em', 'small', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'details', 'summary', 
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'br'
+  ]);
+  
+  // A simple regex tag extractor to warn about unknown tags
+  const tagRegex = /<([a-zA-Z0-9:-]+)/g;
+  let match;
+  const foundTags = new Set<string>();
+  while ((match = tagRegex.exec(template)) !== null) {
+    foundTags.add(match[1].toLowerCase());
+  }
+  
+  for (const tag of foundTags) {
+    if (tag !== 'if' && tag !== 'each' && !tag.startsWith('/') && !allowedTags.has(tag)) {
+      warnings.push(`Tag <${tag}> is not in the allowed list of safe tags.`);
+    }
+  }
+
+  return warnings;
+}

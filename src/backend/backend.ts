@@ -176,12 +176,24 @@ class StateOfTheLoomBackend {
       ...baseGenerationStatus,
       disabledReason,
     };
+
+    let isStale = false;
+    if (latestTracker && active.messages && active.messages.length > 0) {
+      const trackedMsgIndex = active.messages.findIndex((m) => m.id === latestTracker.messageId);
+      if (trackedMsgIndex === -1) {
+        isStale = true;
+      } else if (trackedMsgIndex < active.messages.length - 1) {
+        isStale = true;
+      }
+    }
+
     const diagnostics: LoomDiagnostics = {
       ...this.diagnostics,
       backendReady: true,
       lastParserError: this.diagnostics.lastParserError,
       lastGenerationError: this.diagnostics.lastGenerationError,
       storageWarning: this.diagnostics.storageWarning,
+      lastRenderStatus: isStale ? 'Current Loom state is Stale (new user or assistant messages have been added).' : this.diagnostics.lastRenderStatus,
     };
     const simulationNote = getSimulationMilestoneStatus();
     const entityNote = getEntityCaptureMilestoneStatus();
@@ -271,6 +283,31 @@ class StateOfTheLoomBackend {
 
       if (message.type === 'export_diagnostics') {
         await this.send(userId, { type: 'diagnostics', diagnostics: this.diagnostics });
+        return;
+      }
+
+      if (message.type === 'save_preset') {
+        await this.presetService.save(userId, message.preset);
+        const state = await this.buildState(userId);
+        await this.send(userId, { type: 'state', state });
+        await this.send(userId, { type: 'toast', level: 'success', message: `Template '${message.preset.name}' saved.` });
+        return;
+      }
+
+      if (message.type === 'delete_preset') {
+        await this.presetService.delete(userId, message.presetId);
+        const state = await this.buildState(userId);
+        await this.send(userId, { type: 'state', state });
+        await this.send(userId, { type: 'toast', level: 'success', message: 'Template deleted.' });
+        return;
+      }
+
+      if (message.type === 'reset_presets') {
+        await this.presetService.reset(userId);
+        const state = await this.buildState(userId);
+        await this.send(userId, { type: 'state', state });
+        await this.send(userId, { type: 'toast', level: 'success', message: 'Custom templates reset to defaults.' });
+        return;
       }
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);

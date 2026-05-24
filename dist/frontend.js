@@ -1,3 +1,646 @@
+// src/shared/defaults.ts
+var LOOM_SCHEMA_VERSION = "1";
+var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
+var now = "2026-01-01T00:00:00.000Z";
+var microLoomPreset = {
+  id: "micro_loom",
+  name: "Micro Loom",
+  version: "1.0.0",
+  description: "Smallest, fastest tracker. Best for low token usage and fast models.",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "location", "time", "mood", "delta"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneTitle: { type: "string", default: "" },
+      location: { type: "string", default: "" },
+      time: { type: "string", default: "" },
+      mood: { type: "string", default: "" },
+      delta: { type: "string", default: "" },
+      cast: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      activeThread: { type: "string", default: "" }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    '  <header class="sotl-card__head">',
+    '    <div class="sotl-card__header-main">',
+    '      <div class="sotl-card__eyebrow">Micro Loom</div>',
+    '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+    "    </div>",
+    '    <span class="sotl-pill sotl-pill--mood">{{mood}}</span>',
+    "  </header>",
+    '  <dl class="sotl-grid">',
+    '    <div class="sotl-grid-item"><dt>Location</dt><dd>{{location}}</dd></div>',
+    '    <div class="sotl-grid-item"><dt>Time</dt><dd>{{time}}</dd></div>',
+    "  </dl>",
+    '  <p class="sotl-delta">{{delta}}</p>',
+    '  <details class="sotl-card-details" open><summary>Cast Present</summary><ul class="sotl-anchors-list">{{#each cast}}<li>{{.}}</li>{{/each}}</ul></details>',
+    '  {{#if activeThread}}<details class="sotl-card-details" open><summary>Active Thread</summary><p class="sotl-thread-desc">{{activeThread}}</p></details>{{/if}}',
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom, a micro-sized continuity tracker for an AI roleplay chat.",
+    "Return valid JSON only. Do not use markdown fences.",
+    "Use the Micro Loom schema exactly.",
+    "Preserve stable facts from the previous tracker unless the latest assistant message clearly changes them.",
+    "Only update what changed this turn. Do not invent missing details.",
+    "Use empty strings and [] for unknowns.",
+    "Keep cast array under 4 items."
+  ].join("\n"),
+  injectionTemplate: "[Micro Loom]\n{{compactSummary}}",
+  maxInjectionTokens: 150,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "compact",
+    theme: "system",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneTitle: "Quick word in the foyer",
+    location: "Foyer",
+    time: "Late evening",
+    mood: "tense",
+    delta: "Mira entered quietly without shaking off her wet coat.",
+    cast: ["Mira", "Josh"],
+    activeThread: "Learn what Mira is hiding."
+  },
+  createdAt: now,
+  updatedAt: now
+};
+var slimSceneSampleData = {
+  schemaVersion: LOOM_SCHEMA_VERSION,
+  sceneTitle: "A quiet turn in the old hall",
+  location: "Lantern Hall",
+  time: "Late evening",
+  mood: "watchful",
+  delta: "Mira noticed the sealed letter and did not comment on it.",
+  showCast: true,
+  cast: [
+    {
+      name: "Mira",
+      role: "barkeep",
+      position: "behind the counter",
+      outfit: "rolled sleeves, dark apron",
+      emotion: "guarded",
+      inventory: ["sealed letter"]
+    }
+  ],
+  showInventory: true,
+  inventory: ["sealed letter", "brass key"],
+  showThreads: true,
+  activeThread: "Find out who left the letter.",
+  anchors: ["The cellar door is locked.", "Rain is getting heavier outside."],
+  avoidNext: ["Do not reveal the letter contents yet."]
+};
+var slimScenePreset = {
+  id: SLIM_SCENE_PRESET_ID,
+  name: "Slim Scene Loom",
+  version: "1.0.0",
+  description: "A low-token continuity tracker for location, cast, mood, inventory, deltas, and active story anchors.",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "location", "time", "mood", "delta"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneTitle: { type: "string", default: "" },
+      location: { type: "string", default: "" },
+      time: { type: "string", default: "" },
+      mood: { type: "string", default: "" },
+      delta: { type: "string", default: "" },
+      showCast: { type: "boolean", default: false },
+      cast: {
+        type: "array",
+        maxItems: 6,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            role: { type: "string", default: "" },
+            position: { type: "string", default: "" },
+            outfit: { type: "string", default: "" },
+            emotion: { type: "string", default: "" },
+            inventory: { type: "array", maxItems: 6, default: [], items: { type: "string" } }
+          }
+        }
+      },
+      showInventory: { type: "boolean", default: false },
+      inventory: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+      showThreads: { type: "boolean", default: false },
+      activeThread: { type: "string", default: "" },
+      anchors: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+      avoidNext: { type: "array", maxItems: 5, default: [], items: { type: "string" } }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    '  <header class="sotl-card__head">',
+    '    <div class="sotl-card__header-main">',
+    '      <div class="sotl-card__eyebrow">State of the Loom</div>',
+    '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+    "    </div>",
+    '    <span class="sotl-pill sotl-pill--mood">{{mood}}</span>',
+    "  </header>",
+    '  <dl class="sotl-grid">',
+    '    <div class="sotl-grid-item"><dt>Location</dt><dd>{{location}}</dd></div>',
+    '    <div class="sotl-grid-item"><dt>Time</dt><dd>{{time}}</dd></div>',
+    "  </dl>",
+    '  <p class="sotl-delta">{{delta}}</p>',
+    '  {{#if showCast}}<div class="sotl-section sotl-cast-section"><h4>Cast Members</h4><div class="sotl-cast-grid">{{#each cast}}<article class="sotl-cast-chip"><strong>{{name}}</strong> <span class="sotl-cast-role">{{role}}</span> <span class="sotl-cast-pos">{{position}}</span> <em class="sotl-cast-emo">{{emotion}}</em></article>{{/each}}</div></div>{{/if}}',
+    '  {{#if showInventory}}<details class="sotl-card-details" open><summary>Inventory Items</summary><ul class="sotl-inventory-list">{{#each inventory}}<li>{{.}}</li>{{/each}}</ul></details>{{/if}}',
+    '  {{#if showThreads}}<details class="sotl-card-details" open><summary>Active Thread</summary><p class="sotl-thread-desc">{{activeThread}}</p></details>{{/if}}',
+    '  <details class="sotl-card-details" open><summary>Scene Anchors</summary><ul class="sotl-anchors-list">{{#each anchors}}<li>{{.}}</li>{{/each}}</ul></details>',
+    '  <details class="sotl-card-details"><summary>Avoid Next (Instructions)</summary><ul class="sotl-avoid-list">{{#each avoidNext}}<li>{{.}}</li>{{/each}}</ul></details>',
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom, a continuity tracker for an AI roleplay chat.",
+    "Return valid JSON only. Do not use markdown fences.",
+    "Use the Slim Scene Loom schema exactly.",
+    "Preserve stable facts from the previous tracker unless the latest assistant message clearly changes them.",
+    "Only update what changed this turn. Do not invent missing details.",
+    "Use empty strings, false, 0, and [] for unknowns.",
+    "Keep arrays within their maxItems caps."
+  ].join("\n"),
+  injectionTemplate: "[State of the Loom placeholder]\n{{compactSummary}}",
+  maxInjectionTokens: 350,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "compact",
+    theme: "system",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: slimSceneSampleData,
+  createdAt: now,
+  updatedAt: now
+};
+var balancedStoryPreset = {
+  id: "balanced_story_loom",
+  name: "Balanced Story Loom",
+  version: "1.0.0",
+  description: "Medium-detail continuity tracker. Monitors environment, relationships, and cast pockets.",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "location", "environment", "time", "mood", "delta"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneTitle: { type: "string", default: "" },
+      location: { type: "string", default: "" },
+      environment: { type: "string", default: "" },
+      time: { type: "string", default: "" },
+      mood: { type: "string", default: "" },
+      delta: { type: "string", default: "" },
+      cast: {
+        type: "array",
+        maxItems: 5,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            role: { type: "string", default: "" },
+            position: { type: "string", default: "" },
+            outfit: { type: "string", default: "" },
+            emotion: { type: "string", default: "" },
+            pockets: { type: "array", maxItems: 4, default: [], items: { type: "string" } }
+          }
+        }
+      },
+      relationships: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            parties: { type: "string", default: "" },
+            tone: { type: "string", default: "" },
+            details: { type: "string", default: "" }
+          }
+        }
+      },
+      inventory: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+      activeThread: { type: "string", default: "" },
+      anchors: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+      contradictions: { type: "array", maxItems: 4, default: [], items: { type: "string" } }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    '  <header class="sotl-card__head">',
+    '    <div class="sotl-card__header-main">',
+    '      <div class="sotl-card__eyebrow">Balanced Story Loom</div>',
+    '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+    "    </div>",
+    '    <span class="sotl-pill sotl-pill--mood">{{mood}}</span>',
+    "  </header>",
+    '  <p class="sotl-delta" style="font-size: 11px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d)); margin-bottom: 8px;"><strong>Environment:</strong> {{environment}}</p>',
+    '  <dl class="sotl-grid">',
+    '    <div class="sotl-grid-item"><dt>Location</dt><dd>{{location}}</dd></div>',
+    '    <div class="sotl-grid-item"><dt>Time</dt><dd>{{time}}</dd></div>',
+    "  </dl>",
+    '  <p class="sotl-delta">{{delta}}</p>',
+    '  <div class="sotl-section sotl-cast-section">',
+    "    <h4>Cast Details</h4>",
+    '    <div class="sotl-cast-grid">',
+    "      {{#each cast}}",
+    '      <article class="sotl-cast-chip" style="flex-direction: column; align-items: flex-start; gap: 2px;">',
+    '        <div><strong>{{name}}</strong> <span class="sotl-cast-role">({{role}})</span></div>',
+    '        <div style="font-size: 11px;">\u{1F4CD} {{position}} \u2022 \u{1F455} {{outfit}}</div>',
+    '        <div style="font-size: 11px;">\u{1F3AD} <em class="sotl-cast-emo">{{emotion}}</em></div>',
+    '        {{#if pockets}}<div style="font-size: 10px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));">\u{1F392} Pockets: {{pockets}}</div>{{/if}}',
+    "      </article>",
+    "      {{/each}}",
+    "    </div>",
+    "  </div>",
+    "  {{#if relationships}}",
+    '  <details class="sotl-card-details" open><summary>Relationships</summary>',
+    '    <ul class="sotl-anchors-list">',
+    "      {{#each relationships}}",
+    "      <li><strong>{{parties}}</strong>: <em>{{tone}}</em> \u2014 {{details}}</li>",
+    "      {{/each}}",
+    "    </ul>",
+    "  </details>",
+    "  {{/if}}",
+    '  <details class="sotl-card-details"><summary>Inventory Items</summary><ul class="sotl-inventory-list">{{#each inventory}}<li>{{.}}</li>{{/each}}</ul></details>',
+    '  {{#if activeThread}}<details class="sotl-card-details" open><summary>Active Thread</summary><p class="sotl-thread-desc">{{activeThread}}</p></details>{{/if}}',
+    '  <details class="sotl-card-details" open><summary>Scene Anchors</summary><ul class="sotl-anchors-list">{{#each anchors}}<li>{{.}}</li>{{/each}}</ul></details>',
+    '  {{#if contradictions}}<details class="sotl-card-details"><summary>Contradictions</summary><ul class="sotl-anchors-list">{{#each contradictions}}<li>{{.}}</li>{{/each}}</ul></details>{{/if}}',
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom, a medium-detail story tracking system.",
+    "Return valid JSON only. Do not use markdown fences.",
+    "Use the Balanced Story Loom schema exactly.",
+    "Provide stable facts, tracking details, and active threads.",
+    "Keep arrays capped. Empty strings and [] are used for unknown or empty blocks."
+  ].join("\n"),
+  injectionTemplate: "[Balanced Story Loom]\n{{compactSummary}}",
+  maxInjectionTokens: 400,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "normal",
+    theme: "system",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneTitle: "A shared secret in Lantern Hall",
+    location: "Lantern Hall",
+    environment: "Dimly lit, warm hearth, rain drumming on high windows",
+    time: "Late evening",
+    mood: "intimate but guarded",
+    delta: "Mira showed Josh the letter but refused to let him hold it.",
+    cast: [
+      {
+        name: "Mira",
+        role: "barkeep",
+        position: "by the fireplace",
+        outfit: "dark woolen coat, damp leather boots",
+        emotion: "hesitant",
+        pockets: ["sealed letter"]
+      },
+      {
+        name: "Josh",
+        role: "guest",
+        position: "sitting on the rug",
+        outfit: "casual knits",
+        emotion: "curious",
+        pockets: ["pocket knife"]
+      }
+    ],
+    relationships: [
+      { parties: "Mira & Josh", tone: "cautious trust", details: "Mira shared the letter but is holding back its full history." }
+    ],
+    inventory: ["sealed letter", "brass key", "pocket knife"],
+    activeThread: "Find out who wrote the letter.",
+    anchors: ["The cellar door remains locked.", "The storm outside is intensifying."],
+    contradictions: ["None."]
+  },
+  createdAt: now,
+  updatedAt: now
+};
+var castContinuityPreset = {
+  id: "cast_continuity_loom",
+  name: "Cast Continuity Loom",
+  version: "1.0.0",
+  description: "Focuses entirely on character consistency: posture, proximity, intent, and speech traits.",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "location", "time", "delta"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneTitle: { type: "string", default: "" },
+      location: { type: "string", default: "" },
+      time: { type: "string", default: "" },
+      delta: { type: "string", default: "" },
+      cast: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            appearance: { type: "string", default: "" },
+            outfit: { type: "string", default: "" },
+            posture: { type: "string", default: "" },
+            proximity: { type: "string", default: "" },
+            hands: { type: "string", default: "" },
+            emotion: { type: "string", default: "" },
+            intent: { type: "string", default: "" },
+            dialogueColor: { type: "string", default: "" },
+            pockets: { type: "array", maxItems: 4, default: [], items: { type: "string" } }
+          }
+        }
+      }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    '  <header class="sotl-card__head">',
+    '    <div class="sotl-card__header-main">',
+    '      <div class="sotl-card__eyebrow">Cast Continuity Loom</div>',
+    '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+    "    </div>",
+    '    <span class="sotl-pill sotl-pill--mood">{{time}}</span>',
+    "  </header>",
+    '  <p class="sotl-delta" style="margin-top: 6px;">\u{1F4CD} <strong>Location:</strong> {{location}}</p>',
+    '  <p class="sotl-delta">{{delta}}</p>',
+    '  <div class="sotl-section sotl-cast-section">',
+    "    <h4>Character Continuities</h4>",
+    '    <div style="display: grid; gap: 10px; margin-top: 6px;">',
+    "      {{#each cast}}",
+    '      <article class="sotl-panel" style="background: var(--lumiverse-fill-subtle, rgba(255,255,255,0.3)); padding: 10px; display: grid; gap: 4px;">',
+    '        <h4 style="font-size: 13px; color: var(--lv-accent, #3864d9);">{{name}}</h4>',
+    '        <div style="font-size: 12px; line-height: 1.4;">',
+    "          <strong>Look:</strong> {{appearance}}<br>",
+    "          <strong>Outfit:</strong> {{outfit}}<br>",
+    "          <strong>Posture:</strong> {{posture}}<br>",
+    "          <strong>Proximity:</strong> {{proximity}}<br>",
+    "          <strong>Hands:</strong> {{hands}}<br>",
+    '          <strong>Emotion:</strong> <em class="sotl-cast-emo">{{emotion}}</em><br>',
+    "          <strong>Intent:</strong> {{intent}}<br>",
+    '          <strong>Dialogue:</strong> <span style="font-style: italic;">{{dialogueColor}}</span>',
+    "        </div>",
+    '        {{#if pockets}}<div style="font-size: 11px; margin-top: 4px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));">\u{1F392} Pockets: {{pockets}}</div>{{/if}}',
+    "      </article>",
+    "      {{/each}}",
+    "    </div>",
+    "  </div>",
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom, focusing entirely on roleplay character continuity details.",
+    "Return valid JSON only. Do not use markdown fences.",
+    "Use the Cast Continuity Loom schema exactly.",
+    "Document precise character appearances, outfits, gestures, distance, emotional states, goals, and dialogue details.",
+    "Only record facts grounded in active dialogue and physical actions."
+  ].join("\n"),
+  injectionTemplate: "[Cast Continuity Loom]\n{{compactSummary}}",
+  maxInjectionTokens: 400,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "normal",
+    theme: "system",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneTitle: "Anxious alignment",
+    location: "Hallway entry",
+    time: "Sunset",
+    delta: "Mira crossed her arms tightly, avoiding Josh\u2019s direct gaze.",
+    cast: [
+      {
+        name: "Mira",
+        appearance: "pale, brown hair tied back messily",
+        outfit: "damp green sweater",
+        posture: "arms crossed, shoulders hunched",
+        proximity: "two feet from door frame",
+        hands: "clutching her elbows",
+        emotion: "apprehensive",
+        intent: "deflect questions about the key",
+        dialogueColor: "hushed, clipped tone",
+        pockets: ["brass key"]
+      }
+    ]
+  },
+  createdAt: now,
+  updatedAt: now
+};
+var fullContinuityLedgerPreset = {
+  id: "full_continuity_ledger",
+  name: "Full Continuity Ledger",
+  version: "1.0.0",
+  description: "Largest preset tracking weather, lighting, secrets, relationships, meters, and anchors.",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "location", "time", "weather", "lighting", "mood", "delta"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneTitle: { type: "string", default: "" },
+      location: { type: "string", default: "" },
+      time: { type: "string", default: "" },
+      weather: { type: "string", default: "" },
+      lighting: { type: "string", default: "" },
+      mood: { type: "string", default: "" },
+      delta: { type: "string", default: "" },
+      cast: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            outfit: { type: "string", default: "" },
+            emotion: { type: "string", default: "" },
+            pockets: { type: "array", maxItems: 4, default: [], items: { type: "string" } }
+          }
+        }
+      },
+      inventory: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+      relationships: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            parties: { type: "string", default: "" },
+            status: { type: "string", default: "" }
+          }
+        }
+      },
+      activeThread: { type: "string", default: "" },
+      secrets: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      rumors: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      anchors: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+      contradictions: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      avoidNext: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+      meters: {
+        type: "array",
+        maxItems: 4,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            value: { type: "string", default: "" }
+          }
+        }
+      }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    '  <header class="sotl-card__head">',
+    '    <div class="sotl-card__header-main">',
+    '      <div class="sotl-card__eyebrow">Full Continuity Ledger</div>',
+    '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+    "    </div>",
+    '    <span class="sotl-pill sotl-pill--mood">{{mood}}</span>',
+    "  </header>",
+    '  <dl class="sotl-grid" style="grid-template-columns: repeat(3, 1fr); gap: 4px;">',
+    '    <div class="sotl-grid-item"><dt>Location</dt><dd style="font-size: 11px;">{{location}}</dd></div>',
+    '    <div class="sotl-grid-item"><dt>Time/Weather</dt><dd style="font-size: 11px;">{{time}} \u2022 {{weather}}</dd></div>',
+    '    <div class="sotl-grid-item"><dt>Lighting</dt><dd style="font-size: 11px;">{{lighting}}</dd></div>',
+    "  </dl>",
+    '  <p class="sotl-delta">{{delta}}</p>',
+    '  <div class="sotl-section sotl-cast-section">',
+    "    <h4>Cast Continuity</h4>",
+    '    <div class="sotl-cast-grid">',
+    "      {{#each cast}}",
+    '      <article class="sotl-cast-chip">',
+    '        <strong>{{name}}</strong> <em class="sotl-cast-emo">({{emotion}})</em> <span style="font-size: 11px; margin-left: 4px;">\u{1F455} {{outfit}}</span>',
+    '        {{#if pockets}}<span style="font-size: 10px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d)); margin-left: 6px;">\u{1F392} {{pockets}}</span>{{/if}}',
+    "      </article>",
+    "      {{/each}}",
+    "    </div>",
+    "  </div>",
+    "  {{#if meters}}",
+    '  <div style="margin-top: 8px;">',
+    '    <h4 style="margin: 0 0 4px; font-size: 11px; text-transform: uppercase; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));">Meters</h4>',
+    '    <div style="display: flex; flex-wrap: wrap; gap: 6px;">',
+    '      {{#each meters}}<span class="sotl-chip" style="background: rgba(220,10,10,0.06); border-color: rgba(220,10,10,0.15);">\u{1F525} {{name}}: {{value}}</span>{{/each}}',
+    "    </div>",
+    "  </div>",
+    "  {{/if}}",
+    '  <details class="sotl-card-details" open><summary>Inventory & Relationships</summary>',
+    '    <div style="font-size: 12px; margin-top: 4px;">',
+    "      <strong>Inventory:</strong> {{inventory}}<br>",
+    "      {{#each relationships}}<strong>{{parties}}</strong>: {{status}}<br>{{/each}}",
+    "    </div>",
+    "  </details>",
+    '  <details class="sotl-card-details" open><summary>Story Continuum</summary>',
+    '    <div style="font-size: 12px; line-height: 1.4; display: grid; gap: 4px;">',
+    "      {{#if activeThread}}<div><strong>Active Thread:</strong> {{activeThread}}</div>{{/if}}",
+    "      {{#if secrets}}<div><strong>Secrets:</strong> {{secrets}}</div>{{/if}}",
+    "      {{#if rumors}}<div><strong>Rumors:</strong> {{rumors}}</div>{{/if}}",
+    "      {{#if anchors}}<div><strong>Anchors:</strong> {{anchors}}</div>{{/if}}",
+    "      {{#if contradictions}}<div><strong>Contradictions:</strong> {{contradictions}}</div>{{/if}}",
+    "      {{#if avoidNext}}<div><strong>Avoid Next:</strong> {{avoidNext}}</div>{{/if}}",
+    "    </div>",
+    "  </details>",
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom, tracking full roleplay continuity details.",
+    "Return valid JSON only. Do not use markdown fences.",
+    "Use the Full Continuity Ledger schema exactly.",
+    "Preserve long-running secrets, rumors, active story arcs, lighting changes, weather state, and relationships.",
+    "Keep arrays capped. Empty strings and [] are used for unknown or empty blocks."
+  ].join("\n"),
+  injectionTemplate: "[Full Continuity Ledger]\n{{compactSummary}}",
+  maxInjectionTokens: 450,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "normal",
+    theme: "system",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneTitle: "Storm over Ward House",
+    location: "Ward House Kitchen",
+    time: "5:45 PM",
+    weather: "heavy rain, thunder",
+    lighting: "dim, flickering overhead fixture",
+    mood: "tense, electric",
+    delta: "Bridget\u2019s sudden questioning spiked the tension in the room.",
+    cast: [
+      {
+        name: "Bridget Hanley",
+        outfit: "dark knit sweater",
+        emotion: "wryly curious",
+        pockets: ["lighter"]
+      },
+      {
+        name: "Diane Ward",
+        outfit: "denim shorts, simple tee",
+        emotion: "tolerant but weary",
+        pockets: ["keyring"]
+      }
+    ],
+    inventory: ["letter", "keyring", "lighter"],
+    relationships: [
+      { parties: "Bridget & Diane", status: "playful tension" }
+    ],
+    activeThread: "Resolve Marcus\u2019s sudden absence.",
+    secrets: ["Marcus left under threat."],
+    rumors: ["The cellar door leads to an old drainage system."],
+    anchors: ["The house is locked from inside."],
+    contradictions: ["None."],
+    avoidNext: ["Do not reveal Marcus\u2019s whereabouts yet."],
+    meters: [
+      { name: "Tension", value: "High" },
+      { name: "Rain intensity", value: "Severe" }
+    ]
+  },
+  createdAt: now,
+  updatedAt: now
+};
+var builtInPresets = [
+  microLoomPreset,
+  slimScenePreset,
+  balancedStoryPreset,
+  castContinuityPreset,
+  fullContinuityLedgerPreset
+];
+
 // src/shared/renderer.ts
 function safeObjectToString(val) {
   if (val === null || val === void 0) return "";
@@ -52,6 +695,101 @@ function renderTemplate(template, data) {
   });
   return output.replace(/{{\s*([\w.]+|\.)\s*}}/g, (_match, path) => escapeHtml(readPath(data, path)));
 }
+function sanitizeDomHtml(html) {
+  if (typeof document === "undefined") {
+    return "";
+  }
+  try {
+    let sanitizeNode2 = function(node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node;
+      }
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node;
+        const tag = el.tagName.toLowerCase();
+        if (!allowedTags.has(tag)) {
+          return null;
+        }
+        const cleanEl = document.createElement(tag);
+        for (let i = 0; i < el.attributes.length; i++) {
+          const attr = el.attributes[i];
+          const name = attr.name.toLowerCase();
+          if (allowedAttrs.has(name) || name.startsWith("data-")) {
+            const value = attr.value;
+            const cleanVal = value.trim().toLowerCase();
+            if (cleanVal.includes("javascript:") || cleanVal.includes("data:")) {
+              continue;
+            }
+            cleanEl.setAttribute(name, value);
+          }
+        }
+        let child = el.firstChild;
+        while (child) {
+          const cleanChild = sanitizeNode2(child);
+          if (cleanChild) {
+            cleanEl.appendChild(cleanChild);
+          }
+          child = child.nextSibling;
+        }
+        return cleanEl;
+      }
+      return null;
+    };
+    var sanitizeNode = sanitizeNode2;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const body = doc.body;
+    const allowedTags = /* @__PURE__ */ new Set([
+      "div",
+      "section",
+      "article",
+      "header",
+      "footer",
+      "span",
+      "p",
+      "b",
+      "strong",
+      "i",
+      "em",
+      "small",
+      "ul",
+      "ol",
+      "li",
+      "dl",
+      "dt",
+      "dd",
+      "details",
+      "summary",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "hr",
+      "br"
+    ]);
+    const allowedAttrs = /* @__PURE__ */ new Set([
+      "class",
+      "title",
+      "aria-label",
+      "role"
+    ]);
+    const cleanBody = document.createElement("body");
+    let rootChild = body.firstChild;
+    while (rootChild) {
+      const cleanChild = sanitizeNode2(rootChild);
+      if (cleanChild) {
+        cleanBody.appendChild(cleanChild);
+      }
+      rootChild = rootChild.nextSibling;
+    }
+    return cleanBody.innerHTML;
+  } catch (err) {
+    console.error("DOM Parser sanitization failed:", err);
+    return "";
+  }
+}
 function renderTrackerHtml(tracker, preset) {
   const data = {
     ...tracker.data,
@@ -59,7 +797,28 @@ function renderTrackerHtml(tracker, preset) {
     theme: preset.renderOptions.theme,
     compactSummary: tracker.compactSummary
   };
-  return renderTemplate(preset.htmlTemplate, data);
+  try {
+    const rawHtml = renderTemplate(preset.htmlTemplate, data);
+    const isCustom = !builtInPresets.some((p) => p.id === preset.id);
+    if (isCustom) {
+      return sanitizeDomHtml(rawHtml);
+    }
+    return rawHtml;
+  } catch (error) {
+    console.error("Loom template rendering failed, falling back to safe card:", error);
+    const title = escapeHtml(tracker.compactSummary || "Continuity State");
+    return `
+      <section class="sotl-card sotl-density-compact sotl-theme-system" data-sotl-card="true">
+        <header class="sotl-card__head">
+          <div class="sotl-card__header-main">
+            <div class="sotl-card__eyebrow">State of the Loom (Fallback)</div>
+            <h3 class="sotl-card__title">${title}</h3>
+          </div>
+        </header>
+        <p class="sotl-delta">${escapeHtml(tracker.compactSummary || "Continuity render failed due to a template rendering error.")}</p>
+      </section>
+    `;
+  }
 }
 
 // src/frontend/ui.ts
@@ -79,18 +838,252 @@ function iconButton(label, action, id) {
   return `<button class="sotl-icon-button" type="button" data-sotl-action="${escapeHtml2(action)}" data-sotl-message-id="${escapeHtml2(id)}" title="${escapeHtml2(label)}" aria-label="${escapeHtml2(label)}">${escapeHtml2(label.slice(0, 1))}</button>`;
 }
 
+// src/shared/validation.ts
+function validateTemplateSafety(template) {
+  const warnings = [];
+  const lower = template.toLowerCase();
+  if (lower.includes("<script")) {
+    warnings.push("Script tags (<script>) are blocked for safety.");
+  }
+  if (lower.includes("<iframe")) {
+    warnings.push("Iframe tags (<iframe>) are blocked for safety.");
+  }
+  if (lower.includes("<object") || lower.includes("<embed")) {
+    warnings.push("Object and embed tags are blocked for safety.");
+  }
+  if (lower.includes("style=")) {
+    warnings.push("Inline style attributes (style=) are stripped. Use CSS classes instead.");
+  }
+  if (/\bon[a-zA-Z]+\s*=/i.test(template)) {
+    warnings.push("Inline event handlers (e.g. onclick=) are blocked for safety.");
+  }
+  if (lower.includes("javascript:") || lower.includes("data:")) {
+    warnings.push("javascript: and data: URIs inside attributes are blocked for safety.");
+  }
+  const allowedTags = /* @__PURE__ */ new Set([
+    "div",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "span",
+    "p",
+    "b",
+    "strong",
+    "i",
+    "em",
+    "small",
+    "ul",
+    "ol",
+    "li",
+    "dl",
+    "dt",
+    "dd",
+    "details",
+    "summary",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "br"
+  ]);
+  const tagRegex = /<([a-zA-Z0-9:-]+)/g;
+  let match;
+  const foundTags = /* @__PURE__ */ new Set();
+  while ((match = tagRegex.exec(template)) !== null) {
+    foundTags.add(match[1].toLowerCase());
+  }
+  for (const tag of foundTags) {
+    if (tag !== "if" && tag !== "each" && !tag.startsWith("/") && !allowedTags.has(tag)) {
+      warnings.push(`Tag <${tag}> is not in the allowed list of safe tags.`);
+    }
+  }
+  return warnings;
+}
+
 // src/frontend/presetEditor.ts
-function renderPresetDetails(preset) {
+var editingPreset = null;
+var lastPreviewHtml = "";
+var lastSanitizerWarnings = [];
+var lastJsonParseError = null;
+function selectPresetForEditing(preset) {
+  editingPreset = JSON.parse(JSON.stringify(preset));
+  lastPreviewHtml = "";
+  lastSanitizerWarnings = [];
+  lastJsonParseError = null;
+}
+function updateEditingField(field, value) {
+  if (!editingPreset) return;
+  if (field === "name") editingPreset.name = value;
+  if (field === "description") editingPreset.description = value;
+  if (field === "mode") editingPreset.mode = value;
+  if (field === "defaultPlacement") editingPreset.defaultPlacement = value;
+  if (field === "maxInjectionTokens") editingPreset.maxInjectionTokens = parseInt(value, 10) || 150;
+  if (field === "htmlTemplate") {
+    editingPreset.htmlTemplate = value;
+    lastSanitizerWarnings = validateTemplateSafety(value);
+  }
+  if (field === "promptInstructions") editingPreset.promptInstructions = value;
+  if (field === "injectionTemplate") editingPreset.injectionTemplate = value;
+  if (field === "schemaJson") {
+    try {
+      editingPreset.schemaJson = JSON.parse(value);
+      lastJsonParseError = null;
+    } catch (err) {
+      lastJsonParseError = `Schema JSON error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  if (field === "sampleData") {
+    try {
+      editingPreset.sampleData = JSON.parse(value);
+      lastJsonParseError = null;
+    } catch (err) {
+      lastJsonParseError = `Sample data JSON error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+}
+function runPreview() {
+  if (!editingPreset) return;
+  try {
+    lastSanitizerWarnings = validateTemplateSafety(editingPreset.htmlTemplate);
+    const mockTracker = {
+      version: editingPreset.version || "1.0.0",
+      schemaVersion: "1",
+      presetId: editingPreset.id,
+      chatId: "preview-chat",
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      source: "manual_edit",
+      placement: editingPreset.defaultPlacement,
+      data: editingPreset.sampleData || {},
+      compactSummary: "Preview compact summary",
+      validation: { ok: true, issues: [] }
+    };
+    lastPreviewHtml = renderTrackerHtml(mockTracker, editingPreset);
+    lastJsonParseError = null;
+  } catch (err) {
+    lastJsonParseError = `Preview failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+function isPresetValid(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && typeof value.id === "string" && typeof value.name === "string" && typeof value.htmlTemplate === "string";
+}
+function renderPresetEditor(state2) {
+  if (!editingPreset || !state2.presets.some((p) => p.id === editingPreset.id)) {
+    const active = state2.presets.find((p) => p.id === state2.settings.activePresetId);
+    editingPreset = active ? JSON.parse(JSON.stringify(active)) : state2.presets[0] ? JSON.parse(JSON.stringify(state2.presets[0])) : null;
+  }
+  if (!editingPreset) {
+    return '<p class="sotl-note">No templates are available to edit.</p>';
+  }
+  const isBuiltIn = builtInPresets.some((p) => p.id === editingPreset.id);
+  const presetsOptions = state2.presets.map((p) => {
+    const selected = p.id === editingPreset.id ? " selected" : "";
+    const isB = builtInPresets.some((bp) => bp.id === p.id);
+    return `<option value="${escapeHtml2(p.id)}"${selected}>${escapeHtml2(p.name)}${isB ? " (Built-in)" : " (Custom)"}</option>`;
+  }).join("");
   return [
-    '<div class="sotl-fields">',
-    '<details class="sotl-details"><summary>Prompt instructions</summary>',
-    `<pre class="sotl-code">${escapeHtml2(preset.promptInstructions)}</pre>`,
+    '<div class="sotl-fields" style="margin-top: 10px;">',
+    '<label class="sotl-label">Template to edit/inspect',
+    `  <select class="sotl-select" data-sotl-editor-field="selectedPresetId">${presetsOptions}</select>`,
+    "</label>",
+    isBuiltIn ? '<p class="sotl-note" style="color: var(--lv-accent, #3864d9);">\u2139\uFE0F Built-in templates are read-only. Click "Duplicate to Edit" to customize.</p>' : '<p class="sotl-note" style="color: var(--lv-success-text, #176b43);">\u270F\uFE0F You are editing a custom template.</p>',
+    '<div class="sotl-actions" style="margin-top: 8px; margin-bottom: 12px;">',
+    button("New Template", "editor-new", { primary: !isBuiltIn }),
+    button("Duplicate to Edit", "editor-duplicate", { primary: isBuiltIn }),
+    button("Save Template", "editor-save", { disabled: isBuiltIn, primary: !isBuiltIn, title: isBuiltIn ? "Built-in templates are read-only" : "Save edits" }),
+    button("Delete Custom", "editor-delete", { disabled: isBuiltIn, title: isBuiltIn ? "Built-in templates cannot be deleted" : "Delete custom template" }),
+    button("Reset All Custom", "editor-reset", { title: "Delete all custom templates" }),
+    "</div>",
+    // Collapsible Details Sections (All collapsed by default)
+    '<details class="sotl-details" style="margin-top: 8px;"><summary>Metadata (Name, Description, Mode)</summary>',
+    '<div class="sotl-fields" style="margin-top: 8px;">',
+    '  <label class="sotl-label">Template Name',
+    `    <input class="sotl-input" type="text" data-sotl-editor-field="name" value="${escapeHtml2(editingPreset.name)}" ${isBuiltIn ? "disabled" : ""}>`,
+    "  </label>",
+    '  <label class="sotl-label">Description',
+    `    <input class="sotl-input" type="text" data-sotl-editor-field="description" value="${escapeHtml2(editingPreset.description)}" ${isBuiltIn ? "disabled" : ""}>`,
+    "  </label>",
+    '  <label class="sotl-label">Mode',
+    `    <select class="sotl-select" data-sotl-editor-field="mode" ${isBuiltIn ? "disabled" : ""}>`,
+    `      <option value="hybrid"${editingPreset.mode === "hybrid" ? " selected" : ""}>Hybrid (passive extract + sidecar)</option>`,
+    `      <option value="sidecar_generate"${editingPreset.mode === "sidecar_generate" ? " selected" : ""}>Sidecar generation only</option>`,
+    `      <option value="passive_extract"${editingPreset.mode === "passive_extract" ? " selected" : ""}>Passive extraction only</option>`,
+    "    </select>",
+    "  </label>",
+    '  <label class="sotl-label">Default Placement',
+    `    <select class="sotl-select" data-sotl-editor-field="defaultPlacement" ${isBuiltIn ? "disabled" : ""}>`,
+    `      <option value="top"${editingPreset.defaultPlacement === "top" ? " selected" : ""}>Top of message</option>`,
+    `      <option value="bottom"${editingPreset.defaultPlacement === "bottom" ? " selected" : ""}>Bottom of message</option>`,
+    "    </select>",
+    "  </label>",
+    '  <label class="sotl-label">Max Injection Tokens',
+    `    <input class="sotl-input" type="number" data-sotl-editor-field="maxInjectionTokens" value="${editingPreset.maxInjectionTokens}" ${isBuiltIn ? "disabled" : ""}>`,
+    "  </label>",
+    "</div>",
     "</details>",
-    '<details class="sotl-details"><summary>Schema JSON</summary>',
-    `<pre class="sotl-code">${escapeHtml2(JSON.stringify(preset.schemaJson, null, 2))}</pre>`,
+    '<details class="sotl-details" style="margin-top: 8px;"><summary>HTML Template</summary>',
+    '<div class="sotl-fields" style="margin-top: 8px;">',
+    `  <textarea class="sotl-textarea" data-sotl-editor-field="htmlTemplate" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(editingPreset.htmlTemplate)}</textarea>`,
+    "</div>",
     "</details>",
-    '<details class="sotl-details"><summary>HTML Template</summary>',
-    `<pre class="sotl-code">${escapeHtml2(preset.htmlTemplate)}</pre>`,
+    '<details class="sotl-details" style="margin-top: 8px;"><summary>Prompt Instructions</summary>',
+    '<div class="sotl-fields" style="margin-top: 8px;">',
+    `  <textarea class="sotl-textarea" data-sotl-editor-field="promptInstructions" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(editingPreset.promptInstructions)}</textarea>`,
+    "</div>",
+    "</details>",
+    '<details class="sotl-details" style="margin-top: 8px;"><summary>Schema JSON</summary>',
+    '<div class="sotl-fields" style="margin-top: 8px;">',
+    `  <textarea class="sotl-textarea" data-sotl-editor-field="schemaJson" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(JSON.stringify(editingPreset.schemaJson, null, 2))}</textarea>`,
+    "</div>",
+    "</details>",
+    '<details class="sotl-details" style="margin-top: 8px;"><summary>Sample Data JSON</summary>',
+    '<div class="sotl-fields" style="margin-top: 8px;">',
+    `  <textarea class="sotl-textarea" data-sotl-editor-field="sampleData" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(JSON.stringify(editingPreset.sampleData, null, 2))}</textarea>`,
+    "</div>",
+    "</details>",
+    '<details class="sotl-details" style="margin-top: 8px;"><summary>Injection Template</summary>',
+    '<div class="sotl-fields" style="margin-top: 8px;">',
+    `  <textarea class="sotl-textarea" data-sotl-editor-field="injectionTemplate" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(editingPreset.injectionTemplate)}</textarea>`,
+    "</div>",
+    "</details>",
+    '<details class="sotl-details" style="margin-top: 8px;"><summary>Import / Export</summary>',
+    '<div class="sotl-fields" style="margin-top: 8px;">',
+    '  <div class="sotl-actions" style="margin-bottom: 8px;">',
+    button("Copy Template JSON", "editor-export"),
+    "  </div>",
+    '  <label class="sotl-label">Paste Template JSON to Import',
+    `    <textarea class="sotl-textarea" data-sotl-editor-field="importJson" placeholder='Paste preset JSON here...'></textarea>`,
+    "  </label>",
+    '  <div class="sotl-actions">',
+    button("Import Pasted Template", "editor-import", { primary: true }),
+    "  </div>",
+    "</div>",
+    "</details>",
+    // Preview / Validation Section
+    '<details class="sotl-details" style="margin-top: 8px;" open><summary>Preview & Validation</summary>',
+    '<div style="margin-top: 8px;">',
+    '  <div class="sotl-actions" style="margin-bottom: 8px;">',
+    button("Run Template Preview", "editor-preview", { primary: true }),
+    "  </div>",
+    lastJsonParseError ? `<p class="sotl-note sotl-warning" style="margin-bottom: 8px; color: var(--lv-error-text, #bd2130);">${escapeHtml2(lastJsonParseError)}</p>` : "",
+    lastSanitizerWarnings.length > 0 ? [
+      '<div style="background: rgba(220,53,69,0.08); border-left: 3px solid var(--lv-error-border, #dc3545); padding: 8px; margin-bottom: 8px; border-radius: 4px;">',
+      '  <strong style="color: var(--lv-error-text, #bd2130); font-size: 11px;">\u26A0\uFE0F Sanitizer Allowlist Warnings:</strong>',
+      '  <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: var(--lv-error-text, #bd2130);">',
+      ...lastSanitizerWarnings.map((w) => `    <li>${escapeHtml2(w)}</li>`),
+      "  </ul>",
+      "</div>"
+    ].join("\n") : "",
+    lastPreviewHtml ? [
+      '<div style="margin-top: 8px;">',
+      '  <span style="font-size: 11px; font-weight: 600; color: var(--lumiverse-text-muted, #64707d);">Mock Render Preview:</span>',
+      `  <div class="sotl-preview" style="margin-top: 4px; max-height: 250px; overflow-y: auto;">${lastPreviewHtml}</div>`,
+      "</div>"
+    ].join("\n") : '<p class="sotl-note">Click "Run Template Preview" to check how this template renders with the sample data.</p>',
+    "</div>",
     "</details>",
     "</div>"
   ].join("");
@@ -194,7 +1187,13 @@ function renderConnectionOptions(state2) {
 function renderPresetOptions(state2) {
   return state2.presets.map((preset) => {
     const selected = preset.id === state2.settings.activePresetId ? " selected" : "";
-    return `<option value="${escapeHtml2(preset.id)}"${selected}>${escapeHtml2(preset.name)}</option>`;
+    let suffix = `[~${preset.maxInjectionTokens || 200}t - Custom]`;
+    if (preset.id === "micro_loom") suffix = "[~150t - Tiny]";
+    else if (preset.id === "slim_scene_loom") suffix = "[~350t - Slim]";
+    else if (preset.id === "balanced_story_loom") suffix = "[~400t - Balanced]";
+    else if (preset.id === "cast_continuity_loom") suffix = "[~400t - Detailed]";
+    else if (preset.id === "full_continuity_ledger") suffix = "[~450t - Full]";
+    return `<option value="${escapeHtml2(preset.id)}"${selected}>${escapeHtml2(preset.name)} ${suffix}</option>`;
   }).join("");
 }
 function renderPlacementOptions(state2) {
@@ -226,6 +1225,7 @@ function renderLatestTracker(state2) {
     `<textarea class="sotl-textarea" data-sotl-field="latestJson">${escapeHtml2(JSON.stringify(state2.latestTracker.data, null, 2))}</textarea>`,
     '<div class="sotl-actions">',
     button("Save JSON", "save-json"),
+    button("Copy JSON", "copy-json", { title: "Copy Loom JSON to clipboard" }),
     "</div>",
     "</div>",
     "</details>"
@@ -318,7 +1318,7 @@ function renderDrawer(state2, status = {}) {
     status.lastToast ? `<p class="sotl-note">${escapeHtml2(status.lastToast.message)}</p>` : "",
     "</section>",
     '<section class="sotl-panel">',
-    "<h3>Current Loom</h3>",
+    "<h3>Current Loom" + (state2.diagnostics.lastRenderStatus?.includes("Stale") ? ' <span style="display: inline-block; background: rgba(255, 193, 7, 0.12); border: 1px solid #ffc107; color: #b58900; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-left: 8px; vertical-align: middle;">\u26A0\uFE0F Stale: New messages sent</span>' : "") + "</h3>",
     renderLatestTracker(state2),
     "</section>",
     '<section class="sotl-panel">',
@@ -327,9 +1327,9 @@ function renderDrawer(state2, status = {}) {
     "</section>",
     renderFeatureBreakdown(true),
     '<section class="sotl-panel">',
-    '<details class="sotl-details"><summary>Preset Details</summary>',
+    '<details class="sotl-details"><summary>Custom Template Editor</summary>',
     '<div style="margin-top: 10px;">',
-    renderPresetDetails(state2.activePreset),
+    renderPresetEditor(state2),
     "</div>",
     "</details>",
     "</section>",
@@ -517,6 +1517,19 @@ function renderCompactPanel(tracker, state2) {
       </svg>
     </button>
   `;
+  const toggleIcon = `
+    <button class="sotl-chat-panel__action-btn" data-sotl-panel-action="toggle-hud-view" title="${isCompact ? "Show Full Tracker View" : "Show Compact Summary View"}" aria-label="Toggle HUD Detail Level">
+      ${isCompact ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+           </svg>` : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="3" y1="15" x2="21" y2="15"/>
+           </svg>`}
+    </button>
+  `;
   const closeIcon = `
     <button class="sotl-chat-panel__action-btn sotl-chat-panel__action-btn--close" data-sotl-panel-action="collapse" title="Close Panel" aria-label="Close Panel">\u2715</button>
   `;
@@ -524,6 +1537,7 @@ function renderCompactPanel(tracker, state2) {
     <header class="sotl-chat-panel__head">
       <span class="sotl-chat-panel__title">Loom HUD</span>
       <div class="sotl-chat-panel__head-actions">
+        ${toggleIcon}
         ${drawerIcon}
         ${generateIcon}
         ${closeIcon}
@@ -617,6 +1631,19 @@ function ensureChatLoomPanel(ctx, state2) {
     } else if (action === "expand") {
       isChatLoomPanelExpanded = true;
       triggerRerender();
+    } else if (action === "toggle-hud-view") {
+      const nextView = state2.settings.hudDefaultView === "compact" ? "full" : "compact";
+      state2.settings.hudDefaultView = nextView;
+      triggerRerender();
+      const msg = { type: "save_settings", settings: { hudDefaultView: nextView } };
+      if (typeof ctx.sendToBackend === "function") {
+        ctx.sendToBackend(msg);
+      } else {
+        const direct = ctx.sendToBackend || ctx.backend && typeof ctx.backend === "object" && ctx.backend.postMessage;
+        if (typeof direct === "function") {
+          direct(msg);
+        }
+      }
     } else if (action === "drawer") {
       if (openDrawerCallback) {
         openDrawerCallback();
@@ -1070,9 +2097,9 @@ var loomStyles = `
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   background: var(--lumiverse-fill, var(--lv-surface-raised, rgba(255, 255, 255, 0.85)));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -1085,10 +2112,11 @@ var loomStyles = `
   color: var(--lumiverse-text, var(--lv-text, #1e2329));
 }
 .sotl-chat-pill:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 20px rgba(20, 24, 32, 0.18);
+  transform: scale(1.05);
+  box-shadow: 0 0 10px var(--lv-accent-glow, rgba(56, 100, 217, 0.4)), 0 4px 16px rgba(20, 24, 32, 0.18);
   border-color: var(--lv-accent, #3864d9);
   color: var(--lv-accent, #3864d9);
+  background: var(--lv-surface-hover, rgba(255, 255, 255, 0.95));
 }
 .sotl-chat-panel {
   width: 320px;
@@ -1515,6 +2543,156 @@ function handleDrawerEvent(event) {
         alertFn?.(`State of the Loom JSON edit failed: ${text}`);
       }
     }
+    if (action === "copy-json" && state?.latestTracker) {
+      const jsonText = JSON.stringify(state.latestTracker.data, null, 2);
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        navigator.clipboard.writeText(jsonText).then(() => {
+          const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
+          alertFn?.("Current Loom JSON copied to clipboard.");
+        }).catch((err) => {
+          console.error("Failed to copy JSON:", err);
+        });
+      }
+      return;
+    }
+    if (action === "editor-new") {
+      const newId = `custom_loom_${Date.now()}`;
+      const newPreset = {
+        id: newId,
+        name: "New Custom Loom",
+        version: "1.0.5",
+        description: "User custom continuity tracker.",
+        mode: "hybrid",
+        schemaJson: {
+          type: "object",
+          required: ["schemaVersion", "sceneTitle", "location", "time", "mood", "delta"],
+          properties: {
+            schemaVersion: { type: "string", default: "1" },
+            sceneTitle: { type: "string", default: "" },
+            location: { type: "string", default: "" },
+            time: { type: "string", default: "" },
+            mood: { type: "string", default: "" },
+            delta: { type: "string", default: "" }
+          }
+        },
+        htmlTemplate: [
+          '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+          '  <header class="sotl-card__head">',
+          '    <div class="sotl-card__header-main">',
+          '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+          "    </div>",
+          "  </header>",
+          '  <dl class="sotl-grid">',
+          '    <div class="sotl-grid-item"><dt>Location</dt><dd>{{location}}</dd></div>',
+          "  </dl>",
+          "</section>"
+        ].join("\n"),
+        promptInstructions: "Return valid JSON only. Do not use markdown fences. Update what changed.",
+        injectionTemplate: "[Custom Loom]\n{{compactSummary}}",
+        maxInjectionTokens: 150,
+        defaultPlacement: "top",
+        renderOptions: { density: "compact", theme: "system", showControls: true },
+        parserOptions: { fenceNames: ["tracker", "loom"], strictJson: true, repairInvalidJson: false },
+        sampleData: { sceneTitle: "New Scene", location: "Foyer" },
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      selectPresetForEditing(newPreset);
+      rerender();
+      return;
+    }
+    if (action === "editor-duplicate" && editingPreset) {
+      const baseId = editingPreset.id.replace(/_copy_\d+/g, "");
+      const newId = `${baseId}_copy_${Date.now()}`;
+      const newPreset = {
+        ...editingPreset,
+        id: newId,
+        name: `${editingPreset.name} Copy`,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      selectPresetForEditing(newPreset);
+      rerender();
+      return;
+    }
+    if (action === "editor-save" && editingPreset) {
+      postToBackend(contextRef, { type: "save_preset", preset: editingPreset });
+      return;
+    }
+    if (action === "editor-delete" && editingPreset) {
+      const confirmFn = typeof globalThis.confirm === "function" ? globalThis.confirm : null;
+      if (confirmFn && !confirmFn(`Delete custom template '${editingPreset.name}'?`)) return;
+      postToBackend(contextRef, { type: "delete_preset", presetId: editingPreset.id });
+      selectPresetForEditing(null);
+      rerender();
+      return;
+    }
+    if (action === "editor-reset") {
+      const confirmFn = typeof globalThis.confirm === "function" ? globalThis.confirm : null;
+      if (confirmFn && !confirmFn("Are you sure you want to delete all custom templates? This cannot be undone.")) return;
+      postToBackend(contextRef, { type: "reset_presets" });
+      selectPresetForEditing(null);
+      rerender();
+      return;
+    }
+    if (action === "editor-preview") {
+      runPreview();
+      rerender();
+      return;
+    }
+    if (action === "editor-export" && editingPreset) {
+      const jsonText = JSON.stringify(editingPreset, null, 2);
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        navigator.clipboard.writeText(jsonText).then(() => {
+          const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
+          alertFn?.("Template JSON copied to clipboard.");
+        }).catch((err) => {
+          console.error("Failed to copy template JSON:", err);
+        });
+      }
+      return;
+    }
+    if (action === "editor-import") {
+      const doc = documentRef2();
+      const textarea = doc?.querySelector('[data-sotl-editor-field="importJson"]');
+      if (!textarea || !textarea.value.trim()) return;
+      try {
+        const parsed = JSON.parse(textarea.value);
+        if (isPresetValid(parsed)) {
+          if (builtInPresets.some((bp) => bp.id === parsed.id)) {
+            parsed.id = `${parsed.id}_imported_${Date.now()}`;
+            parsed.name = `${parsed.name} (Imported)`;
+          }
+          postToBackend(contextRef, { type: "save_preset", preset: parsed });
+          selectPresetForEditing(parsed);
+          textarea.value = "";
+          rerender();
+        } else {
+          throw new Error("JSON is missing required fields (id, name, htmlTemplate, etc.)");
+        }
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
+        alertFn?.(`Template import failed: ${text}`);
+      }
+      return;
+    }
+    return;
+  }
+  const editorField = target.closest("[data-sotl-editor-field]");
+  if (editorField) {
+    if (event.type !== "change") return;
+    markedEvent.__sotlHandled = true;
+    const fieldName2 = editorField.dataset.sotlEditorField || "";
+    if (fieldName2 === "selectedPresetId" && target instanceof HTMLSelectElement) {
+      const preset = state?.presets.find((p) => p.id === target.value);
+      if (preset) {
+        selectPresetForEditing(preset);
+      }
+    } else if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+      updateEditingField(fieldName2, target.value);
+    }
+    rerender();
     return;
   }
   const field = target.closest("[data-sotl-field]");

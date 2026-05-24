@@ -16,7 +16,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.4";
+var LOOM_VERSION = "1.0.5";
 var LOOM_SCHEMA_VERSION = "1";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
 var STORAGE_KEYS = {
@@ -1253,6 +1253,43 @@ var LoomPresetService = class {
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, []);
     return this.loadAll(userId);
   }
+  async save(userId, preset) {
+    if (builtInPresets.some((p) => p.id === preset.id)) {
+      throw new Error(`Cannot modify built-in preset: ${preset.id}`);
+    }
+    const stored = await getJsonWithRecovery(
+      this.spindle,
+      STORAGE_KEYS.presets,
+      userId,
+      [],
+      this.onStorageWarning
+    );
+    const custom = Array.isArray(stored) ? stored.filter(isPreset) : [];
+    const existingIndex = custom.findIndex((p) => p.id === preset.id);
+    if (existingIndex >= 0) {
+      custom[existingIndex] = preset;
+    } else {
+      custom.push(preset);
+    }
+    await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, custom);
+    return this.loadAll(userId);
+  }
+  async delete(userId, presetId) {
+    if (builtInPresets.some((p) => p.id === presetId)) {
+      throw new Error(`Cannot delete built-in preset: ${presetId}`);
+    }
+    const stored = await getJsonWithRecovery(
+      this.spindle,
+      STORAGE_KEYS.presets,
+      userId,
+      [],
+      this.onStorageWarning
+    );
+    const custom = Array.isArray(stored) ? stored.filter(isPreset) : [];
+    const filtered = custom.filter((p) => p.id !== presetId);
+    await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, filtered);
+    return this.loadAll(userId);
+  }
 };
 
 // src/backend/settingsService.ts
@@ -1534,12 +1571,22 @@ var StateOfTheLoomBackend = class {
       ...baseGenerationStatus,
       disabledReason
     };
+    let isStale = false;
+    if (latestTracker && active.messages && active.messages.length > 0) {
+      const trackedMsgIndex = active.messages.findIndex((m) => m.id === latestTracker.messageId);
+      if (trackedMsgIndex === -1) {
+        isStale = true;
+      } else if (trackedMsgIndex < active.messages.length - 1) {
+        isStale = true;
+      }
+    }
     const diagnostics = {
       ...this.diagnostics,
       backendReady: true,
       lastParserError: this.diagnostics.lastParserError,
       lastGenerationError: this.diagnostics.lastGenerationError,
-      storageWarning: this.diagnostics.storageWarning
+      storageWarning: this.diagnostics.storageWarning,
+      lastRenderStatus: isStale ? "Current Loom state is Stale (new user or assistant messages have been added)." : this.diagnostics.lastRenderStatus
     };
     const simulationNote = getSimulationMilestoneStatus();
     const entityNote = getEntityCaptureMilestoneStatus();
@@ -1619,6 +1666,28 @@ var StateOfTheLoomBackend = class {
       }
       if (message.type === "export_diagnostics") {
         await this.send(userId, { type: "diagnostics", diagnostics: this.diagnostics });
+        return;
+      }
+      if (message.type === "save_preset") {
+        await this.presetService.save(userId, message.preset);
+        const state = await this.buildState(userId);
+        await this.send(userId, { type: "state", state });
+        await this.send(userId, { type: "toast", level: "success", message: `Template '${message.preset.name}' saved.` });
+        return;
+      }
+      if (message.type === "delete_preset") {
+        await this.presetService.delete(userId, message.presetId);
+        const state = await this.buildState(userId);
+        await this.send(userId, { type: "state", state });
+        await this.send(userId, { type: "toast", level: "success", message: "Template deleted." });
+        return;
+      }
+      if (message.type === "reset_presets") {
+        await this.presetService.reset(userId);
+        const state = await this.buildState(userId);
+        await this.send(userId, { type: "state", state });
+        await this.send(userId, { type: "toast", level: "success", message: "Custom templates reset to defaults." });
+        return;
       }
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);

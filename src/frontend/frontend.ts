@@ -4,6 +4,14 @@ import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, registerR
 import { renderSettingsPanel } from './settingsPanel.js';
 import { loomStyles } from './styles.js';
 import type { LoomUiStatus } from './ui.js';
+import {
+  editingPreset,
+  selectPresetForEditing,
+  updateEditingField,
+  runPreview,
+  isPresetValid,
+} from './presetEditor.js';
+import { builtInPresets } from '../shared/defaults.js';
 
 type FrontendContext = Record<string, unknown>;
 
@@ -328,6 +336,173 @@ function handleDrawerEvent(event: Event): void {
         alertFn?.(`State of the Loom JSON edit failed: ${text}`);
       }
     }
+
+    if (action === 'copy-json' && state?.latestTracker) {
+      const jsonText = JSON.stringify(state.latestTracker.data, null, 2);
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(jsonText)
+          .then(() => {
+            const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
+            alertFn?.('Current Loom JSON copied to clipboard.');
+          })
+          .catch((err) => {
+            console.error('Failed to copy JSON:', err);
+          });
+      }
+      return;
+    }
+
+    // Custom Preset Editor Action Buttons
+    if (action === 'editor-new') {
+      const newId = `custom_loom_${Date.now()}`;
+      const newPreset = {
+        id: newId,
+        name: 'New Custom Loom',
+        version: '1.0.5',
+        description: 'User custom continuity tracker.',
+        mode: 'hybrid' as const,
+        schemaJson: {
+          type: 'object',
+          required: ['schemaVersion', 'sceneTitle', 'location', 'time', 'mood', 'delta'],
+          properties: {
+            schemaVersion: { type: 'string', default: '1' },
+            sceneTitle: { type: 'string', default: '' },
+            location: { type: 'string', default: '' },
+            time: { type: 'string', default: '' },
+            mood: { type: 'string', default: '' },
+            delta: { type: 'string', default: '' },
+          },
+        },
+        htmlTemplate: [
+          '<section class="sotl-card sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+          '  <header class="sotl-card__head">',
+          '    <div class="sotl-card__header-main">',
+          '      <h3 class="sotl-card__title">{{sceneTitle}}</h3>',
+          '    </div>',
+          '  </header>',
+          '  <dl class="sotl-grid">',
+          '    <div class="sotl-grid-item"><dt>Location</dt><dd>{{location}}</dd></div>',
+          '  </dl>',
+          '</section>',
+        ].join('\n'),
+        promptInstructions: 'Return valid JSON only. Do not use markdown fences. Update what changed.',
+        injectionTemplate: '[Custom Loom]\n{{compactSummary}}',
+        maxInjectionTokens: 150,
+        defaultPlacement: 'top' as const,
+        renderOptions: { density: 'compact' as const, theme: 'system' as const, showControls: true },
+        parserOptions: { fenceNames: ['tracker', 'loom'], strictJson: true, repairInvalidJson: false },
+        sampleData: { sceneTitle: 'New Scene', location: 'Foyer' },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      selectPresetForEditing(newPreset);
+      rerender();
+      return;
+    }
+
+    if (action === 'editor-duplicate' && editingPreset) {
+      const baseId = editingPreset.id.replace(/_copy_\d+/g, '');
+      const newId = `${baseId}_copy_${Date.now()}`;
+      const newPreset = {
+        ...editingPreset,
+        id: newId,
+        name: `${editingPreset.name} Copy`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      selectPresetForEditing(newPreset);
+      rerender();
+      return;
+    }
+
+    if (action === 'editor-save' && editingPreset) {
+      postToBackend(contextRef, { type: 'save_preset', preset: editingPreset });
+      return;
+    }
+
+    if (action === 'editor-delete' && editingPreset) {
+      const confirmFn = typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
+      if (confirmFn && !confirmFn(`Delete custom template '${editingPreset.name}'?`)) return;
+      postToBackend(contextRef, { type: 'delete_preset', presetId: editingPreset.id });
+      selectPresetForEditing(null as any);
+      rerender();
+      return;
+    }
+
+    if (action === 'editor-reset') {
+      const confirmFn = typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
+      if (confirmFn && !confirmFn('Are you sure you want to delete all custom templates? This cannot be undone.')) return;
+      postToBackend(contextRef, { type: 'reset_presets' });
+      selectPresetForEditing(null as any);
+      rerender();
+      return;
+    }
+
+    if (action === 'editor-preview') {
+      runPreview();
+      rerender();
+      return;
+    }
+
+    if (action === 'editor-export' && editingPreset) {
+      const jsonText = JSON.stringify(editingPreset, null, 2);
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(jsonText)
+          .then(() => {
+            const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
+            alertFn?.('Template JSON copied to clipboard.');
+          })
+          .catch((err) => {
+            console.error('Failed to copy template JSON:', err);
+          });
+      }
+      return;
+    }
+
+    if (action === 'editor-import') {
+      const doc = documentRef();
+      const textarea = doc?.querySelector<HTMLTextAreaElement>('[data-sotl-editor-field="importJson"]');
+      if (!textarea || !textarea.value.trim()) return;
+      try {
+        const parsed: unknown = JSON.parse(textarea.value);
+        if (isPresetValid(parsed)) {
+          if (builtInPresets.some((bp) => bp.id === parsed.id)) {
+            parsed.id = `${parsed.id}_imported_${Date.now()}`;
+            parsed.name = `${parsed.name} (Imported)`;
+          }
+          postToBackend(contextRef, { type: 'save_preset', preset: parsed });
+          selectPresetForEditing(parsed);
+          textarea.value = '';
+          rerender();
+        } else {
+          throw new Error('JSON is missing required fields (id, name, htmlTemplate, etc.)');
+        }
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
+        alertFn?.(`Template import failed: ${text}`);
+      }
+      return;
+    }
+
+    return;
+  }
+
+  const editorField = target.closest<HTMLElement>('[data-sotl-editor-field]');
+  if (editorField) {
+    if (event.type !== 'change') return;
+    markedEvent.__sotlHandled = true;
+    const fieldName = editorField.dataset.sotlEditorField || '';
+    
+    if (fieldName === 'selectedPresetId' && target instanceof HTMLSelectElement) {
+      const preset = state?.presets.find((p) => p.id === target.value);
+      if (preset) {
+        selectPresetForEditing(preset);
+      }
+    } else if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+      updateEditingField(fieldName, target.value);
+    }
+    rerender();
     return;
   }
 

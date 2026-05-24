@@ -403,9 +403,9 @@ export const loomStyles = `
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   background: var(--lumiverse-fill, var(--lv-surface-raised, rgba(255, 255, 255, 0.85)));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -418,10 +418,11 @@ export const loomStyles = `
   color: var(--lumiverse-text, var(--lv-text, #1e2329));
 }
 .sotl-chat-pill:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 20px rgba(20, 24, 32, 0.18);
+  transform: scale(1.05);
+  box-shadow: 0 0 10px var(--lv-accent-glow, rgba(56, 100, 217, 0.4)), 0 4px 16px rgba(20, 24, 32, 0.18);
   border-color: var(--lv-accent, #3864d9);
   color: var(--lv-accent, #3864d9);
+  background: var(--lv-surface-hover, rgba(255, 255, 255, 0.95));
 }
 .sotl-chat-panel {
   width: 320px;

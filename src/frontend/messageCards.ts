@@ -208,6 +208,23 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
     </button>
   `;
 
+  const toggleIcon = `
+    <button class="sotl-chat-panel__action-btn" data-sotl-panel-action="toggle-hud-view" title="${isCompact ? 'Show Full Tracker View' : 'Show Compact Summary View'}" aria-label="Toggle HUD Detail Level">
+      ${isCompact 
+        ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+           </svg>`
+        : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="3" y1="15" x2="21" y2="15"/>
+           </svg>`
+      }
+    </button>
+  `;
+
   const closeIcon = `
     <button class="sotl-chat-panel__action-btn sotl-chat-panel__action-btn--close" data-sotl-panel-action="collapse" title="Close Panel" aria-label="Close Panel">✕</button>
   `;
@@ -216,6 +233,7 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
     <header class="sotl-chat-panel__head">
       <span class="sotl-chat-panel__title">Loom HUD</span>
       <div class="sotl-chat-panel__head-actions">
+        ${toggleIcon}
         ${drawerIcon}
         ${generateIcon}
         ${closeIcon}
@@ -337,6 +355,20 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
     } else if (action === 'expand') {
       isChatLoomPanelExpanded = true;
       triggerRerender();
+    } else if (action === 'toggle-hud-view') {
+      const nextView = state.settings.hudDefaultView === 'compact' ? 'full' : 'compact';
+      state.settings.hudDefaultView = nextView;
+      triggerRerender();
+      
+      const msg = { type: 'save_settings' as const, settings: { hudDefaultView: nextView } };
+      if (typeof ctx.sendToBackend === 'function') {
+        ctx.sendToBackend(msg);
+      } else {
+        const direct = ctx.sendToBackend || (ctx.backend && typeof ctx.backend === 'object' && (ctx.backend as any).postMessage);
+        if (typeof direct === 'function') {
+          direct(msg);
+        }
+      }
     } else if (action === 'drawer') {
       if (openDrawerCallback) {
         openDrawerCallback();

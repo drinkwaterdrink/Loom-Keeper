@@ -138,7 +138,10 @@ export type LoomFrontendMessage =
   | { type: 'delete_tracker'; chatId: string; messageId?: string | undefined }
   | { type: 'hide_tracker'; chatId: string; messageId?: string | undefined; hidden: boolean }
   | { type: 'reset_storage' }
-  | { type: 'export_diagnostics' };
+  | { type: 'export_diagnostics' }
+  | { type: 'save_preset'; preset: LoomPreset }
+  | { type: 'delete_preset'; presetId: string }
+  | { type: 'reset_presets' };
 
 export type LoomBackendMessage =
   | { type: 'state'; state: LoomFrontendState }
