@@ -4,6 +4,16 @@ export type LoomTheme = 'system' | 'glass' | 'paper' | 'terminal' | 'minimal';
 export type LoomTrackerSource = 'passive_extract' | 'sidecar_generate' | 'manual_edit' | 'repair';
 export type LoomPresetOrigin = 'built-in' | 'custom' | 'imported' | 'duplicated';
 export type LoomParseFailureCategory = 'empty' | 'invalid_json' | 'fenced_markdown' | 'schema_invalid' | 'missing_required_fields' | 'unknown';
+export type LoomTemplateEngine = 'loom' | 'handlebars_compat';
+export type LoomTemplateSourceFormat = 'loom' | 'simtracker';
+export type LoomCustomTemplateMode = 'trusted_layout' | 'strict_sanitized' | 'safe_generic';
+
+export interface LoomTemplateField {
+  key: string;
+  description: string;
+  type?: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object' | undefined;
+  itemSchema?: string | LoomTemplateField[] | undefined;
+}
 
 export interface LoomValidationIssue {
   path: string;
@@ -39,6 +49,9 @@ export interface LoomPreset {
   version: string;
   description: string;
   origin?: LoomPresetOrigin | undefined;
+  templateEngine?: LoomTemplateEngine | undefined;
+  sourceFormat?: LoomTemplateSourceFormat | undefined;
+  customFields?: LoomTemplateField[] | undefined;
   mode: 'passive_extract' | 'sidecar_generate' | 'hybrid';
   schemaJson: Record<string, unknown>;
   htmlTemplate: string;
@@ -80,6 +93,7 @@ export interface LoomSettings {
   trackerHistoryLimit: number;
   sidecarGenerationTimeoutMs?: number | undefined;
   useSafeRenderer?: boolean | undefined;
+  customTemplateMode?: LoomCustomTemplateMode | undefined;
 }
 
 export interface LoomPermissionState {
@@ -114,9 +128,22 @@ export interface LoomRenderReport {
   success: boolean;
   fallbackUsed: boolean;
   sanitizerRemovedContent: boolean;
+  templateMode?: LoomCustomTemplateMode | undefined;
+  preservedData?: boolean | undefined;
+  compatibility?: LoomTemplateCompatibilityReport | undefined;
   warning?: string | undefined;
   error?: string | undefined;
   missingFields: string[];
+}
+
+export interface LoomTemplateCompatibilityReport {
+  templateEngine: LoomTemplateEngine;
+  sourceFormat: LoomTemplateSourceFormat;
+  referencedFields: string[];
+  samplePresentFields: string[];
+  latestPresentFields: string[];
+  missingFromSample: string[];
+  missingFromLatest: string[];
 }
 
 export interface LoomPipelineReport {
@@ -140,6 +167,9 @@ export interface LoomPipelineReport {
   renderError?: string | undefined;
   renderWarning?: string | undefined;
   sanitizerRemovedContent: boolean;
+  templateMode?: LoomCustomTemplateMode | undefined;
+  preservedData?: boolean | undefined;
+  templateCompatibility?: LoomTemplateCompatibilityReport | undefined;
   fallbackUsed: boolean;
   trackerPresetId?: string | undefined;
   messageId: string;

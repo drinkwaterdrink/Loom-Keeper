@@ -16,8 +16,9 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.12";
+var LOOM_VERSION = "1.0.13";
 var LOOM_SCHEMA_VERSION = "1";
+var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
 var STORAGE_KEYS = {
   settings: "settings.json",
@@ -27,7 +28,7 @@ var STORAGE_KEYS = {
 var now = "2026-01-01T00:00:00.000Z";
 var defaultSettings = {
   enabled: true,
-  activePresetId: SLIM_SCENE_PRESET_ID,
+  activePresetId: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   autoGenerate: false,
   useDefaultConnectionFallback: true,
   stripTrackerBlocksFromMessages: false,
@@ -42,7 +43,381 @@ var defaultSettings = {
   cardDensity: "compact",
   trackerHistoryLimit: 5,
   sidecarGenerationTimeoutMs: 18e4,
-  useSafeRenderer: false
+  useSafeRenderer: false,
+  customTemplateMode: "trusted_layout"
+};
+var grandContinuityAtlasPreset = {
+  id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
+  name: "Grand Continuity Atlas",
+  version: "1.0.13",
+  description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
+  origin: "built-in",
+  templateEngine: "handlebars_compat",
+  sourceFormat: "loom",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneIdentity", "narrativeDelta", "characters", "worldState", "nextTurnGuidance"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneIdentity: {
+        type: "object",
+        properties: {
+          title: { type: "string", default: "" },
+          location: { type: "string", default: "" },
+          subLocation: { type: "string", default: "" },
+          time: { type: "string", default: "" },
+          date: { type: "string", default: "" },
+          weather: { type: "string", default: "" },
+          lighting: { type: "string", default: "" },
+          privacy: { type: "string", default: "" },
+          pacing: { type: "string", default: "" },
+          tension: { type: "string", default: "" },
+          mood: { type: "string", default: "" },
+          sensoryAtmosphere: { type: "string", default: "" },
+          atmosphere: { type: "array", maxItems: 8, default: [], items: { type: "string" } }
+        }
+      },
+      narrativeDelta: {
+        type: "object",
+        properties: {
+          summary: { type: "string", default: "" },
+          whatChanged: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          immediateConsequences: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          unresolvedBeats: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          continuityWarnings: { type: "array", maxItems: 6, default: [], items: { type: "string" } }
+        }
+      },
+      characters: {
+        type: "array",
+        maxItems: 8,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            role: { type: "string", default: "" },
+            presence: { type: "string", default: "" },
+            location: { type: "string", default: "" },
+            currentAction: { type: "string", default: "" },
+            appearance: {
+              type: "object",
+              properties: {
+                overview: { type: "string", default: "" },
+                face: { type: "string", default: "" },
+                hair: { type: "string", default: "" },
+                eyes: { type: "string", default: "" },
+                bodyBuild: { type: "string", default: "" },
+                clothing: { type: "string", default: "" },
+                posture: { type: "string", default: "" },
+                voice: { type: "string", default: "" },
+                scent: { type: "string", default: "" },
+                visibleCondition: { type: "string", default: "" }
+              }
+            },
+            state: {
+              type: "object",
+              properties: {
+                emotion: { type: "string", default: "" },
+                hiddenTension: { type: "string", default: "" },
+                injuries: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+                fatigue: { type: "string", default: "" },
+                goals: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+                knowledge: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+                secrets: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+                boundaries: { type: "array", maxItems: 6, default: [], items: { type: "string" } }
+              }
+            },
+            relationshipToUser: {
+              type: "object",
+              properties: {
+                label: { type: "string", default: "" },
+                trust: { type: "integer", default: 0 },
+                warmth: { type: "integer", default: 0 },
+                attraction: { type: "integer", default: 0 },
+                irritation: { type: "integer", default: 0 },
+                fear: { type: "integer", default: 0 },
+                leverage: { type: "string", default: "" },
+                recentShift: { type: "string", default: "" }
+              }
+            },
+            props: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+            inventory: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+            changesThisTurn: { type: "array", maxItems: 6, default: [], items: { type: "string" } }
+          }
+        }
+      },
+      relationships: {
+        type: "array",
+        maxItems: 10,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            parties: { type: "string", default: "" },
+            trust: { type: "string", default: "" },
+            warmth: { type: "string", default: "" },
+            attraction: { type: "string", default: "" },
+            irritation: { type: "string", default: "" },
+            fear: { type: "string", default: "" },
+            promises: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+            conflicts: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+            debts: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+            recentShift: { type: "string", default: "" }
+          }
+        }
+      },
+      worldState: {
+        type: "object",
+        properties: {
+          importantObjects: { type: "array", maxItems: 10, default: [], items: { type: "string" } },
+          hazards: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          activeThreads: { type: "array", maxItems: 10, default: [], items: { type: "string" } },
+          loreFacts: { type: "array", maxItems: 10, default: [], items: { type: "string" } },
+          constraints: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          timelineAnchors: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          sceneRules: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          contradictions: { type: "array", maxItems: 6, default: [], items: { type: "string" } }
+        }
+      },
+      nextTurnGuidance: {
+        type: "object",
+        properties: {
+          likelyFocus: { type: "string", default: "" },
+          fragileDetails: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          doNotForget: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          avoidInventing: { type: "array", maxItems: 8, default: [], items: { type: "string" } }
+        }
+      }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-atlas sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    "<style>",
+    ".sotl-atlas{font-family:var(--lv-font-sans,Inter,ui-sans-serif,system-ui,sans-serif);color:var(--lumiverse-text,var(--lv-text,#eef2ff));background:linear-gradient(145deg,rgba(12,16,24,.96),rgba(21,27,38,.94));border:1px solid rgba(130,150,190,.3);border-radius:14px;padding:14px;box-shadow:0 16px 44px rgba(0,0,0,.38);display:grid;gap:12px;overflow:hidden}",
+    ".sotl-atlas *{box-sizing:border-box}",
+    ".sotl-atlas__head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;border-bottom:1px solid rgba(255,255,255,.11);padding-bottom:10px}",
+    ".sotl-atlas__eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#9fb7ff;font-weight:800}",
+    ".sotl-atlas h3{margin:2px 0 0;font-size:18px;line-height:1.15;color:#fff}",
+    ".sotl-atlas__mood{display:inline-flex;align-items:center;border:1px solid rgba(159,183,255,.35);background:rgba(95,122,255,.14);border-radius:999px;padding:4px 9px;font-size:11px;color:#dbe5ff;white-space:nowrap}",
+    ".sotl-atlas__chips{display:flex;flex-wrap:wrap;gap:6px}",
+    ".sotl-atlas__chip{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);border-radius:7px;padding:5px 7px;font-size:11px;color:#d8deea;line-height:1.25}",
+    ".sotl-atlas__delta{font-size:13px;line-height:1.5;color:#f4f7ff;margin:0;padding:10px;border-radius:10px;background:rgba(255,255,255,.06);border-left:3px solid #8fb0ff}",
+    ".sotl-atlas__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}",
+    ".sotl-atlas__panel{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.045);border-radius:10px;padding:10px;min-width:0}",
+    ".sotl-atlas__panel h4{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#9fb7ff}",
+    ".sotl-atlas__list{margin:0;padding-left:16px;font-size:12px;line-height:1.45;color:#e1e7f2}",
+    ".sotl-atlas__cast{display:grid;gap:9px}",
+    ".sotl-atlas__person{border:1px solid rgba(159,183,255,.18);background:rgba(159,183,255,.06);border-radius:10px;padding:10px;display:grid;gap:8px}",
+    ".sotl-atlas__person-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
+    ".sotl-atlas__person h5{margin:0;font-size:14px;color:#fff}.sotl-atlas__role{font-size:11px;color:#b6c2d8}",
+    ".sotl-atlas__kv{display:grid;grid-template-columns:82px minmax(0,1fr);gap:4px 8px;font-size:12px;line-height:1.38}.sotl-atlas__kv b{color:#9fb7ff;font-size:10px;text-transform:uppercase;letter-spacing:.05em}.sotl-atlas__kv span{min-width:0;overflow-wrap:anywhere}",
+    ".sotl-atlas__meters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.sotl-atlas__meter{background:rgba(0,0,0,.18);border-radius:7px;padding:5px;text-align:center}.sotl-atlas__meter b{display:block;font-size:9px;color:#9fb7ff;text-transform:uppercase}.sotl-atlas__meter span{font-size:12px;color:#fff;font-weight:800}",
+    "@media(max-width:560px){.sotl-atlas{padding:11px;border-radius:10px}.sotl-atlas__head{grid-template-columns:1fr}.sotl-atlas__grid{grid-template-columns:1fr}.sotl-atlas__meters{grid-template-columns:repeat(3,minmax(0,1fr))}.sotl-atlas__kv{grid-template-columns:72px minmax(0,1fr)}}",
+    "</style>",
+    '<header class="sotl-atlas__head">',
+    '  <div><div class="sotl-atlas__eyebrow">Grand Continuity Atlas</div><h3>{{sceneIdentity.title}}</h3></div>',
+    '  <span class="sotl-atlas__mood">{{sceneIdentity.mood}}</span>',
+    "</header>",
+    '<div class="sotl-atlas__chips">',
+    '  <span class="sotl-atlas__chip">Location: {{sceneIdentity.location}}{{#if sceneIdentity.subLocation}} / {{sceneIdentity.subLocation}}{{/if}}</span>',
+    '  <span class="sotl-atlas__chip">Time: {{sceneIdentity.time}}</span>',
+    '  <span class="sotl-atlas__chip">Weather: {{sceneIdentity.weather}}</span>',
+    '  <span class="sotl-atlas__chip">Light: {{sceneIdentity.lighting}}</span>',
+    '  <span class="sotl-atlas__chip">Privacy: {{sceneIdentity.privacy}}</span>',
+    '  <span class="sotl-atlas__chip">Tension: {{sceneIdentity.tension}}</span>',
+    "</div>",
+    '<p class="sotl-atlas__delta">{{narrativeDelta.summary}}</p>',
+    '<section class="sotl-atlas__cast">',
+    "{{#each characters}}",
+    '  <article class="sotl-atlas__person">',
+    '    <div class="sotl-atlas__person-head"><div><h5>{{name}}</h5><div class="sotl-atlas__role">{{role}} - {{presence}} - {{location}}</div></div><span class="sotl-atlas__chip">{{state.emotion}}</span></div>',
+    '    <div class="sotl-atlas__kv">',
+    "      <b>Face</b><span>{{appearance.face}}</span><b>Hair</b><span>{{appearance.hair}}</span><b>Eyes</b><span>{{appearance.eyes}}</span><b>Build</b><span>{{appearance.bodyBuild}}</span><b>Clothes</b><span>{{appearance.clothing}}</span><b>Posture</b><span>{{appearance.posture}}</span><b>Voice</b><span>{{appearance.voice}}</span><b>Condition</b><span>{{appearance.visibleCondition}}</span>",
+    "    </div>",
+    '    <div class="sotl-atlas__meters"><div class="sotl-atlas__meter"><b>Trust</b><span>{{relationshipToUser.trust}}</span></div><div class="sotl-atlas__meter"><b>Warmth</b><span>{{relationshipToUser.warmth}}</span></div><div class="sotl-atlas__meter"><b>Attract</b><span>{{relationshipToUser.attraction}}</span></div><div class="sotl-atlas__meter"><b>Irrit.</b><span>{{relationshipToUser.irritation}}</span></div><div class="sotl-atlas__meter"><b>Fear</b><span>{{relationshipToUser.fear}}</span></div></div>',
+    '    <div class="sotl-atlas__grid">',
+    '      <div class="sotl-atlas__panel"><h4>Intent and Knowledge</h4><ul class="sotl-atlas__list">{{#each state.goals}}<li>{{this}}</li>{{/each}}{{#each state.knowledge}}<li>{{this}}</li>{{/each}}</ul></div>',
+    '      <div class="sotl-atlas__panel"><h4>Props and Changes</h4><ul class="sotl-atlas__list">{{#each props}}<li>{{this}}</li>{{/each}}{{#each inventory}}<li>{{this}}</li>{{/each}}{{#each changesThisTurn}}<li>{{this}}</li>{{/each}}</ul></div>',
+    "    </div>",
+    "  </article>",
+    "{{/each}}",
+    "</section>",
+    '<section class="sotl-atlas__grid">',
+    '  <div class="sotl-atlas__panel"><h4>World State</h4><ul class="sotl-atlas__list">{{#each worldState.importantObjects}}<li>{{this}}</li>{{/each}}{{#each worldState.hazards}}<li>{{this}}</li>{{/each}}{{#each worldState.activeThreads}}<li>{{this}}</li>{{/each}}{{#each worldState.loreFacts}}<li>{{this}}</li>{{/each}}</ul></div>',
+    '  <div class="sotl-atlas__panel"><h4>Next Turn Guidance</h4><p style="font-size:12px;line-height:1.45;margin:0 0 6px;color:#f4f7ff;">{{nextTurnGuidance.likelyFocus}}</p><ul class="sotl-atlas__list">{{#each nextTurnGuidance.fragileDetails}}<li>{{this}}</li>{{/each}}{{#each nextTurnGuidance.doNotForget}}<li>{{this}}</li>{{/each}}{{#each nextTurnGuidance.avoidInventing}}<li>{{this}}</li>{{/each}}</ul></div>',
+    "</section>",
+    '{{#if relationships}}<details class="sotl-card-details" open><summary>Relationship Ledger</summary><ul class="sotl-atlas__list">{{#each relationships}}<li><strong>{{parties}}</strong>: trust {{trust}}, warmth {{warmth}}, attraction {{attraction}}, irritation {{irritation}}, fear {{fear}}. {{recentShift}}</li>{{/each}}</ul></details>{{/if}}',
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom: Grand Continuity Atlas, a high-detail continuity tracker for AI roleplay.",
+    "Return raw JSON only. Do not use markdown fences, XML tags, comments, prose outside JSON, or explanations.",
+    "Use the Grand Continuity Atlas schema exactly. Include every required top-level object.",
+    "Target roughly 2200-2800 JSON tokens when the scene has enough material. Do not pad with invented facts; if information is unknown, use concise empty strings or empty arrays.",
+    "Preserve stable facts from the previous tracker unless the latest assistant message clearly changes them.",
+    "Track character appearance with unusually strong continuity: face, hair, eyes, build, clothing, posture, voice, scent, visible condition, injuries, fatigue, emotional state, hidden tension, goals, knowledge, secrets, boundaries, props, inventory, and changes this turn.",
+    "Track relationships as state, not vibes only: trust, warmth, attraction, irritation, fear, leverage, promises, conflicts, debts, and recent shifts.",
+    "Track world state: important objects, hazards, active threads, lore facts, constraints, timeline anchors, scene rules, contradictions, and continuity warnings.",
+    "Use 0-100 integers for relationshipToUser meter values. Keep arrays within maxItems. Prefer specific compact phrases over vague labels.",
+    "The latest assistant message is authoritative for what just happened; the previous tracker is authoritative for stable continuity that was not contradicted."
+  ].join("\n"),
+  injectionTemplate: "[Grand Continuity Atlas]\n{{compactSummary}}",
+  maxInjectionTokens: 900,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "expanded",
+    theme: "glass",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom", "atlas"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneIdentity: {
+      title: "Kitchen Introduction Under Stormlight",
+      location: "Ward House",
+      subLocation: "Kitchen threshold",
+      time: "5:35 PM",
+      date: "2024-07-12",
+      weather: "hot, stagnant, humid late afternoon with thunder building outside",
+      lighting: "low afternoon sun through windows and warm kitchen overheads",
+      privacy: "semi-private; Bridget and Diane can observe Josh",
+      pacing: "slow social pressure with physical discomfort",
+      tension: "strained, awkward, mildly buzzed",
+      mood: "tense but domestic",
+      sensoryAtmosphere: "heavy summer heat, tile underfoot, old wood, glass clinks, storm scent near the door",
+      atmosphere: ["heavy standing heat", "old kitchen wood", "wet storm smell near the threshold"]
+    },
+    narrativeDelta: {
+      summary: "Josh enters the kitchen after Diane and makes a clumsy offer to leave while Bridget observes from the counter with wine in hand.",
+      whatChanged: ["Josh has arrived in the kitchen.", "Bridget is confirmed present and watching.", "Marcus remains absent."],
+      immediateConsequences: ["Josh must navigate Bridget and Diane while physically strained."],
+      unresolvedBeats: ["Why Marcus is absent.", "Whether Josh can move upstairs safely."],
+      continuityWarnings: ["Do not forget Josh is dealing with a severe right-leg cramp."]
+    },
+    characters: [
+      {
+        name: "Josh",
+        role: "visitor",
+        presence: "active in scene",
+        location: "kitchen threshold",
+        currentAction: "offering to leave despite pain",
+        appearance: {
+          overview: "strained, overheated, trying to look composed",
+          face: "tight around the mouth from pain",
+          hair: "slightly mussed from the humid house",
+          eyes: "watchful and embarrassed",
+          bodyBuild: "adult build, currently favoring one leg",
+          clothing: "casual travel clothes, rumpled from the heat",
+          posture: "weight shifted off the right leg",
+          voice: "polite but strained",
+          scent: "warm skin and storm-damp air",
+          visibleCondition: "severe right-leg cramp limiting movement"
+        },
+        state: {
+          emotion: "awkward and tense",
+          hiddenTension: "does not want to look helpless in front of Bridget",
+          injuries: ["severe right-leg cramp"],
+          fatigue: "physically strained",
+          goals: ["avoid imposing", "reach Marcus or learn where he is"],
+          knowledge: ["Marcus is absent", "Diane and Bridget are watching him"],
+          secrets: [],
+          boundaries: ["should not sprint or climb quickly while cramped"]
+        },
+        relationshipToUser: {
+          label: "player viewpoint",
+          trust: 50,
+          warmth: 45,
+          attraction: 0,
+          irritation: 15,
+          fear: 10,
+          leverage: "none established",
+          recentShift: "more vulnerable after visible pain"
+        },
+        props: [],
+        inventory: [],
+        changesThisTurn: ["entered kitchen", "showed strain from leg cramp"]
+      },
+      {
+        name: "Bridget Hanley",
+        role: "aunt and drinker of wine",
+        presence: "active observer",
+        location: "leaning near the kitchen counter",
+        currentAction: "watching Josh with sharp curiosity",
+        appearance: {
+          overview: "composed, amused, slightly buzzed",
+          face: "sharp-eyed with a faintly assessing expression",
+          hair: "neat enough but casual for the house",
+          eyes: "focused on Josh",
+          bodyBuild: "relaxed adult posture",
+          clothing: "house casuals with a folded towel in hand",
+          posture: "leaning at the counter, glass nearby",
+          voice: "dry and curious",
+          scent: "wine and warm kitchen air",
+          visibleCondition: "mildly buzzed but observant"
+        },
+        state: {
+          emotion: "curious and amused",
+          hiddenTension: "testing Josh socially",
+          injuries: [],
+          fatigue: "none obvious",
+          goals: ["understand who Josh is", "watch Diane handle him"],
+          knowledge: ["Josh is struggling physically", "Marcus is not here"],
+          secrets: [],
+          boundaries: ["keeps social control through teasing observation"]
+        },
+        relationshipToUser: {
+          label: "new acquaintance",
+          trust: 30,
+          warmth: 35,
+          attraction: 0,
+          irritation: 20,
+          fear: 0,
+          leverage: "social confidence in her own kitchen",
+          recentShift: "became more interested after seeing Josh struggle"
+        },
+        props: ["wine glass", "folded towel"],
+        inventory: [],
+        changesThisTurn: ["identified as present and observing Josh"]
+      }
+    ],
+    relationships: [
+      {
+        parties: "Josh and Bridget",
+        trust: "low but open",
+        warmth: "testing curiosity",
+        attraction: "not established",
+        irritation: "minor awkwardness",
+        fear: "none",
+        promises: [],
+        conflicts: ["Josh may be judged for arriving while Marcus is absent"],
+        debts: [],
+        recentShift: "Bridget has begun evaluating Josh directly."
+      }
+    ],
+    worldState: {
+      importantObjects: ["wine glass on the counter", "kitchen threshold", "stair path toward Marcus room"],
+      hazards: ["Josh right-leg cramp", "hot stagnant room", "social scrutiny"],
+      activeThreads: ["Marcus absence", "Josh trying to reach upstairs", "Bridget assessing Josh"],
+      loreFacts: ["Ward House kitchen is occupied by Diane and Bridget."],
+      constraints: ["Josh movement is impaired.", "Marcus should not suddenly appear without setup."],
+      timelineAnchors: ["Josh arrived after Diane entered the kitchen."],
+      sceneRules: ["Domestic realism and social tension matter more than action."],
+      contradictions: []
+    },
+    nextTurnGuidance: {
+      likelyFocus: "Josh needs to answer Bridget or Diane while managing the leg cramp.",
+      fragileDetails: ["Josh is at the threshold, not upstairs.", "Bridget has wine and is watching closely."],
+      doNotForget: ["Marcus is absent.", "Diane is present.", "The right-leg cramp is severe."],
+      avoidInventing: ["Do not invent Marcus location yet.", "Do not resolve the cramp instantly."]
+    }
+  },
+  createdAt: now,
+  updatedAt: now
 };
 var microLoomPreset = {
   id: "micro_loom",
@@ -678,7 +1053,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.12",
+  version: "1.0.13",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -953,6 +1328,7 @@ var chronoscopeOccultLedgerPreset = {
   updatedAt: now
 };
 var builtInPresets = [
+  grandContinuityAtlasPreset,
   microLoomPreset,
   slimScenePreset,
   balancedStoryPreset,
@@ -1029,6 +1405,7 @@ function extractTrackerBlock(content, fenceNames) {
 function buildTrackerPrompt(input) {
   const previous = input.previousTracker ? JSON.stringify(input.previousTracker.data, null, 2) : "{}";
   const schema = JSON.stringify(input.preset.schemaJson, null, 2);
+  const sample = JSON.stringify(input.preset.sampleData || {}, null, 2);
   const histories = input.previousSummaries && input.previousSummaries.length > 0 ? "\n\nRecent tracker history:\n" + input.previousSummaries.map((s, idx) => `[T-${idx + 1}] ${s}`).join("\n") : "";
   return [
     {
@@ -1040,6 +1417,9 @@ function buildTrackerPrompt(input) {
       content: [
         "Schema:",
         schema,
+        "",
+        "Sample JSON shape and naming conventions:",
+        sample,
         "",
         "Previous tracker state:",
         previous,
@@ -1058,14 +1438,66 @@ function buildTrackerPrompt(input) {
 }
 
 // src/shared/renderer.ts
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function normalizePath(path) {
+  return path.trim().replace(/^\.\//, "").replace(/^\$root\./, "");
+}
+function readRecordPath(source, rawPath) {
+  if (!rawPath) return void 0;
+  if (rawPath === "." || rawPath === "this") return source;
+  let path = normalizePath(rawPath);
+  if (path.startsWith("this.")) path = path.slice(5);
+  const parts = path.split(".").filter(Boolean);
+  let current = source;
+  for (const part of parts) {
+    if (part === "length" && Array.isArray(current)) return current.length;
+    if (!isRecord(current) && !Array.isArray(current)) return void 0;
+    current = current[part];
+  }
+  return current;
+}
+function getByPath(data, path) {
+  const value = readRecordPath(data, path);
+  if (value !== void 0 && value !== "") return value;
+  const lowerKey = path.toLowerCase();
+  for (const [key, entryValue] of Object.entries(data)) {
+    if (key.toLowerCase() === lowerKey) return entryValue;
+  }
+  return void 0;
+}
+function getFallbackField(data, keys) {
+  if (!data || typeof data !== "object") return void 0;
+  for (const key of keys) {
+    const value = getByPath(data, key);
+    if (value !== void 0 && value !== null && value !== "") return value;
+  }
+  return void 0;
+}
 function makeCompactSummary(data) {
-  const scene = String(data.sceneTitle || data.location || data.title || data.name || "Current scene");
-  const delta = String(data.delta || data.activeThread || data.summary || data.description || "").trim();
+  const scene = String(getFallbackField(data, [
+    "sceneIdentity.title",
+    "sceneTitle",
+    "location",
+    "title",
+    "name",
+    "scene"
+  ]) || "Current scene");
+  const delta = String(getFallbackField(data, [
+    "narrativeDelta.summary",
+    "delta",
+    "activeThread",
+    "summary",
+    "description"
+  ]) || "").trim();
   return delta ? `${scene}: ${delta}` : scene;
 }
 
 // src/shared/validation.ts
 var VALID_ORIGINS = /* @__PURE__ */ new Set(["built-in", "custom", "imported", "duplicated"]);
+var VALID_TEMPLATE_ENGINES = /* @__PURE__ */ new Set(["loom", "handlebars_compat"]);
+var VALID_SOURCE_FORMATS = /* @__PURE__ */ new Set(["loom", "simtracker"]);
 function normalizePresetId(value, fallbackPrefix = "custom_loom") {
   const raw = String(value || "").trim();
   const slug = raw.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "").slice(0, 96);
@@ -1090,6 +1522,23 @@ function schemaType(schema) {
 }
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function asString(value, fallback = "") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+function normalizeTemplateField(value, index = 0) {
+  const record = asObject(value);
+  const key = asString(record.key, asString(record.path, asString(record.name, asString(record.label, `field_${index + 1}`))));
+  const description = asString(record.description, asString(record.desc, asString(record.label, key)));
+  const rawType = asString(record.type, asString(record.fieldType)).toLowerCase();
+  const type = rawType === "number" || rawType === "integer" || rawType === "boolean" || rawType === "array" || rawType === "object" ? rawType : rawType === "list" || rawType === "tags" ? "array" : "string";
+  const nested = record.itemSchema ?? record.fields ?? record.children;
+  return {
+    key,
+    description,
+    type,
+    itemSchema: Array.isArray(nested) ? nested.map((item, childIndex) => normalizeTemplateField(item, childIndex)) : typeof nested === "string" ? nested : void 0
+  };
 }
 function validateNode(value, schema, path, issues) {
   const expected = schemaType(schema);
@@ -1148,12 +1597,17 @@ function normalizePreset(preset) {
   const now2 = (/* @__PURE__ */ new Date()).toISOString();
   const id = normalizePresetId(preset.id || `custom_loom_${Date.now()}`);
   const origin = preset.origin && VALID_ORIGINS.has(preset.origin) ? preset.origin : "custom";
+  const templateEngine = preset.templateEngine && VALID_TEMPLATE_ENGINES.has(preset.templateEngine) ? preset.templateEngine : "loom";
+  const sourceFormat = preset.sourceFormat && VALID_SOURCE_FORMATS.has(preset.sourceFormat) ? preset.sourceFormat : "loom";
   return {
     id,
     name: String(preset.name || "Custom Loom Template"),
     version: String(preset.version || LOOM_VERSION),
     description: String(preset.description || ""),
     origin: id && isBuiltInPresetId(id) ? "built-in" : origin === "built-in" ? "custom" : origin,
+    templateEngine,
+    sourceFormat,
+    customFields: Array.isArray(preset.customFields) ? preset.customFields.map((field, index) => normalizeTemplateField(field, index)) : void 0,
     mode: preset.mode === "passive_extract" || preset.mode === "sidecar_generate" || preset.mode === "hybrid" ? preset.mode : "hybrid",
     schemaJson: preset.schemaJson && typeof preset.schemaJson === "object" && !Array.isArray(preset.schemaJson) ? preset.schemaJson : {
       type: "object",
@@ -1178,7 +1632,7 @@ function normalizePreset(preset) {
       showControls: typeof preset.renderOptions?.showControls === "boolean" ? preset.renderOptions.showControls : true
     },
     parserOptions: {
-      fenceNames: Array.isArray(preset.parserOptions?.fenceNames) ? preset.parserOptions.fenceNames : ["tracker", "loom"],
+      fenceNames: Array.isArray(preset.parserOptions?.fenceNames) ? preset.parserOptions.fenceNames.filter((item) => typeof item === "string" && Boolean(item.trim())) : ["tracker", "loom"],
       strictJson: typeof preset.parserOptions?.strictJson === "boolean" ? preset.parserOptions.strictJson : true,
       repairInvalidJson: typeof preset.parserOptions?.repairInvalidJson === "boolean" ? preset.parserOptions.repairInvalidJson : false
     },
@@ -1695,7 +2149,7 @@ var LoomPresetService = class {
   }
   async resolve(userId, presetId) {
     const presets = await this.loadAll(userId);
-    return presets.find((preset) => preset.id === presetId) ?? presets.find((preset) => preset.id === SLIM_SCENE_PRESET_ID) ?? builtInPresets[0];
+    return presets.find((preset) => preset.id === presetId) ?? presets.find((preset) => preset.id === GRAND_CONTINUITY_ATLAS_PRESET_ID) ?? builtInPresets[0];
   }
   async reset(userId) {
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, []);
@@ -1803,6 +2257,10 @@ var LoomSettingsService = class {
     };
     if (!next.activePresetId) next.activePresetId = defaultSettings.activePresetId;
     if (!next.messageCardPlacement) next.messageCardPlacement = defaultSettings.messageCardPlacement;
+    if (next.customTemplateMode !== "trusted_layout" && next.customTemplateMode !== "strict_sanitized" && next.customTemplateMode !== "safe_generic") {
+      next.customTemplateMode = defaultSettings.customTemplateMode;
+    }
+    if (next.useSafeRenderer) next.customTemplateMode = "safe_generic";
     return next;
   }
 };
@@ -1813,7 +2271,7 @@ function getSimulationMilestoneStatus() {
 }
 
 // src/backend/trackerStateService.ts
-function isRecord(value) {
+function isRecord2(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function makeMessageKey(messageId, swipeId) {
@@ -1821,12 +2279,12 @@ function makeMessageKey(messageId, swipeId) {
   return typeof swipeId === "number" ? `${base}::swipe:${swipeId}` : base;
 }
 function normalizeIndex(value) {
-  if (!isRecord(value)) return {};
+  if (!isRecord2(value)) return {};
   const index = {};
   for (const [chatId, chatValue] of Object.entries(value)) {
-    if (!isRecord(chatValue)) continue;
-    const messages = isRecord(chatValue.messages) ? chatValue.messages : {};
-    const latest = isRecord(chatValue.latest) ? chatValue.latest : void 0;
+    if (!isRecord2(chatValue)) continue;
+    const messages = isRecord2(chatValue.messages) ? chatValue.messages : {};
+    const latest = isRecord2(chatValue.latest) ? chatValue.latest : void 0;
     index[chatId] = { messages };
     if (latest) index[chatId].latest = latest;
   }
@@ -1925,11 +2383,11 @@ var LoomTrackerStateService = class {
 };
 
 // src/backend/backend.ts
-function isRecord2(value) {
+function isRecord3(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function isFrontendMessage(value) {
-  return isRecord2(value) && typeof value.type === "string";
+  return isRecord3(value) && typeof value.type === "string";
 }
 function activeChatName(id, fallback) {
   if (!id) return fallback;
@@ -2291,6 +2749,8 @@ var StateOfTheLoomBackend = class {
         // Will be updated dynamically on frontend
         sanitizerRemovedContent: false,
         // Will be updated dynamically on frontend
+        templateMode: settings.useSafeRenderer ? "safe_generic" : settings.customTemplateMode || "trusted_layout",
+        preservedData: false,
         fallbackUsed: false,
         // Will be updated dynamically on frontend
         trackerPresetId: result.tracker.presetId,
@@ -2338,6 +2798,8 @@ var StateOfTheLoomBackend = class {
           schemaValidationSuccess: false,
           renderSuccess: false,
           sanitizerRemovedContent: false,
+          templateMode: state.settings.useSafeRenderer ? "safe_generic" : state.settings.customTemplateMode || "trusted_layout",
+          preservedData: false,
           fallbackUsed: true,
           trackerPresetId: preset.id,
           messageId: messageId || "latest",
@@ -2369,7 +2831,7 @@ var StateOfTheLoomBackend = class {
   }
   async handleGenerationEnded(payload) {
     try {
-      if (!isRecord2(payload)) return;
+      if (!isRecord3(payload)) return;
       const source = payload.source ?? payload.extensionId ?? payload.extension_id;
       const generationType = payload.generationType ?? payload.generation_type;
       if (source === "state_of_the_loom" || generationType === "quiet") return;

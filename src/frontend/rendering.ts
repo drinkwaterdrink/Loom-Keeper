@@ -1,4 +1,4 @@
-import type { LoomFrontendState, LoomPreset, LoomRenderReport, LoomTrackerState } from '../shared/types.js';
+import type { LoomCustomTemplateMode, LoomFrontendState, LoomPreset, LoomRenderReport, LoomTrackerState } from '../shared/types.js';
 import { getFallbackField, renderGenericSafeCard, renderTrackerHtmlDetailed } from '../shared/renderer.js';
 import { escapeHtml } from './ui.js';
 
@@ -14,7 +14,7 @@ export function resolvePresetForTracker(
 export function renderTrackerForState(
   tracker: LoomTrackerState,
   state: LoomFrontendState,
-  useSafeRenderer = Boolean(state.settings.useSafeRenderer),
+  mode: LoomCustomTemplateMode = state.settings.useSafeRenderer ? 'safe_generic' : (state.settings.customTemplateMode || 'trusted_layout'),
 ): LoomRenderReport {
   const { preset, missing } = resolvePresetForTracker(state, tracker);
   if (missing) {
@@ -24,12 +24,14 @@ export function renderTrackerForState(
       success: false,
       fallbackUsed: true,
       sanitizerRemovedContent: false,
+      templateMode: 'safe_generic',
+      preservedData: true,
       warning,
       error: warning,
       missingFields: [],
     };
   }
-  return renderTrackerHtmlDetailed(tracker, preset, useSafeRenderer);
+  return renderTrackerHtmlDetailed(tracker, preset, mode);
 }
 
 function compactValue(value: unknown): string {
@@ -53,21 +55,40 @@ function compactValue(value: unknown): string {
 }
 
 function collectCompactFields(data: Record<string, unknown>): Array<{ key: string; value: string }> {
-  const skip = new Set(['schemaversion', 'schema_version', 'scenetitle', 'title', 'name', 'scene', 'scenename']);
-  return Object.entries(data)
+  const characters = getFallbackField(data, ['characters', 'cast', 'present']);
+  const preferred = [
+    { key: 'Location', value: compactValue(getFallbackField(data, ['sceneIdentity.location', 'location', 'current_location', 'place'])) },
+    { key: 'Time', value: compactValue(getFallbackField(data, ['sceneIdentity.time', 'time', 'timeOfDay', 'scene_time'])) },
+    { key: 'Weather', value: compactValue(getFallbackField(data, ['sceneIdentity.weather', 'weather'])) },
+    { key: 'Characters', value: Array.isArray(characters) ? characters.slice(0, 4).map(compactValue).filter(Boolean).join(', ') : '' },
+  ].filter((entry) => entry.value);
+  const skip = new Set(['schemaversion', 'schema_version', 'scenetitle', 'title', 'name', 'scene', 'scenename', 'sceneidentity', 'narrativedelta', 'characters', 'cast', 'present']);
+  const remaining = Object.entries(data)
     .filter(([key, value]) => !skip.has(key.toLowerCase()) && value !== null && value !== undefined && value !== '')
     .map(([key, value]) => ({ key, value: compactValue(value) }))
     .filter((entry) => entry.value)
     .slice(0, 5);
+  return [...preferred, ...remaining].slice(0, 5);
 }
 
 export function renderCompactTrackerForState(tracker: LoomTrackerState, state: LoomFrontendState): string {
   const { preset, missing } = resolvePresetForTracker(state, tracker);
-  const title = String(getFallbackField(tracker.data, ['sceneTitle', 'title', 'name', 'sceneName', 'scene']) || tracker.compactSummary || 'Continuity State');
+  const title = String(getFallbackField(tracker.data, [
+    'sceneIdentity.title',
+    'sceneTitle',
+    'title',
+    'name',
+    'sceneName',
+    'scene',
+  ]) || tracker.compactSummary || 'Continuity State');
   const fields = collectCompactFields(tracker.data);
-  const summary = tracker.compactSummary && tracker.compactSummary !== title
-    ? tracker.compactSummary
-    : fields[0]?.value || 'No compact summary recorded.';
+  const summary = String(getFallbackField(tracker.data, [
+    'narrativeDelta.whatChangedThisTurn',
+    'narrativeDelta.summary',
+    'delta',
+    'summary',
+    'compactSummary',
+  ]) || (tracker.compactSummary && tracker.compactSummary !== title ? tracker.compactSummary : fields[0]?.value) || 'No compact summary recorded.');
 
   const chips = fields.slice(1, 5).map((field) => {
     return `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml(field.key)}: ${escapeHtml(field.value)}</span>`;

@@ -448,6 +448,8 @@ class StateOfTheLoomBackend {
         schemaValidationIssues: result.tracker.validation.issues,
         renderSuccess: true, // Will be updated dynamically on frontend
         sanitizerRemovedContent: false, // Will be updated dynamically on frontend
+        templateMode: settings.useSafeRenderer ? 'safe_generic' : (settings.customTemplateMode || 'trusted_layout'),
+        preservedData: false,
         fallbackUsed: false, // Will be updated dynamically on frontend
         trackerPresetId: result.tracker.presetId,
         messageId: target.message.id || 'latest',
@@ -502,6 +504,8 @@ class StateOfTheLoomBackend {
           schemaValidationSuccess: false,
           renderSuccess: false,
           sanitizerRemovedContent: false,
+          templateMode: state.settings.useSafeRenderer ? 'safe_generic' : (state.settings.customTemplateMode || 'trusted_layout'),
+          preservedData: false,
           fallbackUsed: true,
           trackerPresetId: preset.id,
           messageId: messageId || 'latest',

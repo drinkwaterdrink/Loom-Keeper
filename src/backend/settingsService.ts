@@ -67,6 +67,14 @@ export class LoomSettingsService {
 
     if (!next.activePresetId) next.activePresetId = defaultSettings.activePresetId;
     if (!next.messageCardPlacement) next.messageCardPlacement = defaultSettings.messageCardPlacement;
+    if (
+      next.customTemplateMode !== 'trusted_layout'
+      && next.customTemplateMode !== 'strict_sanitized'
+      && next.customTemplateMode !== 'safe_generic'
+    ) {
+      next.customTemplateMode = defaultSettings.customTemplateMode;
+    }
+    if (next.useSafeRenderer) next.customTemplateMode = 'safe_generic';
     return next;
   }
 }

@@ -1,5 +1,5 @@
 import { renderTrackerHtml } from '../shared/renderer.js';
-import type { LoomFrontendState } from '../shared/types.js';
+import type { LoomCustomTemplateMode, LoomFrontendState } from '../shared/types.js';
 import { renderTrackerForState } from './rendering.js';
 import { renderPresetEditor } from './presetEditor.js';
 import { renderFeatureBreakdown } from './settingsPanel.js';
@@ -21,6 +21,10 @@ function renderConnectionOptions(state: LoomFrontendState): string {
   return options.join('');
 }
 
+function effectiveTemplateMode(state: LoomFrontendState): LoomCustomTemplateMode {
+  return state.settings.useSafeRenderer ? 'safe_generic' : (state.settings.customTemplateMode || 'trusted_layout');
+}
+
 function renderPresetOptions(state: LoomFrontendState): string {
   return state.presets.map((preset) => {
     const selected = preset.id === state.settings.activePresetId ? ' selected' : '';
@@ -30,6 +34,7 @@ function renderPresetOptions(state: LoomFrontendState): string {
     else if (preset.id === 'balanced_story_loom') suffix = '[~400t - Balanced]';
     else if (preset.id === 'cast_continuity_loom') suffix = '[~400t - Detailed]';
     else if (preset.id === 'full_continuity_ledger') suffix = '[~450t - Full]';
+    else if (preset.id === 'grand_continuity_atlas') suffix = '[~2500t - Grand]';
     return `<option value="${escapeHtml(preset.id)}"${selected}>${escapeHtml(preset.name)} ${suffix}</option>`;
   }).join('');
 }
@@ -118,8 +123,8 @@ function renderPipelineReport(state: LoomFrontendState): string {
     ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` 
     : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml(report.renderError || 'Render error')}</span>`;
   const sanitizerVal = report.sanitizerRemovedContent 
-    ? `<span style="color: ${errorColor}; font-weight: 600;">Yes (Check template safe tags)</span>` 
-    : `<span style="color: ${successColor}; font-weight: 600;">No (Clean)</span>`;
+    ? `<span style="color: ${errorColor}; font-weight: 600;">Yes (cleanup removed unsafe content)</span>`
+    : `<span style="color: ${successColor}; font-weight: 600;">No (layout preserved)</span>`;
   const fallbackVal = report.fallbackUsed 
     ? `<span style="color: #b58900; font-weight: 600;">Yes (Fallback active)</span>` 
     : `<span style="color: ${successColor}; font-weight: 600;">No (Template OK)</span>`;
@@ -142,8 +147,11 @@ function renderPipelineReport(state: LoomFrontendState): string {
       ${report.schemaValidationIssues && report.schemaValidationIssues.length > 0 ? `<div><strong>Schema Issues:</strong> <code>${escapeHtml(report.schemaValidationIssues.map((issue) => `${issue.path || '(root)'} ${issue.message}`).join(' | '))}</code></div>` : ''}
       <div><strong>HTML Render:</strong> ${renderVal}</div>
       ${report.renderWarning ? `<div><strong>Render Warning:</strong> <code>${escapeHtml(report.renderWarning)}</code></div>` : ''}
-      <div><strong>Sanitizer Removed Content:</strong> ${sanitizerVal}</div>
+      <div><strong>Template Mode:</strong> <code>${escapeHtml(report.templateMode || 'n/a')}</code></div>
+      <div><strong>Template Cleanup Removed Content:</strong> ${sanitizerVal}</div>
       <div><strong>Fallback Card Used:</strong> ${fallbackVal}</div>
+      <div><strong>Unrendered Data Appended:</strong> ${report.preservedData ? `<span style="color: ${successColor}; font-weight: 600;">Yes</span>` : 'No'}</div>
+      ${report.templateCompatibility ? `<div><strong>Template Missing Latest Fields:</strong> <code>${escapeHtml(report.templateCompatibility.missingFromLatest.join(', ') || 'none')}</code></div>` : ''}
       ${report.trackerPresetId ? `<div><strong>Tracker Preset ID:</strong> <code>${escapeHtml(report.trackerPresetId)}</code></div>` : ''}
       <div><strong>Latest Tracker Message ID:</strong> <code>${escapeHtml(report.messageId)}</code></div>
       <div><strong>Chat ID:</strong> <code>${escapeHtml(report.chatId)}</code></div>
@@ -216,7 +224,7 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
           compactSummary: 'Sample preview for ' + state.activePreset.name,
           validation: { ok: true, issues: [] },
         };
-        return renderTrackerHtml(mockTracker, state.activePreset, state.settings.useSafeRenderer);
+        return renderTrackerHtml(mockTracker, state.activePreset, effectiveTemplateMode(state));
       } catch (err) {
         return `<p class="sotl-note sotl-warning" style="color: var(--lv-error-text,#bd2130);">⚠️ Preview Render Failed: ${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`;
       }
@@ -243,6 +251,13 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderInMessages" ' + (state.settings.renderInMessages ? 'checked' : '') + '> Attach tracker cards to messages (Experimental)</label>',
  
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="useSafeRenderer" ' + (state.settings.useSafeRenderer ? 'checked' : '') + '> Use safe generic renderer for custom presets</label>',
+    '<label class="sotl-label">Custom template rendering',
+    `<select class="sotl-select" data-sotl-field="customTemplateMode" ${state.settings.useSafeRenderer ? 'disabled' : ''}>`,
+    `  <option value="trusted_layout"${effectiveTemplateMode(state) === 'trusted_layout' ? ' selected' : ''}>Trusted layout (preserve custom HTML/CSS)</option>`,
+    `  <option value="strict_sanitized"${effectiveTemplateMode(state) === 'strict_sanitized' ? ' selected' : ''}>Strict sanitized</option>`,
+    `  <option value="safe_generic"${effectiveTemplateMode(state) === 'safe_generic' ? ' selected' : ''}>Safe generic renderer only</option>`,
+    '</select>',
+    '</label>',
  
     '<label class="sotl-label">Message card position',
     `<select class="sotl-select" data-sotl-field="messageCardPlacement">${renderPlacementOptions(state)}</select>`,

@@ -24,7 +24,7 @@ const rendering = await importBundled('src/frontend/rendering.ts');
 const activePreset = {
   id: 'slim_scene_loom',
   name: 'Slim Scene Loom',
-  version: '1.0.12',
+  version: '1.0.13',
   description: '',
   origin: 'built-in',
   mode: 'hybrid',
@@ -46,12 +46,14 @@ const customPreset = {
   id: 'custom_reputation_loom',
   name: 'Custom Reputation Loom',
   origin: 'custom',
+  templateEngine: 'handlebars_compat',
+  sourceFormat: 'loom',
   htmlTemplate: '<section class="sotl-card"><h3>{{threadName}}</h3><p>{{reputation}}</p></section>',
   sampleData: { threadName: 'Guild ledger', reputation: 'trusted' },
 };
 
 const tracker = {
-  version: '1.0.12',
+  version: '1.0.13',
   schemaVersion: '1',
   presetId: 'custom_reputation_loom',
   chatId: 'chat-render',
@@ -71,7 +73,7 @@ const tracker = {
 
 const state = {
   backendReady: true,
-  settings: { useSafeRenderer: true },
+  settings: { useSafeRenderer: true, customTemplateMode: 'safe_generic' },
   permissions: { chats: true, chat_mutation: true, generation: true },
   presets: [activePreset, customPreset],
   activePreset,
@@ -108,9 +110,59 @@ const brokenPreset = {
 };
 const originalError = console.error;
 console.error = () => {};
-const brokenReport = renderer.renderTrackerHtmlDetailed(tracker, brokenPreset, false);
+const brokenReport = renderer.renderTrackerHtmlDetailed(tracker, brokenPreset, 'trusted_layout');
 console.error = originalError;
 assert.equal(brokenReport.fallbackUsed, true);
 assert.match(brokenReport.html, /Custom template failed|Safe Renderer/);
+
+const simPreset = {
+  ...customPreset,
+  id: 'simtracker_style_import',
+  name: 'SimTracker Style Import',
+  sourceFormat: 'simtracker',
+  htmlTemplate: [
+    '<section class="sim-card" style="display:grid;gap:4px" onclick="bad()">',
+    '<script>bad()</script>',
+    '{{#each characters}}',
+    '<label class="person" style="color:#123">{{@index}} {{characterName}} {{initials characterName}}</label>',
+    '<p>{{#if (gt stats.trust 50)}}trusted{{else}}wary{{/if}} / {{divide stats.energy 2}}</p>',
+    '{{/each}}',
+    '</section>',
+  ].join(''),
+  sampleData: {
+    characters: [
+      { name: 'Mara Venn', stats: { trust: 72, energy: 8 } },
+      { characterName: 'Ilan', stats: { trust: 20, energy: 4 } },
+    ],
+  },
+};
+const simTracker = {
+  ...tracker,
+  presetId: simPreset.id,
+  data: simPreset.sampleData,
+};
+const simReport = renderer.renderTrackerHtmlDetailed(simTracker, simPreset, 'trusted_layout');
+assert.equal(simReport.fallbackUsed, false);
+assert.match(simReport.html, /0 Mara Venn MV/);
+assert.match(simReport.html, /trusted/);
+assert.match(simReport.html, /wary/);
+assert.match(simReport.html, /display:grid/);
+assert.doesNotMatch(simReport.html, /onclick=/);
+assert.doesNotMatch(simReport.html, /<script/i);
+assert.equal(simReport.sanitizerRemovedContent, true);
+
+const missingTemplatePreset = {
+  ...customPreset,
+  id: 'custom_missing_paths',
+  htmlTemplate: '<section><h3>{{threadName}}</h3><p>{{missing.deep.path}}</p></section>',
+};
+const missingFieldsReport = renderer.renderTrackerHtmlDetailed(tracker, missingTemplatePreset, 'trusted_layout');
+assert.equal(missingFieldsReport.fallbackUsed, false, 'missing optional paths should not hide valid rendered content');
+assert.match(missingFieldsReport.warning, /Missing template fields/);
+assert.match(missingFieldsReport.html, /Unrendered tracker data/);
+
+const compatibility = renderer.buildTemplateCompatibilityReport(missingTemplatePreset, missingTemplatePreset.sampleData, tracker.data);
+assert.ok(compatibility.referencedFields.includes('missing.deep.path'));
+assert.ok(compatibility.missingFromLatest.includes('missing.deep.path'));
 
 console.log('OK: renderer smoke passed');

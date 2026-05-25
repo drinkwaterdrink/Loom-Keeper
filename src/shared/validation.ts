@@ -1,8 +1,18 @@
 import { builtInPresets, LOOM_VERSION } from './defaults.js';
-import type { LoomPreset, LoomPresetOrigin, LoomValidationIssue, LoomValidationReport } from './types.js';
+import type {
+  LoomPreset,
+  LoomPresetOrigin,
+  LoomTemplateEngine,
+  LoomTemplateField,
+  LoomTemplateSourceFormat,
+  LoomValidationIssue,
+  LoomValidationReport,
+} from './types.js';
 
 type Schema = Record<string, unknown>;
 const VALID_ORIGINS = new Set<LoomPresetOrigin>(['built-in', 'custom', 'imported', 'duplicated']);
+const VALID_TEMPLATE_ENGINES = new Set<LoomTemplateEngine>(['loom', 'handlebars_compat']);
+const VALID_SOURCE_FORMATS = new Set<LoomTemplateSourceFormat>(['loom', 'simtracker']);
 
 export function normalizePresetId(value: unknown, fallbackPrefix = 'custom_loom'): string {
   const raw = String(value || '').trim();
@@ -38,6 +48,235 @@ function schemaType(schema: Schema): string | undefined {
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()) : [];
+}
+
+function normalizeTemplateField(value: unknown, index = 0): LoomTemplateField {
+  const record = asObject(value);
+  const key = asString(record.key, asString(record.path, asString(record.name, asString(record.label, `field_${index + 1}`))));
+  const description = asString(record.description, asString(record.desc, asString(record.label, key)));
+  const rawType = asString(record.type, asString(record.fieldType)).toLowerCase();
+  const type = rawType === 'number' || rawType === 'integer' || rawType === 'boolean' || rawType === 'array' || rawType === 'object'
+    ? rawType
+    : rawType === 'list' || rawType === 'tags'
+      ? 'array'
+      : 'string';
+  const nested = record.itemSchema ?? record.fields ?? record.children;
+  return {
+    key,
+    description,
+    type,
+    itemSchema: Array.isArray(nested)
+      ? nested.map((item, childIndex) => normalizeTemplateField(item, childIndex))
+      : typeof nested === 'string'
+        ? nested
+        : undefined,
+  };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizePath(path: string): string[] {
+  return path
+    .replace(/\[(\d+)\]/g, '')
+    .replace(/\[\]/g, '')
+    .split('.')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function ensureObjectProperty(schema: Schema, key: string): Schema {
+  if (!isPlainObject(schema.properties)) schema.properties = {};
+  const properties = schema.properties as Record<string, unknown>;
+  if (!isPlainObject(properties[key])) {
+    properties[key] = { type: 'object', properties: {}, additionalProperties: true };
+  }
+  const child = properties[key] as Schema;
+  if (!isPlainObject(child.properties)) child.properties = {};
+  return child;
+}
+
+function setNestedSchema(parent: Schema, path: string[], fieldSchema: Schema): void {
+  if (path.length === 0) return;
+  if (path.length === 1) {
+    if (!isPlainObject(parent.properties)) parent.properties = {};
+    (parent.properties as Record<string, unknown>)[path[0]] = fieldSchema;
+    return;
+  }
+  const next = ensureObjectProperty(parent, path[0]);
+  setNestedSchema(next, path.slice(1), fieldSchema);
+}
+
+function setNestedSample(parent: Record<string, unknown>, path: string[], value: unknown): void {
+  if (path.length === 0) return;
+  if (path.length === 1) {
+    parent[path[0]] = value;
+    return;
+  }
+  const key = path[0];
+  if (!isPlainObject(parent[key])) parent[key] = {};
+  setNestedSample(parent[key] as Record<string, unknown>, path.slice(1), value);
+}
+
+function explicitFieldType(record: Record<string, unknown>): LoomTemplateField['type'] | undefined {
+  const raw = asString(record.type, asString(record.fieldType, asString(record.inputType))).toLowerCase();
+  if (raw === 'integer' || raw === 'int') return 'integer';
+  if (raw === 'number' || raw === 'float' || raw === 'range' || raw === 'slider') return 'number';
+  if (raw === 'boolean' || raw === 'bool' || raw === 'checkbox' || raw === 'toggle') return 'boolean';
+  if (raw === 'array' || raw === 'list' || raw === 'tags' || raw === 'multi-select' || raw === 'multiselect') return 'array';
+  if (raw === 'object' || raw === 'group') return 'object';
+  if (raw === 'string' || raw === 'text' || raw === 'textarea' || raw === 'select' || raw === 'enum' || raw === 'color') return 'string';
+  return undefined;
+}
+
+function inferSchemaForField(value: unknown): Schema {
+  const record = asObject(value);
+  const type = explicitFieldType(record);
+  const keyText = asString(record.key, asString(record.path, asString(record.name, ''))).toLowerCase();
+  const description = asString(record.description, asString(record.desc, asString(record.label, '')));
+  const options = asStringArray(record.options ?? record.choices ?? record.enum);
+
+  const base: Schema = {};
+  if (description) base.description = description;
+  if (options.length > 0) base.enum = options;
+
+  if (type === 'array') {
+    const nested = record.itemSchema ?? record.fields ?? record.children;
+    if (Array.isArray(nested) && nested.length > 0) {
+      const child: Schema = { type: 'object', properties: {}, additionalProperties: true };
+      nested.forEach((item, index) => {
+        const field = normalizeTemplateField(item, index);
+        setNestedSchema(child, normalizePath(field.key), inferSchemaForField(item));
+      });
+      return { ...base, type: 'array', items: child };
+    }
+    return { ...base, type: 'array', items: { type: 'string' } };
+  }
+  if (type === 'object') return { ...base, type: 'object', properties: {}, additionalProperties: true };
+  if (type === 'number' || type === 'integer' || type === 'boolean') return { ...base, type };
+
+  if (typeof record.default === 'number' || typeof record.value === 'number' || /\b(score|rating|level|trust|fear|warmth|attraction|irritation|leverage|tension|risk|progress|percent)\b/i.test(keyText)) {
+    return { ...base, type: 'number' };
+  }
+  if (typeof record.default === 'boolean' || typeof record.value === 'boolean') return { ...base, type: 'boolean' };
+  return { ...base, type: 'string' };
+}
+
+function sampleForField(value: unknown, fieldSchema: Schema, key: string): unknown {
+  const record = asObject(value);
+  const defaultValue = record.default ?? record.value ?? record.sample ?? record.example;
+  if (defaultValue !== undefined) return defaultValue;
+  const type = schemaType(fieldSchema);
+  const keyLower = key.toLowerCase();
+  if (type === 'number' || type === 'integer') return keyLower.includes('trust') || keyLower.includes('warmth') ? 55 : 1;
+  if (type === 'boolean') return true;
+  if (type === 'array') return ['sample'];
+  if (type === 'object') return {};
+  if (keyLower.includes('color')) return '#7b8cff';
+  if (keyLower.includes('name')) return 'Sample Character';
+  if (keyLower.includes('status')) return 'observing';
+  if (keyLower.includes('thought')) return 'Quietly reassessing the scene.';
+  return asString(record.description, asString(record.label, 'Sample detail'));
+}
+
+function simFieldTarget(path: string[]): { scope: 'root' | 'world' | 'character'; path: string[] } {
+  const first = (path[0] || '').toLowerCase();
+  if (first === 'worlddata' || first === 'world' || first === 'global' || first === 'tracker') {
+    return { scope: 'world', path: path.slice(1) };
+  }
+  if (first === 'character' || first === 'characters') {
+    return { scope: 'character', path: path.slice(1) };
+  }
+  if (first === 'stats') {
+    return { scope: 'character', path };
+  }
+  if (['scenetitle', 'title', 'location', 'time', 'date', 'weather', 'lighting', 'privacy', 'mood', 'delta', 'summary', 'compactsummary'].includes(first)) {
+    return { scope: 'root', path };
+  }
+  return { scope: 'character', path };
+}
+
+function synthesizePresetFromCustomFields(customFields: unknown[]): { schemaJson: Record<string, unknown>; sampleData: Record<string, unknown>; fields: LoomTemplateField[] } {
+  const fields = customFields.map((field, index) => normalizeTemplateField(field, index));
+  const characterSchema: Schema = {
+    type: 'object',
+    required: ['name'],
+    properties: {
+      name: { type: 'string' },
+      characterName: { type: 'string' },
+      role: { type: 'string' },
+      statusTag: { type: 'string' },
+      stats: { type: 'object', properties: {}, additionalProperties: true },
+    },
+    additionalProperties: true,
+  };
+  const worldDataSchema: Schema = { type: 'object', properties: {}, additionalProperties: true };
+  const rootSchema: Schema = {
+    type: 'object',
+    required: ['schemaVersion', 'sceneTitle', 'characters'],
+    properties: {
+      schemaVersion: { type: 'string' },
+      sceneTitle: { type: 'string' },
+      compactSummary: { type: 'string' },
+      worldData: worldDataSchema,
+      characters: { type: 'array', items: characterSchema, maxItems: 12 },
+    },
+    additionalProperties: true,
+  };
+  const sampleCharacter: Record<string, unknown> = {
+    name: 'Sample Character',
+    characterName: 'Sample Character',
+    role: 'Present Character',
+    statusTag: 'present',
+    stats: {},
+  };
+  const sampleData: Record<string, unknown> = {
+    schemaVersion: '1',
+    sceneTitle: 'Imported Template Preview',
+    compactSummary: 'Imported template preview with synthesized sample data.',
+    worldData: {},
+    characters: [sampleCharacter],
+  };
+
+  customFields.forEach((rawField, index) => {
+    const field = fields[index];
+    const path = normalizePath(field.key);
+    if (path.length === 0) return;
+    const fieldSchema = inferSchemaForField(rawField);
+    const target = simFieldTarget(path);
+    const targetPath = target.path.length > 0 ? target.path : [field.key];
+    const sampleValue = sampleForField(rawField, fieldSchema, targetPath[targetPath.length - 1]);
+    if (target.scope === 'world') {
+      setNestedSchema(worldDataSchema, targetPath, fieldSchema);
+      const world = sampleData.worldData as Record<string, unknown>;
+      setNestedSample(world, targetPath, sampleValue);
+    } else if (target.scope === 'root') {
+      setNestedSchema(rootSchema, targetPath, fieldSchema);
+      setNestedSample(sampleData, targetPath, sampleValue);
+    } else {
+      setNestedSchema(characterSchema, targetPath, fieldSchema);
+      setNestedSample(sampleCharacter, targetPath, sampleValue);
+    }
+  });
+
+  return { schemaJson: rootSchema, sampleData, fields };
+}
+
+function extractImportCandidates(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  const record = asObject(value);
+  if (Array.isArray(record.presets)) return record.presets as unknown[];
+  if (Array.isArray(record.templates)) return record.templates as unknown[];
+  return [value];
 }
 
 function validateNode(value: unknown, schema: Schema, path: string, issues: LoomValidationIssue[]): void {
@@ -129,6 +368,8 @@ export function validateTemplateSafety(template: string): string[] {
     'div', 'section', 'article', 'header', 'footer', 'span', 'p', 'b', 'strong', 
     'i', 'em', 'small', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'details', 'summary', 
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'br', 'style',
+    'label', 'input', 'button', 'img', 'figure', 'figcaption', 'main', 'aside', 'nav',
+    'progress', 'meter', 'time', 'mark',
     'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
     'svg', 'path', 'line', 'rect', 'circle', 'polygon', 'ellipse', 'g', 'text', 'defs', 'lineargradient', 'stop'
   ]);
@@ -150,16 +391,136 @@ export function validateTemplateSafety(template: string): string[] {
   return warnings;
 }
 
+export function coerceImportedPreset(value: unknown, index = 0): LoomPreset | null {
+  const record = asObject(value);
+  if (Object.keys(record).length === 0) return null;
+
+  const extSettings = asObject(record.extSettings);
+  const templateName = asString(record.templateName, asString(record.name, `Imported Template ${index + 1}`));
+  const htmlTemplate = asString(
+    record.htmlTemplate,
+    asString(record.templateHtml, asString(record.renderTemplate, asString(record.template)))
+  );
+  const hasNativeShape = typeof record.id === 'string'
+    && typeof record.name === 'string'
+    && typeof record.htmlTemplate === 'string';
+  const hasSimTrackerShape = Boolean(
+    record.templateName
+    || record.sysPrompt
+    || record.customFields
+    || record.extSettings
+    || record.templatePosition
+  );
+
+  if (!hasNativeShape && !hasSimTrackerShape) return null;
+  if (!htmlTemplate) return null;
+
+  const rawFields = Array.isArray(record.customFields)
+    ? record.customFields as unknown[]
+    : Array.isArray(extSettings.customFields)
+      ? extSettings.customFields as unknown[]
+      : Array.isArray(record.fields)
+        ? record.fields as unknown[]
+        : [];
+  const synthesized = rawFields.length > 0 ? synthesizePresetFromCustomFields(rawFields) : null;
+  const schemaJson = isPlainObject(record.schemaJson)
+    ? record.schemaJson
+    : isPlainObject(record.schema)
+      ? record.schema
+      : synthesized?.schemaJson;
+  const sampleData = isPlainObject(record.sampleData)
+    ? record.sampleData
+    : isPlainObject(record.sample)
+      ? record.sample
+      : synthesized?.sampleData;
+
+  const rawId = asString(record.id, asString(record.templateId, templateName));
+  const normalizedId = normalizePresetId(rawId, 'imported_loom');
+  const safeId = isBuiltInPresetId(normalizedId) ? `${normalizedId}_imported_${Date.now()}` : normalizedId;
+  const codeBlockNames = [
+    ...asStringArray(record.fenceNames),
+    ...asStringArray(asObject(record.parserOptions).fenceNames),
+    asString(record.codeBlockIdentifier),
+    asString(extSettings.codeBlockIdentifier),
+    'tracker',
+    'loom',
+  ].filter(Boolean);
+  const templatePosition = asString(record.templatePosition).toUpperCase();
+  const promptInstructions = asString(
+    record.promptInstructions,
+    asString(record.sysPrompt, asString(record.systemPrompt, asString(record.prompt)))
+  );
+  const isSimTracker = hasSimTrackerShape && !hasNativeShape;
+
+  const promptWithOverride = [
+    promptInstructions || 'Track the current roleplay scene as structured continuity JSON.',
+    isSimTracker
+      ? [
+          '',
+          'STATE OF THE LOOM IMPORT COMPATIBILITY OVERRIDE:',
+          'Return raw JSON only. Do not wrap output in markdown fences, SimTracker tags, HTML, prose, or comments.',
+          'The JSON must match the State of the Loom schema below and should include a characters array when character fields are present.',
+        ].join('\n')
+      : '',
+  ].filter(Boolean).join('\n');
+
+  const importedPreset: Partial<LoomPreset> = {
+    ...record,
+    id: safeId,
+    name: templateName,
+    version: asString(record.version, LOOM_VERSION),
+    description: asString(record.description, asString(record.templateDescription, asString(record.displayInstructions, 'Imported tracker template.'))),
+    origin: 'imported',
+    templateEngine: isSimTracker || record.templateEngine === 'handlebars_compat' ? 'handlebars_compat' : 'loom',
+    sourceFormat: isSimTracker ? 'simtracker' : (record.sourceFormat === 'simtracker' ? 'simtracker' : 'loom'),
+    mode: (record.mode === 'passive_extract' || record.mode === 'sidecar_generate' || record.mode === 'hybrid') ? record.mode : 'hybrid',
+    htmlTemplate,
+    promptInstructions: promptWithOverride,
+    injectionTemplate: asString(record.injectionTemplate, '[Imported Loom]\n{{compactSummary}}'),
+    maxInjectionTokens: typeof record.maxInjectionTokens === 'number' ? record.maxInjectionTokens : 220,
+    defaultPlacement: templatePosition === 'TOP' || record.defaultPlacement === 'top' ? 'top' : record.defaultPlacement === 'bottom' ? 'bottom' : 'top',
+    parserOptions: {
+      fenceNames: [...new Set(codeBlockNames)],
+      strictJson: asObject(record.parserOptions).strictJson === false ? false : true,
+      repairInvalidJson: asObject(record.parserOptions).repairInvalidJson === true,
+    },
+  };
+  const normalizedFields = synthesized?.fields ?? (rawFields.length > 0 ? rawFields.map((field, fieldIndex) => normalizeTemplateField(field, fieldIndex)) : undefined);
+  if (normalizedFields) importedPreset.customFields = normalizedFields;
+  if (schemaJson) importedPreset.schemaJson = schemaJson;
+  if (sampleData) importedPreset.sampleData = sampleData;
+  return normalizePreset(importedPreset);
+}
+
+export function coerceImportedPresets(value: unknown): { presets: LoomPreset[]; failures: string[] } {
+  const failures: string[] = [];
+  const presets = extractImportCandidates(value)
+    .map((candidate, index) => {
+      const preset = coerceImportedPreset(candidate, index);
+      if (!preset) failures.push(`Item ${index + 1} is missing a supported template shape or htmlTemplate.`);
+      return preset;
+    })
+    .filter((preset): preset is LoomPreset => Boolean(preset));
+  return { presets, failures };
+}
+
 export function normalizePreset(preset: Partial<LoomPreset>): LoomPreset {
   const now = new Date().toISOString();
   const id = normalizePresetId(preset.id || `custom_loom_${Date.now()}`);
   const origin = preset.origin && VALID_ORIGINS.has(preset.origin) ? preset.origin : 'custom';
+  const templateEngine = preset.templateEngine && VALID_TEMPLATE_ENGINES.has(preset.templateEngine) ? preset.templateEngine : 'loom';
+  const sourceFormat = preset.sourceFormat && VALID_SOURCE_FORMATS.has(preset.sourceFormat) ? preset.sourceFormat : 'loom';
   return {
     id,
     name: String(preset.name || 'Custom Loom Template'),
     version: String(preset.version || LOOM_VERSION),
     description: String(preset.description || ''),
     origin: id && isBuiltInPresetId(id) ? 'built-in' : origin === 'built-in' ? 'custom' : origin,
+    templateEngine,
+    sourceFormat,
+    customFields: Array.isArray(preset.customFields)
+      ? preset.customFields.map((field, index) => normalizeTemplateField(field, index))
+      : undefined,
     mode: (preset.mode === 'passive_extract' || preset.mode === 'sidecar_generate' || preset.mode === 'hybrid') 
       ? preset.mode 
       : 'hybrid',
@@ -194,7 +555,7 @@ export function normalizePreset(preset: Partial<LoomPreset>): LoomPreset {
       showControls: typeof preset.renderOptions?.showControls === 'boolean' ? preset.renderOptions.showControls : true
     },
     parserOptions: {
-      fenceNames: Array.isArray(preset.parserOptions?.fenceNames) ? preset.parserOptions.fenceNames : ['tracker', 'loom'],
+      fenceNames: Array.isArray(preset.parserOptions?.fenceNames) ? preset.parserOptions.fenceNames.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())) : ['tracker', 'loom'],
       strictJson: typeof preset.parserOptions?.strictJson === 'boolean' ? preset.parserOptions.strictJson : true,
       repairInvalidJson: typeof preset.parserOptions?.repairInvalidJson === 'boolean' ? preset.parserOptions.repairInvalidJson : false
     },

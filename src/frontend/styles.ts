@@ -406,8 +406,12 @@ export const loomStyles = `
 }
 .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
   position: fixed;
-  top: 60px;
+  top: 48px;
   right: 16px;
+  left: 16px;
+  width: auto;
+  max-width: 720px;
+  margin-left: auto;
 }
 .sotl-chat-pill {
   display: flex;
@@ -446,6 +450,10 @@ export const loomStyles = `
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.sotl-chat-panel-container--expanded .sotl-chat-panel {
+  width: 100%;
+  max-height: calc(100vh - 136px);
 }
 .sotl-chat-panel__head {
   display: flex;
@@ -500,11 +508,21 @@ export const loomStyles = `
   flex-direction: column;
   gap: 6px;
   font-size: 12px;
+  min-height: 0;
+}
+.sotl-chat-panel-container--expanded .sotl-chat-panel__body {
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 .sotl-chat-panel__scroll-body {
   overflow-y: auto;
   max-height: 280px;
   padding-right: 4px;
+  min-height: 0;
+}
+.sotl-chat-panel-container--expanded .sotl-chat-panel__scroll-body {
+  flex: 1 1 auto;
+  max-height: calc(100vh - 190px);
 }
 .sotl-chat-panel__scroll-body::-webkit-scrollbar {
   width: 5px;
@@ -560,12 +578,24 @@ export const loomStyles = `
     display: flex !important;
   }
   .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
-    right: 12px;
-    top: 70px;
-    max-width: calc(100vw - 24px);
+    left: 6px;
+    right: 6px;
+    top: 40px;
+    bottom: 84px;
+    width: auto;
+    max-width: none;
+    margin-left: 0;
   }
   .sotl-chat-panel {
     width: 100%;
+  }
+  .sotl-chat-panel-container--expanded .sotl-chat-panel {
+    height: 100%;
+    max-height: none;
+    padding: 10px;
+  }
+  .sotl-chat-panel-container--expanded .sotl-chat-panel__scroll-body {
+    max-height: none;
   }
 }
 

@@ -1,4 +1,4 @@
-import { builtInPresets, SLIM_SCENE_PRESET_ID, STORAGE_KEYS } from '../shared/defaults.js';
+import { builtInPresets, GRAND_CONTINUITY_ATLAS_PRESET_ID, STORAGE_KEYS } from '../shared/defaults.js';
 import type { LoomPreset } from '../shared/types.js';
 import type { LoomSpindle } from './lumiverseApi.js';
 import { getJsonWithRecovery, setJsonWithRecovery, type StorageWarningSink } from './storageRecovery.js';
@@ -42,7 +42,7 @@ export class LoomPresetService {
   async resolve(userId: string, presetId: string): Promise<LoomPreset> {
     const presets = await this.loadAll(userId);
     return presets.find((preset) => preset.id === presetId)
-      ?? presets.find((preset) => preset.id === SLIM_SCENE_PRESET_ID)
+      ?? presets.find((preset) => preset.id === GRAND_CONTINUITY_ATLAS_PRESET_ID)
       ?? builtInPresets[0];
   }
 

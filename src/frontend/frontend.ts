@@ -10,11 +10,11 @@ import {
   selectPresetForEditing,
   updateEditingField,
   runPreview,
-  isPresetValid,
   setImportStatus,
   clearImportStatus,
 } from './presetEditor.js';
 import { builtInPresets } from '../shared/defaults.js';
+import { coerceImportedPresets } from '../shared/validation.js';
 
 type FrontendContext = Record<string, unknown>;
 
@@ -261,6 +261,9 @@ function paint(status: LoomUiStatus): void {
       report.fallbackUsed = render.fallbackUsed;
       report.renderSuccess = render.success;
       report.sanitizerRemovedContent = render.sanitizerRemovedContent;
+      report.templateMode = render.templateMode;
+      report.preservedData = render.preservedData;
+      report.templateCompatibility = render.compatibility;
       report.renderWarning = render.warning;
       report.renderError = render.error;
       report.trackerPresetId = state.latestTracker.presetId;
@@ -380,9 +383,11 @@ function handleDrawerEvent(event: Event): void {
       const newPreset = {
         id: newId,
         name: 'New Custom Loom',
-        version: '1.0.12',
+        version: '1.0.13',
         description: 'User custom continuity tracker.',
         mode: 'hybrid' as const,
+        templateEngine: 'handlebars_compat' as const,
+        sourceFormat: 'loom' as const,
         schemaJson: {
           type: 'object',
           required: ['schemaVersion', 'sceneTitle', 'location', 'time', 'mood', 'delta'],
@@ -572,24 +577,7 @@ function handleDrawerEvent(event: Event): void {
         } else {
           candidates = [parsed];
         }
-        const valid: any[] = [];
-        const failures: string[] = [];
-        for (const candidate of candidates) {
-          if (!isPresetValid(candidate)) {
-            failures.push('One item is missing required fields (id, name, htmlTemplate).');
-            continue;
-          }
-          const p = { ...candidate } as any;
-          if (builtInPresets.some((bp) => bp.id === p.id)) {
-            p.id = `${p.id}_custom_${Date.now()}`;
-            p.name = `${p.name} (Custom Copy)`;
-          }
-          p.origin = 'imported';
-          // Ensure required timestamps exist
-          if (!p.createdAt) p.createdAt = new Date().toISOString();
-          p.updatedAt = new Date().toISOString();
-          valid.push(p);
-        }
+        const { presets: valid, failures } = coerceImportedPresets(candidates);
         if (valid.length === 0) {
           const failMsg = failures.length > 0 ? failures[0] : 'No valid presets found in the pasted JSON.';
           setImportStatus({ ok: false, message: failMsg });
@@ -645,10 +633,8 @@ function handleDrawerEvent(event: Event): void {
             candidates = parsed;
           } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).presets)) {
             candidates = (parsed as Record<string, unknown>).presets as unknown[];
-          } else if (isPresetValid(parsed)) {
-            candidates = [parsed];
           } else {
-            throw new Error('Pack file must be a JSON array or an object with a "presets" array.');
+            candidates = [parsed];
           }
         } else {
           // Single file: support single object, array, or pack
@@ -660,23 +646,7 @@ function handleDrawerEvent(event: Event): void {
             candidates = [parsed];
           }
         }
-        const valid: any[] = [];
-        const failures: string[] = [];
-        for (const candidate of candidates) {
-          if (!isPresetValid(candidate)) {
-            failures.push('One item is missing required fields.');
-            continue;
-          }
-          const p = { ...candidate } as any;
-          if (builtInPresets.some((bp) => bp.id === p.id)) {
-            p.id = `${p.id}_custom_${Date.now()}`;
-            p.name = `${p.name} (Custom Copy)`;
-          }
-          p.origin = 'imported';
-          if (!p.createdAt) p.createdAt = new Date().toISOString();
-          p.updatedAt = new Date().toISOString();
-          valid.push(p);
-        }
+        const { presets: valid, failures } = coerceImportedPresets(candidates);
         if (valid.length === 0) {
           const failMsg = failures.length > 0 ? failures[0] : 'No valid presets found in the file.';
           setImportStatus({ ok: false, message: failMsg });
@@ -762,7 +732,16 @@ function handleDrawerEvent(event: Event): void {
     saveSettings({ stripTrackerBlocksFromMessages: field.checked });
   }
   if (fieldName === 'useSafeRenderer' && field instanceof HTMLInputElement) {
-    saveSettings({ useSafeRenderer: field.checked });
+    saveSettings({
+      useSafeRenderer: field.checked,
+      customTemplateMode: field.checked ? 'safe_generic' : 'trusted_layout',
+    });
+  }
+  if (fieldName === 'customTemplateMode' && field instanceof HTMLSelectElement) {
+    const value = field.value as LoomSettings['customTemplateMode'];
+    if (value === 'trusted_layout' || value === 'strict_sanitized' || value === 'safe_generic') {
+      saveSettings({ customTemplateMode: value, useSafeRenderer: false });
+    }
   }
   if (fieldName === 'messageCardPlacement' && field instanceof HTMLSelectElement) {
     saveSettings({ messageCardPlacement: field.value as LoomSettings['messageCardPlacement'] });

@@ -90,7 +90,7 @@ await frontendHandlers[0]({ type: 'ready' }, 'smoke-user');
 const customPreset = {
   id: 'custom fancy loom',
   name: 'Custom Fancy Loom',
-  version: '1.0.12',
+  version: '1.0.13',
   description: 'Custom smoke-test preset.',
   origin: 'imported',
   mode: 'sidecar_generate',

@@ -1,7 +1,7 @@
 import type { LoomFrontendState, LoomPreset, LoomRenderReport } from '../shared/types.js';
 import { escapeHtml, button } from './ui.js';
 import { validateTemplateSafety, checkPresetReadiness } from '../shared/validation.js';
-import { renderTrackerHtmlDetailed } from '../shared/renderer.js';
+import { buildTemplateCompatibilityReport, renderTrackerHtmlDetailed } from '../shared/renderer.js';
 import { builtInPresets } from '../shared/defaults.js';
 
 export let editingPreset: LoomPreset | null = null;
@@ -81,7 +81,7 @@ export function runPreview(): void {
       validation: { ok: true, issues: [] },
     };
     
-    lastPreviewReport = renderTrackerHtmlDetailed(mockTracker, editingPreset);
+    lastPreviewReport = renderTrackerHtmlDetailed(mockTracker, editingPreset, 'trusted_layout');
     lastPreviewHtml = lastPreviewReport.html;
     lastJsonParseError = null;
   } catch (err) {
@@ -109,6 +109,8 @@ export function renderPresetEditor(state: LoomFrontendState): string {
   }
 
   const isBuiltIn = builtInPresets.some((p) => p.id === editingPreset!.id);
+  const latestData = state.latestTracker?.presetId === editingPreset.id ? state.latestTracker.data : undefined;
+  const compatibility = buildTemplateCompatibilityReport(editingPreset, editingPreset.sampleData || {}, latestData);
   const presetsOptions = state.presets.map((p) => {
     const selected = p.id === editingPreset!.id ? ' selected' : '';
     const isB = builtInPresets.some((bp) => bp.id === p.id);
@@ -127,7 +129,7 @@ export function renderPresetEditor(state: LoomFrontendState): string {
     (() => {
       const readiness = checkPresetReadiness(editingPreset!);
       const warningsList = readiness.templateWarnings.length > 0
-        ? `<div style="margin-top: 4px; padding: 4px 6px; border-radius: 4px; background: rgba(220,53,69,0.06); color: var(--lv-error-text,#bd2130); font-size: 10px;">⚠️ Unsafe elements: ${readiness.templateWarnings.map(w => escapeHtml(w)).join(', ')}</div>`
+        ? `<div style="margin-top: 4px; padding: 4px 6px; border-radius: 4px; background: rgba(176,104,0,0.08); color: var(--lv-warning-text,#8a4f00); font-size: 10px;">Template cleanup will remove: ${readiness.templateWarnings.map(w => escapeHtml(w)).join(', ')}</div>`
         : '';
       return [
         '<div class="sotl-panel" style="margin-top: 6px; padding: 10px; background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.45)); display: grid; gap: 4px; border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.2));">',
@@ -139,7 +141,7 @@ export function renderPresetEditor(state: LoomFrontendState): string {
         '  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; font-size: 11px;">',
         `    <div>${readiness.schemaValid ? '✅' : '❌'} <strong>Schema:</strong> ${readiness.schemaValid ? 'Valid' : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml(readiness.schemaError || 'Invalid')}</span>`}</div>`,
         `    <div>${readiness.sampleDataValid ? '✅' : '❌'} <strong>Sample Data:</strong> ${readiness.sampleDataValid ? 'Valid' : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml(readiness.sampleDataError || 'Invalid')}</span>`}</div>`,
-        `    <div>${readiness.templateSafe ? '✅' : '⚠️'} <strong>Safety:</strong> ${readiness.templateSafe ? 'Safe' : 'Unsafe elements'}</div>`,
+        `    <div>${readiness.templateSafe ? '✅' : '⚠️'} <strong>Template:</strong> ${readiness.templateSafe ? 'Clean' : 'Cleanup warnings'}</div>`,
         `    <div>${readiness.promptPresent ? '✅' : '❌'} <strong>Instructions:</strong> ${readiness.promptPresent ? 'Present' : 'Missing'}</div>`,
         '  </div>',
         warningsList,
@@ -161,6 +163,7 @@ export function renderPresetEditor(state: LoomFrontendState): string {
     // Collapsible Details Sections (All collapsed by default)
     '<details class="sotl-details" style="margin-top: 8px;"><summary>Metadata (Name, Description, Mode)</summary>',
     '<div class="sotl-fields" style="margin-top: 8px;">',
+    `  <p class="sotl-note">Origin: <code>${escapeHtml(editingPreset.origin || (isBuiltIn ? 'built-in' : 'custom'))}</code> - Engine: <code>${escapeHtml(editingPreset.templateEngine || 'loom')}</code> - Source: <code>${escapeHtml(editingPreset.sourceFormat || 'loom')}</code></p>`,
     '  <label class="sotl-label">Template Name',
     `    <input class="sotl-input" type="text" data-sotl-editor-field="name" value="${escapeHtml(editingPreset.name)}" ${isBuiltIn ? 'disabled' : ''}>`,
     '  </label>',
@@ -261,9 +264,9 @@ export function renderPresetEditor(state: LoomFrontendState): string {
     
     lastSanitizerWarnings.length > 0
       ? [
-          '<div style="background: rgba(220,53,69,0.08); border-left: 3px solid var(--lv-error-border, #dc3545); padding: 8px; margin-bottom: 8px; border-radius: 4px;">',
-          '  <strong style="color: var(--lv-error-text, #bd2130); font-size: 11px;">⚠️ Sanitizer Allowlist Warnings:</strong>',
-          '  <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: var(--lv-error-text, #bd2130);">',
+          '<div style="background: rgba(176,104,0,0.08); border-left: 3px solid var(--lv-warning-border, #b06800); padding: 8px; margin-bottom: 8px; border-radius: 4px;">',
+          '  <strong style="color: var(--lv-warning-text, #8a4f00); font-size: 11px;">Template Cleanup Warnings:</strong>',
+          '  <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: var(--lv-warning-text, #8a4f00);">',
           ...lastSanitizerWarnings.map((w) => `    <li>${escapeHtml(w)}</li>`),
           '  </ul>',
           '</div>',
@@ -273,6 +276,15 @@ export function renderPresetEditor(state: LoomFrontendState): string {
     lastPreviewReport
       ? `<p class="sotl-note" style="margin-bottom: 8px;">Preview render: ${lastPreviewReport.success ? 'template rendered' : 'fallback used'}${lastPreviewReport.warning ? ` - ${escapeHtml(lastPreviewReport.warning)}` : ''}</p>`
       : '',
+
+    [
+      '<div style="margin: 8px 0; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.04); display: grid; gap: 4px; font-size: 11px;">',
+      '  <strong>Template Compatibility Report</strong>',
+      `  <div>Engine: <code>${escapeHtml(compatibility.templateEngine)}</code> - Source: <code>${escapeHtml(compatibility.sourceFormat)}</code> - References: <code>${compatibility.referencedFields.length}</code></div>`,
+      `  <div>Missing from sample: <code>${escapeHtml(compatibility.missingFromSample.join(', ') || 'none')}</code></div>`,
+      latestData ? `  <div>Missing from latest tracker: <code>${escapeHtml(compatibility.missingFromLatest.join(', ') || 'none')}</code></div>` : '  <div>Latest tracker coverage: <code>no matching latest tracker</code></div>',
+      '</div>',
+    ].join('\n'),
 
     lastPreviewHtml
       ? [

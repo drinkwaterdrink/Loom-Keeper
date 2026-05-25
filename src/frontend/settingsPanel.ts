@@ -6,7 +6,7 @@ export function renderFeatureBreakdown(collapsible = false): string {
     '<div class="sotl-feature-grid">',
     '<article><strong>Drawer HUD</strong><span>Shows status, current tracker, controls, diagnostics, and preset details.</span></article>',
     '<article><strong>Settings panel</strong><span>Works from the extension list and exposes the core toggles.</span></article>',
-    '<article><strong>Slim Scene Loom</strong><span>Tracks scene title, location, time, mood, cast, inventory, anchors, and avoid-next notes.</span></article>',
+    '<article><strong>Grand Continuity Atlas</strong><span>New default tracker with rich scene, appearance, relationship, world-state, and next-turn continuity sections.</span></article>',
     '<article><strong>Passive extraction</strong><span>Reads fenced <code>tracker</code> and <code>loom</code> JSON blocks from assistant replies.</span></article>',
     '<article><strong>Generate tracker</strong><span>Uses a sidecar connection or default fallback to make tracker JSON for the latest assistant message.</span></article>',
     '<article><strong>Per-chat storage</strong><span>Saves latest and per-message tracker state through user storage.</span></article>',
@@ -14,7 +14,7 @@ export function renderFeatureBreakdown(collapsible = false): string {
     '<article><strong>Manual JSON edit</strong><span>Lets you correct the current tracker without regenerating.</span></article>',
     '<article><strong>Runtime recovery</strong><span>Repairs corrupt Loom storage and exposes Reset Loom Storage when the backend is slow or offline.</span></article>',
     '</div>',
-    '<p class="sotl-note">Not in this milestone: prompt injection, simulation clocks, entity inbox, companion autonomy, Council tools, and the large Universal Loom Ledger preset.</p>',
+    '<p class="sotl-note">Not in this milestone: prompt injection, simulation clocks, entity inbox, companion autonomy, Council tools, and arbitrary template JavaScript.</p>',
   ].join('');
 
   if (collapsible) {

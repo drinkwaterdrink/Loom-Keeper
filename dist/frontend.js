@@ -1,7 +1,382 @@
 // src/shared/defaults.ts
+var LOOM_VERSION = "1.0.13";
 var LOOM_SCHEMA_VERSION = "1";
+var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
 var now = "2026-01-01T00:00:00.000Z";
+var grandContinuityAtlasPreset = {
+  id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
+  name: "Grand Continuity Atlas",
+  version: "1.0.13",
+  description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
+  origin: "built-in",
+  templateEngine: "handlebars_compat",
+  sourceFormat: "loom",
+  mode: "hybrid",
+  schemaJson: {
+    type: "object",
+    required: ["schemaVersion", "sceneIdentity", "narrativeDelta", "characters", "worldState", "nextTurnGuidance"],
+    properties: {
+      schemaVersion: { type: "string", default: LOOM_SCHEMA_VERSION },
+      sceneIdentity: {
+        type: "object",
+        properties: {
+          title: { type: "string", default: "" },
+          location: { type: "string", default: "" },
+          subLocation: { type: "string", default: "" },
+          time: { type: "string", default: "" },
+          date: { type: "string", default: "" },
+          weather: { type: "string", default: "" },
+          lighting: { type: "string", default: "" },
+          privacy: { type: "string", default: "" },
+          pacing: { type: "string", default: "" },
+          tension: { type: "string", default: "" },
+          mood: { type: "string", default: "" },
+          sensoryAtmosphere: { type: "string", default: "" },
+          atmosphere: { type: "array", maxItems: 8, default: [], items: { type: "string" } }
+        }
+      },
+      narrativeDelta: {
+        type: "object",
+        properties: {
+          summary: { type: "string", default: "" },
+          whatChanged: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          immediateConsequences: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          unresolvedBeats: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          continuityWarnings: { type: "array", maxItems: 6, default: [], items: { type: "string" } }
+        }
+      },
+      characters: {
+        type: "array",
+        maxItems: 8,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", default: "" },
+            role: { type: "string", default: "" },
+            presence: { type: "string", default: "" },
+            location: { type: "string", default: "" },
+            currentAction: { type: "string", default: "" },
+            appearance: {
+              type: "object",
+              properties: {
+                overview: { type: "string", default: "" },
+                face: { type: "string", default: "" },
+                hair: { type: "string", default: "" },
+                eyes: { type: "string", default: "" },
+                bodyBuild: { type: "string", default: "" },
+                clothing: { type: "string", default: "" },
+                posture: { type: "string", default: "" },
+                voice: { type: "string", default: "" },
+                scent: { type: "string", default: "" },
+                visibleCondition: { type: "string", default: "" }
+              }
+            },
+            state: {
+              type: "object",
+              properties: {
+                emotion: { type: "string", default: "" },
+                hiddenTension: { type: "string", default: "" },
+                injuries: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+                fatigue: { type: "string", default: "" },
+                goals: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+                knowledge: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+                secrets: { type: "array", maxItems: 6, default: [], items: { type: "string" } },
+                boundaries: { type: "array", maxItems: 6, default: [], items: { type: "string" } }
+              }
+            },
+            relationshipToUser: {
+              type: "object",
+              properties: {
+                label: { type: "string", default: "" },
+                trust: { type: "integer", default: 0 },
+                warmth: { type: "integer", default: 0 },
+                attraction: { type: "integer", default: 0 },
+                irritation: { type: "integer", default: 0 },
+                fear: { type: "integer", default: 0 },
+                leverage: { type: "string", default: "" },
+                recentShift: { type: "string", default: "" }
+              }
+            },
+            props: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+            inventory: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+            changesThisTurn: { type: "array", maxItems: 6, default: [], items: { type: "string" } }
+          }
+        }
+      },
+      relationships: {
+        type: "array",
+        maxItems: 10,
+        default: [],
+        items: {
+          type: "object",
+          properties: {
+            parties: { type: "string", default: "" },
+            trust: { type: "string", default: "" },
+            warmth: { type: "string", default: "" },
+            attraction: { type: "string", default: "" },
+            irritation: { type: "string", default: "" },
+            fear: { type: "string", default: "" },
+            promises: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+            conflicts: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+            debts: { type: "array", maxItems: 4, default: [], items: { type: "string" } },
+            recentShift: { type: "string", default: "" }
+          }
+        }
+      },
+      worldState: {
+        type: "object",
+        properties: {
+          importantObjects: { type: "array", maxItems: 10, default: [], items: { type: "string" } },
+          hazards: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          activeThreads: { type: "array", maxItems: 10, default: [], items: { type: "string" } },
+          loreFacts: { type: "array", maxItems: 10, default: [], items: { type: "string" } },
+          constraints: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          timelineAnchors: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          sceneRules: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          contradictions: { type: "array", maxItems: 6, default: [], items: { type: "string" } }
+        }
+      },
+      nextTurnGuidance: {
+        type: "object",
+        properties: {
+          likelyFocus: { type: "string", default: "" },
+          fragileDetails: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          doNotForget: { type: "array", maxItems: 8, default: [], items: { type: "string" } },
+          avoidInventing: { type: "array", maxItems: 8, default: [], items: { type: "string" } }
+        }
+      }
+    }
+  },
+  htmlTemplate: [
+    '<section class="sotl-atlas sotl-density-{{density}} sotl-theme-{{theme}}" data-sotl-card="true">',
+    "<style>",
+    ".sotl-atlas{font-family:var(--lv-font-sans,Inter,ui-sans-serif,system-ui,sans-serif);color:var(--lumiverse-text,var(--lv-text,#eef2ff));background:linear-gradient(145deg,rgba(12,16,24,.96),rgba(21,27,38,.94));border:1px solid rgba(130,150,190,.3);border-radius:14px;padding:14px;box-shadow:0 16px 44px rgba(0,0,0,.38);display:grid;gap:12px;overflow:hidden}",
+    ".sotl-atlas *{box-sizing:border-box}",
+    ".sotl-atlas__head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;border-bottom:1px solid rgba(255,255,255,.11);padding-bottom:10px}",
+    ".sotl-atlas__eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#9fb7ff;font-weight:800}",
+    ".sotl-atlas h3{margin:2px 0 0;font-size:18px;line-height:1.15;color:#fff}",
+    ".sotl-atlas__mood{display:inline-flex;align-items:center;border:1px solid rgba(159,183,255,.35);background:rgba(95,122,255,.14);border-radius:999px;padding:4px 9px;font-size:11px;color:#dbe5ff;white-space:nowrap}",
+    ".sotl-atlas__chips{display:flex;flex-wrap:wrap;gap:6px}",
+    ".sotl-atlas__chip{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);border-radius:7px;padding:5px 7px;font-size:11px;color:#d8deea;line-height:1.25}",
+    ".sotl-atlas__delta{font-size:13px;line-height:1.5;color:#f4f7ff;margin:0;padding:10px;border-radius:10px;background:rgba(255,255,255,.06);border-left:3px solid #8fb0ff}",
+    ".sotl-atlas__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}",
+    ".sotl-atlas__panel{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.045);border-radius:10px;padding:10px;min-width:0}",
+    ".sotl-atlas__panel h4{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#9fb7ff}",
+    ".sotl-atlas__list{margin:0;padding-left:16px;font-size:12px;line-height:1.45;color:#e1e7f2}",
+    ".sotl-atlas__cast{display:grid;gap:9px}",
+    ".sotl-atlas__person{border:1px solid rgba(159,183,255,.18);background:rgba(159,183,255,.06);border-radius:10px;padding:10px;display:grid;gap:8px}",
+    ".sotl-atlas__person-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
+    ".sotl-atlas__person h5{margin:0;font-size:14px;color:#fff}.sotl-atlas__role{font-size:11px;color:#b6c2d8}",
+    ".sotl-atlas__kv{display:grid;grid-template-columns:82px minmax(0,1fr);gap:4px 8px;font-size:12px;line-height:1.38}.sotl-atlas__kv b{color:#9fb7ff;font-size:10px;text-transform:uppercase;letter-spacing:.05em}.sotl-atlas__kv span{min-width:0;overflow-wrap:anywhere}",
+    ".sotl-atlas__meters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.sotl-atlas__meter{background:rgba(0,0,0,.18);border-radius:7px;padding:5px;text-align:center}.sotl-atlas__meter b{display:block;font-size:9px;color:#9fb7ff;text-transform:uppercase}.sotl-atlas__meter span{font-size:12px;color:#fff;font-weight:800}",
+    "@media(max-width:560px){.sotl-atlas{padding:11px;border-radius:10px}.sotl-atlas__head{grid-template-columns:1fr}.sotl-atlas__grid{grid-template-columns:1fr}.sotl-atlas__meters{grid-template-columns:repeat(3,minmax(0,1fr))}.sotl-atlas__kv{grid-template-columns:72px minmax(0,1fr)}}",
+    "</style>",
+    '<header class="sotl-atlas__head">',
+    '  <div><div class="sotl-atlas__eyebrow">Grand Continuity Atlas</div><h3>{{sceneIdentity.title}}</h3></div>',
+    '  <span class="sotl-atlas__mood">{{sceneIdentity.mood}}</span>',
+    "</header>",
+    '<div class="sotl-atlas__chips">',
+    '  <span class="sotl-atlas__chip">Location: {{sceneIdentity.location}}{{#if sceneIdentity.subLocation}} / {{sceneIdentity.subLocation}}{{/if}}</span>',
+    '  <span class="sotl-atlas__chip">Time: {{sceneIdentity.time}}</span>',
+    '  <span class="sotl-atlas__chip">Weather: {{sceneIdentity.weather}}</span>',
+    '  <span class="sotl-atlas__chip">Light: {{sceneIdentity.lighting}}</span>',
+    '  <span class="sotl-atlas__chip">Privacy: {{sceneIdentity.privacy}}</span>',
+    '  <span class="sotl-atlas__chip">Tension: {{sceneIdentity.tension}}</span>',
+    "</div>",
+    '<p class="sotl-atlas__delta">{{narrativeDelta.summary}}</p>',
+    '<section class="sotl-atlas__cast">',
+    "{{#each characters}}",
+    '  <article class="sotl-atlas__person">',
+    '    <div class="sotl-atlas__person-head"><div><h5>{{name}}</h5><div class="sotl-atlas__role">{{role}} - {{presence}} - {{location}}</div></div><span class="sotl-atlas__chip">{{state.emotion}}</span></div>',
+    '    <div class="sotl-atlas__kv">',
+    "      <b>Face</b><span>{{appearance.face}}</span><b>Hair</b><span>{{appearance.hair}}</span><b>Eyes</b><span>{{appearance.eyes}}</span><b>Build</b><span>{{appearance.bodyBuild}}</span><b>Clothes</b><span>{{appearance.clothing}}</span><b>Posture</b><span>{{appearance.posture}}</span><b>Voice</b><span>{{appearance.voice}}</span><b>Condition</b><span>{{appearance.visibleCondition}}</span>",
+    "    </div>",
+    '    <div class="sotl-atlas__meters"><div class="sotl-atlas__meter"><b>Trust</b><span>{{relationshipToUser.trust}}</span></div><div class="sotl-atlas__meter"><b>Warmth</b><span>{{relationshipToUser.warmth}}</span></div><div class="sotl-atlas__meter"><b>Attract</b><span>{{relationshipToUser.attraction}}</span></div><div class="sotl-atlas__meter"><b>Irrit.</b><span>{{relationshipToUser.irritation}}</span></div><div class="sotl-atlas__meter"><b>Fear</b><span>{{relationshipToUser.fear}}</span></div></div>',
+    '    <div class="sotl-atlas__grid">',
+    '      <div class="sotl-atlas__panel"><h4>Intent and Knowledge</h4><ul class="sotl-atlas__list">{{#each state.goals}}<li>{{this}}</li>{{/each}}{{#each state.knowledge}}<li>{{this}}</li>{{/each}}</ul></div>',
+    '      <div class="sotl-atlas__panel"><h4>Props and Changes</h4><ul class="sotl-atlas__list">{{#each props}}<li>{{this}}</li>{{/each}}{{#each inventory}}<li>{{this}}</li>{{/each}}{{#each changesThisTurn}}<li>{{this}}</li>{{/each}}</ul></div>',
+    "    </div>",
+    "  </article>",
+    "{{/each}}",
+    "</section>",
+    '<section class="sotl-atlas__grid">',
+    '  <div class="sotl-atlas__panel"><h4>World State</h4><ul class="sotl-atlas__list">{{#each worldState.importantObjects}}<li>{{this}}</li>{{/each}}{{#each worldState.hazards}}<li>{{this}}</li>{{/each}}{{#each worldState.activeThreads}}<li>{{this}}</li>{{/each}}{{#each worldState.loreFacts}}<li>{{this}}</li>{{/each}}</ul></div>',
+    '  <div class="sotl-atlas__panel"><h4>Next Turn Guidance</h4><p style="font-size:12px;line-height:1.45;margin:0 0 6px;color:#f4f7ff;">{{nextTurnGuidance.likelyFocus}}</p><ul class="sotl-atlas__list">{{#each nextTurnGuidance.fragileDetails}}<li>{{this}}</li>{{/each}}{{#each nextTurnGuidance.doNotForget}}<li>{{this}}</li>{{/each}}{{#each nextTurnGuidance.avoidInventing}}<li>{{this}}</li>{{/each}}</ul></div>',
+    "</section>",
+    '{{#if relationships}}<details class="sotl-card-details" open><summary>Relationship Ledger</summary><ul class="sotl-atlas__list">{{#each relationships}}<li><strong>{{parties}}</strong>: trust {{trust}}, warmth {{warmth}}, attraction {{attraction}}, irritation {{irritation}}, fear {{fear}}. {{recentShift}}</li>{{/each}}</ul></details>{{/if}}',
+    "</section>"
+  ].join(""),
+  promptInstructions: [
+    "You are State of the Loom: Grand Continuity Atlas, a high-detail continuity tracker for AI roleplay.",
+    "Return raw JSON only. Do not use markdown fences, XML tags, comments, prose outside JSON, or explanations.",
+    "Use the Grand Continuity Atlas schema exactly. Include every required top-level object.",
+    "Target roughly 2200-2800 JSON tokens when the scene has enough material. Do not pad with invented facts; if information is unknown, use concise empty strings or empty arrays.",
+    "Preserve stable facts from the previous tracker unless the latest assistant message clearly changes them.",
+    "Track character appearance with unusually strong continuity: face, hair, eyes, build, clothing, posture, voice, scent, visible condition, injuries, fatigue, emotional state, hidden tension, goals, knowledge, secrets, boundaries, props, inventory, and changes this turn.",
+    "Track relationships as state, not vibes only: trust, warmth, attraction, irritation, fear, leverage, promises, conflicts, debts, and recent shifts.",
+    "Track world state: important objects, hazards, active threads, lore facts, constraints, timeline anchors, scene rules, contradictions, and continuity warnings.",
+    "Use 0-100 integers for relationshipToUser meter values. Keep arrays within maxItems. Prefer specific compact phrases over vague labels.",
+    "The latest assistant message is authoritative for what just happened; the previous tracker is authoritative for stable continuity that was not contradicted."
+  ].join("\n"),
+  injectionTemplate: "[Grand Continuity Atlas]\n{{compactSummary}}",
+  maxInjectionTokens: 900,
+  defaultPlacement: "top",
+  renderOptions: {
+    density: "expanded",
+    theme: "glass",
+    showControls: true
+  },
+  parserOptions: {
+    fenceNames: ["tracker", "loom", "atlas"],
+    strictJson: true,
+    repairInvalidJson: false
+  },
+  sampleData: {
+    schemaVersion: LOOM_SCHEMA_VERSION,
+    sceneIdentity: {
+      title: "Kitchen Introduction Under Stormlight",
+      location: "Ward House",
+      subLocation: "Kitchen threshold",
+      time: "5:35 PM",
+      date: "2024-07-12",
+      weather: "hot, stagnant, humid late afternoon with thunder building outside",
+      lighting: "low afternoon sun through windows and warm kitchen overheads",
+      privacy: "semi-private; Bridget and Diane can observe Josh",
+      pacing: "slow social pressure with physical discomfort",
+      tension: "strained, awkward, mildly buzzed",
+      mood: "tense but domestic",
+      sensoryAtmosphere: "heavy summer heat, tile underfoot, old wood, glass clinks, storm scent near the door",
+      atmosphere: ["heavy standing heat", "old kitchen wood", "wet storm smell near the threshold"]
+    },
+    narrativeDelta: {
+      summary: "Josh enters the kitchen after Diane and makes a clumsy offer to leave while Bridget observes from the counter with wine in hand.",
+      whatChanged: ["Josh has arrived in the kitchen.", "Bridget is confirmed present and watching.", "Marcus remains absent."],
+      immediateConsequences: ["Josh must navigate Bridget and Diane while physically strained."],
+      unresolvedBeats: ["Why Marcus is absent.", "Whether Josh can move upstairs safely."],
+      continuityWarnings: ["Do not forget Josh is dealing with a severe right-leg cramp."]
+    },
+    characters: [
+      {
+        name: "Josh",
+        role: "visitor",
+        presence: "active in scene",
+        location: "kitchen threshold",
+        currentAction: "offering to leave despite pain",
+        appearance: {
+          overview: "strained, overheated, trying to look composed",
+          face: "tight around the mouth from pain",
+          hair: "slightly mussed from the humid house",
+          eyes: "watchful and embarrassed",
+          bodyBuild: "adult build, currently favoring one leg",
+          clothing: "casual travel clothes, rumpled from the heat",
+          posture: "weight shifted off the right leg",
+          voice: "polite but strained",
+          scent: "warm skin and storm-damp air",
+          visibleCondition: "severe right-leg cramp limiting movement"
+        },
+        state: {
+          emotion: "awkward and tense",
+          hiddenTension: "does not want to look helpless in front of Bridget",
+          injuries: ["severe right-leg cramp"],
+          fatigue: "physically strained",
+          goals: ["avoid imposing", "reach Marcus or learn where he is"],
+          knowledge: ["Marcus is absent", "Diane and Bridget are watching him"],
+          secrets: [],
+          boundaries: ["should not sprint or climb quickly while cramped"]
+        },
+        relationshipToUser: {
+          label: "player viewpoint",
+          trust: 50,
+          warmth: 45,
+          attraction: 0,
+          irritation: 15,
+          fear: 10,
+          leverage: "none established",
+          recentShift: "more vulnerable after visible pain"
+        },
+        props: [],
+        inventory: [],
+        changesThisTurn: ["entered kitchen", "showed strain from leg cramp"]
+      },
+      {
+        name: "Bridget Hanley",
+        role: "aunt and drinker of wine",
+        presence: "active observer",
+        location: "leaning near the kitchen counter",
+        currentAction: "watching Josh with sharp curiosity",
+        appearance: {
+          overview: "composed, amused, slightly buzzed",
+          face: "sharp-eyed with a faintly assessing expression",
+          hair: "neat enough but casual for the house",
+          eyes: "focused on Josh",
+          bodyBuild: "relaxed adult posture",
+          clothing: "house casuals with a folded towel in hand",
+          posture: "leaning at the counter, glass nearby",
+          voice: "dry and curious",
+          scent: "wine and warm kitchen air",
+          visibleCondition: "mildly buzzed but observant"
+        },
+        state: {
+          emotion: "curious and amused",
+          hiddenTension: "testing Josh socially",
+          injuries: [],
+          fatigue: "none obvious",
+          goals: ["understand who Josh is", "watch Diane handle him"],
+          knowledge: ["Josh is struggling physically", "Marcus is not here"],
+          secrets: [],
+          boundaries: ["keeps social control through teasing observation"]
+        },
+        relationshipToUser: {
+          label: "new acquaintance",
+          trust: 30,
+          warmth: 35,
+          attraction: 0,
+          irritation: 20,
+          fear: 0,
+          leverage: "social confidence in her own kitchen",
+          recentShift: "became more interested after seeing Josh struggle"
+        },
+        props: ["wine glass", "folded towel"],
+        inventory: [],
+        changesThisTurn: ["identified as present and observing Josh"]
+      }
+    ],
+    relationships: [
+      {
+        parties: "Josh and Bridget",
+        trust: "low but open",
+        warmth: "testing curiosity",
+        attraction: "not established",
+        irritation: "minor awkwardness",
+        fear: "none",
+        promises: [],
+        conflicts: ["Josh may be judged for arriving while Marcus is absent"],
+        debts: [],
+        recentShift: "Bridget has begun evaluating Josh directly."
+      }
+    ],
+    worldState: {
+      importantObjects: ["wine glass on the counter", "kitchen threshold", "stair path toward Marcus room"],
+      hazards: ["Josh right-leg cramp", "hot stagnant room", "social scrutiny"],
+      activeThreads: ["Marcus absence", "Josh trying to reach upstairs", "Bridget assessing Josh"],
+      loreFacts: ["Ward House kitchen is occupied by Diane and Bridget."],
+      constraints: ["Josh movement is impaired.", "Marcus should not suddenly appear without setup."],
+      timelineAnchors: ["Josh arrived after Diane entered the kitchen."],
+      sceneRules: ["Domestic realism and social tension matter more than action."],
+      contradictions: []
+    },
+    nextTurnGuidance: {
+      likelyFocus: "Josh needs to answer Bridget or Diane while managing the leg cramp.",
+      fragileDetails: ["Josh is at the threshold, not upstairs.", "Bridget has wine and is watching closely."],
+      doNotForget: ["Marcus is absent.", "Diane is present.", "The right-leg cramp is severe."],
+      avoidInventing: ["Do not invent Marcus location yet.", "Do not resolve the cramp instantly."]
+    }
+  },
+  createdAt: now,
+  updatedAt: now
+};
 var microLoomPreset = {
   id: "micro_loom",
   name: "Micro Loom",
@@ -636,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.12",
+  version: "1.0.13",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -911,6 +1286,7 @@ var chronoscopeOccultLedgerPreset = {
   updatedAt: now
 };
 var builtInPresets = [
+  grandContinuityAtlasPreset,
   microLoomPreset,
   slimScenePreset,
   balancedStoryPreset,
@@ -920,12 +1296,36 @@ var builtInPresets = [
 ];
 
 // src/shared/renderer.ts
+var HELPER_NAMES = /* @__PURE__ */ new Set([
+  "eq",
+  "eqi",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "and",
+  "or",
+  "not",
+  "add",
+  "subtract",
+  "multiply",
+  "divide",
+  "divideRoundUp",
+  "abs",
+  "initials",
+  "rawFirstLetter",
+  "slugifyDash",
+  "slugifyUnderscore",
+  "camelCase",
+  "clampPercent",
+  "percentOf"
+]);
 function safeObjectToString(val) {
   if (val === null || val === void 0) return "";
   if (typeof val !== "object") return String(val);
-  if (Array.isArray(val)) return val.map(safeObjectToString).join(", ");
+  if (Array.isArray(val)) return val.map(safeObjectToString).filter(Boolean).join(", ");
   const obj = val;
-  const keys = ["text", "value", "label", "name", "title", "summary", "description"];
+  const keys = ["text", "value", "label", "name", "title", "summary", "description", "status"];
   for (const key of keys) {
     if (key in obj && obj[key] !== void 0 && obj[key] !== null && typeof obj[key] !== "object") {
       return String(obj[key]);
@@ -940,73 +1340,403 @@ function safeObjectToString(val) {
 function escapeHtml(value) {
   return safeObjectToString(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-function readPath(data, path) {
-  if (path === ".") return data;
-  let cleanPath = path;
-  if (cleanPath.startsWith("this.")) {
-    cleanPath = cleanPath.slice(5);
-  } else if (cleanPath === "this") {
-    return data;
+function stripHtml(html) {
+  return html.replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+}
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function normalizePath(path) {
+  return path.trim().replace(/^\.\//, "").replace(/^\$root\./, "");
+}
+function readRecordPath(source, rawPath) {
+  if (!rawPath) return void 0;
+  if (rawPath === "." || rawPath === "this") return source;
+  let path = normalizePath(rawPath);
+  if (path.startsWith("this.")) path = path.slice(5);
+  const parts = path.split(".").filter(Boolean);
+  let current = source;
+  for (const part of parts) {
+    if (part === "length" && Array.isArray(current)) return current.length;
+    if (!isRecord(current) && !Array.isArray(current)) return void 0;
+    current = current[part];
   }
-  return cleanPath.split(".").reduce((current, part) => {
-    if (!current || typeof current !== "object") return "";
-    return current[part] ?? "";
-  }, data);
+  return current;
+}
+function readPath(ctx, rawPath) {
+  const path = normalizePath(rawPath);
+  if (!path) return void 0;
+  if (path in ctx.locals) return ctx.locals[path];
+  if (path.startsWith("@")) return ctx.locals[path];
+  if (path === "." || path === "this" || path.startsWith("this.")) {
+    return readRecordPath(ctx.current, path);
+  }
+  const fromCurrent = readRecordPath(ctx.current, path);
+  if (fromCurrent !== void 0 && fromCurrent !== "") return fromCurrent;
+  return readRecordPath(ctx.root, path);
 }
 function truthy(value) {
   if (Array.isArray(value)) return value.length > 0;
+  if (value === "false" || value === "0") return false;
   return Boolean(value);
 }
-function renderTemplate(template, data, missingFields = /* @__PURE__ */ new Set()) {
-  let output = template;
-  const sectionPattern = /{{#if\s+([\w.]+)}}([\s\S]*?){{\/if}}/g;
-  output = output.replace(sectionPattern, (_match, path, inner) => {
-    return truthy(readPath(data, path)) ? renderTemplate(inner, data, missingFields) : "";
-  });
-  const eachPattern = /{{#each\s+([\w.]+)}}([\s\S]*?){{\/each}}/g;
-  output = output.replace(eachPattern, (_match, path, inner) => {
-    const value = readPath(data, path);
-    if (value === "" || value === void 0 || value === null) missingFields.add(path);
-    if (!Array.isArray(value) || value.length === 0) return '<p class="sotl-empty">None</p>';
-    return value.map((item) => {
-      const scope = item && typeof item === "object" ? item : { ".": item };
-      return renderTemplate(inner, { ...data, ...scope, ".": item }, missingFields);
-    }).join("");
-  });
-  return output.replace(/{{\s*([\w.]+|\.)\s*}}/g, (_match, path) => {
-    const value = readPath(data, path);
-    if (value === "" || value === void 0 || value === null) missingFields.add(path);
-    return escapeHtml(value);
-  });
+function tokenizeExpression(expression) {
+  const tokens = [];
+  let current = "";
+  let quote = "";
+  let depth = 0;
+  for (let i = 0; i < expression.length; i += 1) {
+    const ch = expression[i];
+    if (quote) {
+      current += ch;
+      if (ch === quote && expression[i - 1] !== "\\") quote = "";
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === "(") {
+      depth += 1;
+      current += ch;
+      continue;
+    }
+    if (ch === ")") {
+      depth = Math.max(0, depth - 1);
+      current += ch;
+      continue;
+    }
+    if (/\s/.test(ch) && depth === 0) {
+      if (current.trim()) tokens.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) tokens.push(current.trim());
+  return tokens;
+}
+function stripWrappedParens(value) {
+  let out = value.trim();
+  while (out.startsWith("(") && out.endsWith(")")) {
+    let depth = 0;
+    let balanced = true;
+    for (let i = 0; i < out.length; i += 1) {
+      if (out[i] === "(") depth += 1;
+      if (out[i] === ")") depth -= 1;
+      if (depth === 0 && i < out.length - 1) {
+        balanced = false;
+        break;
+      }
+    }
+    if (!balanced) break;
+    out = out.slice(1, -1).trim();
+  }
+  return out;
+}
+function numberValue(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+function slugify(value, separator) {
+  return String(value || "").toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, separator);
+}
+function callHelper(name, values) {
+  switch (name) {
+    case "eq":
+      return values[0] === values[1] || String(values[0]) === String(values[1]);
+    case "eqi":
+      return String(values[0] || "").toLowerCase() === String(values[1] || "").toLowerCase();
+    case "gt":
+      return numberValue(values[0]) > numberValue(values[1]);
+    case "gte":
+      return numberValue(values[0]) >= numberValue(values[1]);
+    case "lt":
+      return numberValue(values[0]) < numberValue(values[1]);
+    case "lte":
+      return numberValue(values[0]) <= numberValue(values[1]);
+    case "and":
+      return values.every(truthy);
+    case "or":
+      return values.some(truthy);
+    case "not":
+      return !truthy(values[0]);
+    case "add":
+      return numberValue(values[0]) + numberValue(values[1]);
+    case "subtract":
+      return numberValue(values[0]) - numberValue(values[1]);
+    case "multiply":
+      return numberValue(values[0]) * numberValue(values[1]);
+    case "divide":
+      return numberValue(values[1]) === 0 ? 0 : numberValue(values[0]) / numberValue(values[1]);
+    case "divideRoundUp":
+      return numberValue(values[1]) === 0 ? 0 : Math.ceil(numberValue(values[0]) / numberValue(values[1]));
+    case "abs":
+      return Math.abs(numberValue(values[0]));
+    case "initials":
+      return String(values[0] || "?").replace(/[^a-zA-Z0-9\s_-]+/g, " ").trim().split(/[\s_-]+/).filter(Boolean).slice(0, 3).map((word) => word.charAt(0).toUpperCase()).join("") || "?";
+    case "rawFirstLetter":
+      return String(values[0] || "?").charAt(0) || "?";
+    case "slugifyDash":
+      return slugify(values[0], "-");
+    case "slugifyUnderscore":
+      return slugify(values[0], "_");
+    case "camelCase": {
+      const words = String(values[0] || "").toLowerCase().replace(/[^a-z0-9\s]+/g, " ").trim().split(/\s+/);
+      return words.map((word, index) => index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)).join("");
+    }
+    case "clampPercent":
+      return Math.max(0, Math.min(100, Math.round(numberValue(values[0]))));
+    case "percentOf":
+      return numberValue(values[1]) === 0 ? 0 : Math.max(0, Math.min(100, Math.round(numberValue(values[0]) / numberValue(values[1]) * 100)));
+    default:
+      return "";
+  }
+}
+function evalExpression(expression, ctx) {
+  const expr = stripWrappedParens(expression);
+  if (!expr) return "";
+  if (expr.startsWith('"') && expr.endsWith('"') || expr.startsWith("'") && expr.endsWith("'")) return expr.slice(1, -1);
+  if (expr === "true") return true;
+  if (expr === "false") return false;
+  if (expr === "null") return null;
+  if (/^-?\d+(?:\.\d+)?$/.test(expr)) return Number(expr);
+  const tokens = tokenizeExpression(expr);
+  if (tokens.length > 1 && HELPER_NAMES.has(tokens[0])) {
+    return callHelper(tokens[0], tokens.slice(1).map((token) => evalExpression(token, ctx)));
+  }
+  const value = readPath(ctx, expr);
+  if (value === void 0 || value === null || value === "") ctx.missingFields.add(expr);
+  else ctx.usedFields.add(expr);
+  return value ?? "";
+}
+function tokenizeTemplate(template) {
+  const tokens = [];
+  const re = /{{{?\s*([^{}]+?)\s*}?}}/g;
+  let match;
+  while ((match = re.exec(template)) !== null) {
+    tokens.push({ command: match[1].trim(), start: match.index, end: match.index + match[0].length });
+  }
+  return tokens;
+}
+function parseTemplate(template) {
+  const tokens = tokenizeTemplate(template);
+  function parseNodes(index, cursor, shouldStop) {
+    const nodes = [];
+    while (index < tokens.length) {
+      const token = tokens[index];
+      const command = token.command;
+      if (shouldStop(command)) {
+        if (token.start > cursor) nodes.push({ type: "text", value: template.slice(cursor, token.start) });
+        return { nodes, index, cursor: token.end, stopCommand: command };
+      }
+      if (token.start > cursor) nodes.push({ type: "text", value: template.slice(cursor, token.start) });
+      index += 1;
+      if (command.startsWith("!")) {
+        cursor = token.end;
+        continue;
+      }
+      if (command.startsWith("#each ")) {
+        const expression = command.slice(6).trim();
+        const bodyResult = parseNodes(index, token.end, (cmd) => cmd === "/each" || cmd === "else");
+        let alternate = [];
+        let endIndex = bodyResult.index;
+        if (bodyResult.stopCommand === "else") {
+          const altResult = parseNodes(bodyResult.index + 1, tokens[bodyResult.index].end, (cmd) => cmd === "/each");
+          alternate = altResult.nodes;
+          endIndex = altResult.index;
+        }
+        nodes.push({ type: "each", expression, body: bodyResult.nodes, alternate });
+        cursor = tokens[endIndex]?.end ?? bodyResult.cursor;
+        index = endIndex + 1;
+        continue;
+      }
+      if (command.startsWith("#if ") || command.startsWith("#unless ")) {
+        const inverted = command.startsWith("#unless ");
+        let expression = command.slice(inverted ? 8 : 4).trim();
+        const branches = [];
+        let alternate = [];
+        let nextIndex = index;
+        let nextCursor = token.end;
+        let endIndex = index - 1;
+        while (nextIndex <= tokens.length) {
+          const bodyResult = parseNodes(nextIndex, nextCursor, (cmd) => cmd === (inverted ? "/unless" : "/if") || cmd === "else" || cmd.startsWith("else if "));
+          branches.push({ expression, body: bodyResult.nodes });
+          endIndex = bodyResult.index;
+          if (bodyResult.stopCommand?.startsWith("else if ")) {
+            expression = bodyResult.stopCommand.slice(8).trim();
+            nextIndex = bodyResult.index + 1;
+            nextCursor = tokens[bodyResult.index].end;
+            continue;
+          }
+          if (bodyResult.stopCommand === "else") {
+            const altResult = parseNodes(bodyResult.index + 1, tokens[bodyResult.index].end, (cmd) => cmd === (inverted ? "/unless" : "/if"));
+            alternate = altResult.nodes;
+            endIndex = altResult.index;
+          }
+          break;
+        }
+        nodes.push({ type: "if", branches, alternate, inverted });
+        cursor = tokens[endIndex]?.end ?? token.end;
+        index = endIndex + 1;
+        continue;
+      }
+      if (!command.startsWith("/")) {
+        nodes.push({ type: "var", expression: command });
+      }
+      cursor = token.end;
+    }
+    if (cursor < template.length) nodes.push({ type: "text", value: template.slice(cursor) });
+    return { nodes, index, cursor: template.length };
+  }
+  return parseNodes(0, 0, () => false).nodes;
+}
+function renderNodes(nodes, ctx) {
+  return nodes.map((node) => {
+    if (node.type === "text") return node.value;
+    if (node.type === "var") return escapeHtml(evalExpression(node.expression, ctx));
+    if (node.type === "each") {
+      const value = evalExpression(node.expression, ctx);
+      if (!Array.isArray(value) || value.length === 0) {
+        return node.alternate.length > 0 ? renderNodes(node.alternate, ctx) : "";
+      }
+      return value.map((item, index) => {
+        const current = node.expression.trim() === "characters" && isRecord(item) ? buildCharacterContext(ctx.root, item) : item;
+        return renderNodes(node.body, {
+          ...ctx,
+          current,
+          locals: {
+            ...ctx.locals,
+            "@index": index,
+            "@first": index === 0,
+            "@last": index === value.length - 1
+          }
+        });
+      }).join("");
+    }
+    if (node.type === "if") {
+      for (const branch of node.branches) {
+        const ok = truthy(evalExpression(branch.expression, ctx));
+        if (node.inverted ? !ok : ok) return renderNodes(branch.body, ctx);
+      }
+      return renderNodes(node.alternate, ctx);
+    }
+    return "";
+  }).join("");
+}
+function darkenHexColor(value) {
+  const raw = String(value || "#475569").replace("#", "").trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return "#1f2937";
+  const n = parseInt(raw, 16);
+  const r = Math.max(0, Math.round((n >> 16 & 255) * 0.72));
+  const g = Math.max(0, Math.round((n >> 8 & 255) * 0.72));
+  const b = Math.max(0, Math.round((n & 255) * 0.72));
+  return `#${[r, g, b].map((part) => part.toString(16).padStart(2, "0")).join("")}`;
+}
+function buildCharacterContext(root, character) {
+  const worldData = isRecord(root.worldData) ? root.worldData : {};
+  const name = String(character.name || character.characterName || "Character");
+  const nestedStats = isRecord(character.stats) ? character.stats : {};
+  const stats = { ...character, ...nestedStats };
+  const bgColor = String(character.bg || stats.bg || "#475569");
+  return {
+    ...root,
+    ...character,
+    name,
+    characterName: name,
+    currentDate: worldData.current_date || worldData.date || root.currentDate || "",
+    currentTime: worldData.current_time || worldData.time || root.currentTime || "",
+    stats,
+    bgColor,
+    darkerBgColor: darkenHexColor(bgColor),
+    reactionEmoji: Number(stats.last_react) === 1 ? "+" : Number(stats.last_react) === 2 ? "-" : "=",
+    healthIcon: Number(stats.health) === 1 ? "injured" : Number(stats.health) === 2 ? "critical" : ""
+  };
+}
+function buildRenderData(tracker, preset) {
+  const sceneIdentity = isRecord(tracker.data.sceneIdentity) ? tracker.data.sceneIdentity : {};
+  const narrativeDelta = isRecord(tracker.data.narrativeDelta) ? tracker.data.narrativeDelta : {};
+  const data = {
+    ...tracker.data,
+    data: tracker.data,
+    density: preset.renderOptions.density,
+    theme: preset.renderOptions.theme,
+    compactSummary: tracker.compactSummary
+  };
+  if (sceneIdentity.title && !data.sceneTitle) data.sceneTitle = sceneIdentity.title;
+  if (sceneIdentity.location && !data.location) data.location = sceneIdentity.location;
+  if (sceneIdentity.time && !data.time) data.time = sceneIdentity.time;
+  if (sceneIdentity.weather && !data.weather) data.weather = sceneIdentity.weather;
+  if (sceneIdentity.lighting && !data.lighting) data.lighting = sceneIdentity.lighting;
+  if (sceneIdentity.mood && !data.mood) data.mood = sceneIdentity.mood;
+  if (narrativeDelta.summary && !data.delta) data.delta = narrativeDelta.summary;
+  return data;
+}
+function shouldRenderPerCharacter(template, data, preset) {
+  if (!Array.isArray(data.characters) || data.characters.length === 0) return false;
+  if (template.includes("#each characters")) return false;
+  if (preset.sourceFormat !== "simtracker" && preset.templateEngine !== "handlebars_compat") return false;
+  return /\{\{\s*(?:characterName|stats\.|bgColor|darkerBgColor|reactionEmoji|healthIcon)\b/.test(template);
+}
+function renderTemplate(template, data, preset) {
+  const nodes = parseTemplate(template);
+  const missingFields = /* @__PURE__ */ new Set();
+  const usedFields = /* @__PURE__ */ new Set();
+  const baseContext = { root: data, current: data, locals: {}, missingFields, usedFields };
+  if (shouldRenderPerCharacter(template, data, preset)) {
+    const characters = data.characters;
+    return {
+      html: characters.map((item) => {
+        const character = isRecord(item) ? item : { name: String(item) };
+        const root = buildCharacterContext(data, character);
+        return renderNodes(nodes, { root, current: root, locals: {}, missingFields, usedFields });
+      }).join(""),
+      missingFields: [...missingFields],
+      usedFields: [...usedFields]
+    };
+  }
+  return {
+    html: renderNodes(nodes, baseContext),
+    missingFields: [...missingFields],
+    usedFields: [...usedFields]
+  };
+}
+function cleanupTrustedHtml(html) {
+  let cleaned = html;
+  cleaned = cleaned.replace(/<script\b[\s\S]*?<\/script>/gi, "");
+  cleaned = cleaned.replace(/<iframe\b[\s\S]*?<\/iframe>/gi, "");
+  cleaned = cleaned.replace(/<object\b[\s\S]*?<\/object>/gi, "");
+  cleaned = cleaned.replace(/<embed\b[\s\S]*?>/gi, "");
+  cleaned = cleaned.replace(/\s+on[a-zA-Z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/g, "");
+  cleaned = cleaned.replace(/javascript\s*:/gi, "");
+  return { html: cleaned, removed: cleaned !== html };
 }
 function sanitizeDomHtml(html) {
-  if (typeof document === "undefined") return "";
+  if (typeof document === "undefined") return cleanupTrustedHtml(html).html;
   try {
     let sanitizeNode2 = function(node) {
       if (node.nodeType === Node.TEXT_NODE) return node;
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node;
-        const tag = el.tagName.toLowerCase();
-        if (!allowedTags.has(tag)) return null;
-        const cleanEl = document.createElement(tag);
-        for (let i = 0; i < el.attributes.length; i += 1) {
-          const attr = el.attributes[i];
-          const name = attr.name.toLowerCase();
-          if (!allowedAttrs.has(name) && !name.startsWith("data-")) continue;
-          const value = attr.value;
-          const cleanVal = value.trim().toLowerCase();
-          if (cleanVal.includes("javascript:") || cleanVal.includes("data:")) continue;
-          cleanEl.setAttribute(name, value);
-        }
-        let child = el.firstChild;
-        while (child) {
-          const cleanChild = sanitizeNode2(child);
-          if (cleanChild) cleanEl.appendChild(cleanChild);
-          child = child.nextSibling;
-        }
-        return cleanEl;
+      if (node.nodeType !== Node.ELEMENT_NODE) return null;
+      const el = node;
+      const tag = el.tagName.toLowerCase();
+      if (!allowedTags.has(tag)) return null;
+      const cleanEl = document.createElement(tag);
+      for (let i = 0; i < el.attributes.length; i += 1) {
+        const attr = el.attributes[i];
+        const name = attr.name.toLowerCase();
+        if (!allowedAttrs.has(name) && !name.startsWith("data-")) continue;
+        const cleanVal = attr.value.trim().toLowerCase();
+        if (name.startsWith("on") || cleanVal.includes("javascript:")) continue;
+        cleanEl.setAttribute(name, attr.value);
       }
-      return null;
+      let child = el.firstChild;
+      while (child) {
+        const cleanChild = sanitizeNode2(child);
+        if (cleanChild) cleanEl.appendChild(cleanChild);
+        child = child.nextSibling;
+      }
+      return cleanEl;
     };
     var sanitizeNode = sanitizeNode2;
     const parser = new DOMParser();
@@ -1042,6 +1772,8 @@ function sanitizeDomHtml(html) {
       "hr",
       "br",
       "style",
+      "label",
+      "input",
       "table",
       "thead",
       "tbody",
@@ -1068,6 +1800,11 @@ function sanitizeDomHtml(html) {
       "aria-label",
       "role",
       "style",
+      "for",
+      "type",
+      "checked",
+      "name",
+      "value",
       "viewbox",
       "fill",
       "stroke",
@@ -1111,46 +1848,52 @@ function sanitizeDomHtml(html) {
     return cleanBody.innerHTML;
   } catch (err) {
     console.error("DOM Parser sanitization failed:", err);
-    return "";
+    return cleanupTrustedHtml(html).html;
   }
+}
+function getByPath(data, path) {
+  const value = readRecordPath(data, path);
+  if (value !== void 0 && value !== "") return value;
+  const lowerKey = path.toLowerCase();
+  for (const [key, entryValue] of Object.entries(data)) {
+    if (key.toLowerCase() === lowerKey) return entryValue;
+  }
+  return void 0;
 }
 function getFallbackField(data, keys) {
   if (!data || typeof data !== "object") return void 0;
   for (const key of keys) {
-    if (key in data) return data[key];
-    const lowerKey = key.toLowerCase();
-    for (const k of Object.keys(data)) {
-      if (k.toLowerCase() === lowerKey) return data[k];
-    }
+    const value = getByPath(data, key);
+    if (value !== void 0 && value !== null && value !== "") return value;
   }
   return void 0;
 }
 function isCustomPreset(preset) {
   return !builtInPresets.some((p) => p.id === preset.id);
 }
-function isVisuallyEmptyHtml(html, missingFields) {
+function resolveTemplateMode(modeOrSafe, preset) {
+  if (modeOrSafe === true) return "safe_generic";
+  if (modeOrSafe === "trusted_layout" || modeOrSafe === "strict_sanitized" || modeOrSafe === "safe_generic") return modeOrSafe;
+  return isCustomPreset(preset) ? "trusted_layout" : "trusted_layout";
+}
+function isVisuallyEmptyHtml(html) {
   if (!html.trim()) return true;
-  if (typeof document === "undefined") return false;
-  try {
-    const template = document.createElement("template");
-    template.innerHTML = html;
-    const text = (template.content.textContent || "").replace(/\s+/g, "").trim();
-    const hasVisualElement = Boolean(template.content.querySelector("svg,path,rect,circle,line,polygon,ellipse,table,td,th,hr"));
-    return missingFields.length > 0 && !text && !hasVisualElement;
-  } catch {
-    return false;
-  }
+  if (stripHtml(html)) return false;
+  return !/<(?:svg|path|rect|circle|line|polygon|ellipse|table|td|th|hr|input)\b/i.test(html);
 }
 function renderValueBlock(value, depth = 0) {
   if (value === null || value === void 0 || value === "") return "";
   if (typeof value !== "object") return `<span>${escapeHtml(String(value))}</span>`;
-  if (depth >= 3) return `<pre class="sotl-code">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
+  if (depth >= 3) {
+    try {
+      return `<pre class="sotl-code">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
+    } catch {
+      return "";
+    }
+  }
   if (Array.isArray(value)) {
     if (value.length === 0) return '<p class="sotl-empty">None</p>';
-    const items = value.slice(0, 12).map((item) => {
-      if (item && typeof item === "object") return `<li>${renderValueBlock(item, depth + 1)}</li>`;
-      return `<li>${escapeHtml(String(item))}</li>`;
-    }).join("");
+    const items = value.slice(0, 12).map((item) => `<li>${renderValueBlock(item, depth + 1)}</li>`).join("");
     const more = value.length > 12 ? `<li>${escapeHtml(`+${value.length - 12} more`)}</li>` : "";
     return `<ul class="sotl-anchors-list">${items}${more}</ul>`;
   }
@@ -1163,9 +1906,30 @@ function renderValueBlock(value, depth = 0) {
     </div>
   `).join("")}</dl>`;
 }
+function renderPreservedDataDetails(tracker) {
+  return `
+    <details class="sotl-card-details sotl-template-remainder">
+      <summary>Unrendered tracker data</summary>
+      ${renderValueBlock(tracker.data)}
+    </details>
+  `;
+}
 function renderGenericSafeCard(tracker, preset, warningMessage) {
-  const title = escapeHtml(String(getFallbackField(tracker.data, ["sceneTitle", "title", "name", "sceneName", "scene"]) || "Continuity State"));
-  const mood = escapeHtml(String(getFallbackField(tracker.data, ["mood", "tone", "emotion", "scene_mood"]) || ""));
+  const title = escapeHtml(String(getFallbackField(tracker.data, [
+    "sceneIdentity.title",
+    "sceneTitle",
+    "title",
+    "name",
+    "sceneName",
+    "scene"
+  ]) || "Continuity State"));
+  const mood = escapeHtml(String(getFallbackField(tracker.data, [
+    "sceneIdentity.mood",
+    "mood",
+    "tone",
+    "emotion",
+    "scene_mood"
+  ]) || ""));
   const density = preset.renderOptions?.density || "compact";
   const theme = preset.renderOptions?.theme || "system";
   const warningHtml = warningMessage ? `
@@ -1211,52 +1975,114 @@ function renderGenericSafeCard(tracker, preset, warningMessage) {
     </section>
   `;
 }
-function renderTrackerHtmlDetailed(tracker, preset, useSafeRenderer = false) {
-  if (useSafeRenderer) {
+function collectPresentFields(value, prefix = "", out = /* @__PURE__ */ new Set()) {
+  if (value === null || value === void 0 || value === "") return out;
+  if (prefix) out.add(prefix);
+  if (Array.isArray(value)) {
+    value.slice(0, 3).forEach((item) => collectPresentFields(item, prefix, out));
+    return out;
+  }
+  if (isRecord(value)) {
+    for (const [key, entryValue] of Object.entries(value)) {
+      collectPresentFields(entryValue, prefix ? `${prefix}.${key}` : key, out);
+    }
+  }
+  return out;
+}
+function isLiteralOrHelper(token) {
+  return HELPER_NAMES.has(token) || token === "else" || token.startsWith("/") || token.startsWith("#") || token.startsWith("@") || token === "this" || token === "." || token === "true" || token === "false" || token === "null" || /^-?\d+(?:\.\d+)?$/.test(token) || /^['"]/.test(token);
+}
+function collectExpressionFields(expression, out) {
+  const cleaned = stripWrappedParens(expression.replace(/^#(?:if|unless|each)\s+/, "").replace(/^else if\s+/, ""));
+  for (const token of tokenizeExpression(cleaned)) {
+    const inner = stripWrappedParens(token);
+    if (inner !== token) {
+      collectExpressionFields(inner, out);
+      continue;
+    }
+    if (!isLiteralOrHelper(token)) out.add(token.replace(/^this\./, ""));
+  }
+}
+function extractTemplateReferences(template) {
+  const out = /* @__PURE__ */ new Set();
+  for (const token of tokenizeTemplate(template)) collectExpressionFields(token.command, out);
+  return [...out].filter(Boolean).sort();
+}
+function buildTemplateCompatibilityReport(preset, sampleData, latestData) {
+  const referencedFields = extractTemplateReferences(preset.htmlTemplate || "");
+  const samplePresentFields = [...collectPresentFields(sampleData)].sort();
+  const latestPresentFields = latestData ? [...collectPresentFields(latestData)].sort() : [];
+  const hasPath = (fields, field) => fields.some((candidate) => candidate === field || candidate.startsWith(`${field}.`) || field.startsWith(`${candidate}.`));
+  return {
+    templateEngine: preset.templateEngine || "loom",
+    sourceFormat: preset.sourceFormat || "loom",
+    referencedFields,
+    samplePresentFields,
+    latestPresentFields,
+    missingFromSample: referencedFields.filter((field) => !hasPath(samplePresentFields, field)),
+    missingFromLatest: latestData ? referencedFields.filter((field) => !hasPath(latestPresentFields, field)) : []
+  };
+}
+function renderTrackerHtmlDetailed(tracker, preset, modeOrSafe = false) {
+  const templateMode = resolveTemplateMode(modeOrSafe, preset);
+  if (templateMode === "safe_generic") {
     return {
       html: renderGenericSafeCard(tracker, preset, "Safe generic renderer active."),
       success: true,
       fallbackUsed: true,
       sanitizerRemovedContent: false,
+      templateMode,
+      preservedData: true,
       warning: "Safe generic renderer active.",
-      missingFields: []
+      missingFields: [],
+      compatibility: buildTemplateCompatibilityReport(preset, preset.sampleData || {}, tracker.data)
     };
   }
-  const data = {
-    ...tracker.data,
-    data: tracker.data,
-    density: preset.renderOptions.density,
-    theme: preset.renderOptions.theme,
-    compactSummary: tracker.compactSummary
-  };
   try {
-    const missingFields = /* @__PURE__ */ new Set();
-    const rawHtml = renderTemplate(preset.htmlTemplate, data, missingFields);
-    const missing = [...missingFields];
+    const data = buildRenderData(tracker, preset);
+    const rendered = renderTemplate(preset.htmlTemplate, data, preset);
+    let html = rendered.html;
+    let sanitizerRemovedContent = false;
     if (isCustomPreset(preset)) {
-      const sanitized = sanitizeDomHtml(rawHtml);
-      if (!sanitized || sanitized.trim() === "") {
-        throw new Error("Purified HTML is empty. The template might have invalid/unsupported tags or failed sanitization.");
+      if (templateMode === "strict_sanitized") {
+        const sanitized = sanitizeDomHtml(html);
+        sanitizerRemovedContent = sanitized.trim() !== html.trim();
+        html = sanitized;
+      } else {
+        const cleanup = cleanupTrustedHtml(html);
+        sanitizerRemovedContent = cleanup.removed;
+        html = cleanup.html;
       }
-      if (isVisuallyEmptyHtml(sanitized, missing)) {
-        throw new Error(`Custom template rendered no visible tracker content. Missing fields: ${missing.join(", ") || "unknown"}.`);
-      }
+    }
+    const missing = rendered.missingFields.filter((field) => !field.startsWith("@"));
+    const compatibility = buildTemplateCompatibilityReport(preset, preset.sampleData || {}, tracker.data);
+    if (isVisuallyEmptyHtml(html)) {
+      const message = missing.length > 0 ? `Custom template rendered no visible tracker content. Missing fields: ${missing.join(", ")}.` : "Template rendered no visible tracker content.";
       return {
-        html: sanitized,
-        success: true,
-        fallbackUsed: false,
-        sanitizerRemovedContent: sanitized.trim() !== rawHtml.trim(),
-        warning: missing.length > 0 ? `Missing template fields: ${missing.join(", ")}` : void 0,
-        missingFields: missing
+        html: renderGenericSafeCard(tracker, preset, message),
+        success: false,
+        fallbackUsed: true,
+        sanitizerRemovedContent,
+        templateMode,
+        preservedData: true,
+        warning: message,
+        error: message,
+        missingFields: missing,
+        compatibility
       };
     }
+    const preservedData = isCustomPreset(preset) && missing.length > 0;
+    if (preservedData) html += renderPreservedDataDetails(tracker);
     return {
-      html: rawHtml,
+      html,
       success: true,
       fallbackUsed: false,
-      sanitizerRemovedContent: false,
+      sanitizerRemovedContent,
+      templateMode,
+      preservedData,
       warning: missing.length > 0 ? `Missing template fields: ${missing.join(", ")}` : void 0,
-      missingFields: missing
+      missingFields: missing,
+      compatibility
     };
   } catch (error) {
     console.error("Loom template rendering failed, falling back to safe card:", error);
@@ -1266,14 +2092,17 @@ function renderTrackerHtmlDetailed(tracker, preset, useSafeRenderer = false) {
       success: false,
       fallbackUsed: true,
       sanitizerRemovedContent: false,
+      templateMode,
+      preservedData: true,
       warning: message,
       error: error instanceof Error ? error.message : String(error),
-      missingFields: []
+      missingFields: [],
+      compatibility: buildTemplateCompatibilityReport(preset, preset.sampleData || {}, tracker.data)
     };
   }
 }
-function renderTrackerHtml(tracker, preset, useSafeRenderer = false) {
-  return renderTrackerHtmlDetailed(tracker, preset, useSafeRenderer).html;
+function renderTrackerHtml(tracker, preset, modeOrSafe = false) {
+  return renderTrackerHtmlDetailed(tracker, preset, modeOrSafe).html;
 }
 
 // src/frontend/ui.ts
@@ -1300,7 +2129,7 @@ function resolvePresetForTracker(state2, tracker) {
   if (preset) return { preset, missing: false };
   return { preset: state2.activePreset, missing: true };
 }
-function renderTrackerForState(tracker, state2, useSafeRenderer = Boolean(state2.settings.useSafeRenderer)) {
+function renderTrackerForState(tracker, state2, mode = state2.settings.useSafeRenderer ? "safe_generic" : state2.settings.customTemplateMode || "trusted_layout") {
   const { preset, missing } = resolvePresetForTracker(state2, tracker);
   if (missing) {
     const warning = `Preset '${tracker.presetId}' is not available. Showing tracker data with the safe generic renderer.`;
@@ -1309,12 +2138,14 @@ function renderTrackerForState(tracker, state2, useSafeRenderer = Boolean(state2
       success: false,
       fallbackUsed: true,
       sanitizerRemovedContent: false,
+      templateMode: "safe_generic",
+      preservedData: true,
       warning,
       error: warning,
       missingFields: []
     };
   }
-  return renderTrackerHtmlDetailed(tracker, preset, useSafeRenderer);
+  return renderTrackerHtmlDetailed(tracker, preset, mode);
 }
 function compactValue(value) {
   if (value === null || value === void 0 || value === "") return "";
@@ -1329,14 +2160,35 @@ function compactValue(value) {
   return Object.entries(record).filter(([, entryValue]) => entryValue !== null && entryValue !== void 0 && entryValue !== "").slice(0, 3).map(([key, entryValue]) => `${key}: ${compactValue(entryValue)}`).filter(Boolean).join("; ");
 }
 function collectCompactFields(data) {
-  const skip = /* @__PURE__ */ new Set(["schemaversion", "schema_version", "scenetitle", "title", "name", "scene", "scenename"]);
-  return Object.entries(data).filter(([key, value]) => !skip.has(key.toLowerCase()) && value !== null && value !== void 0 && value !== "").map(([key, value]) => ({ key, value: compactValue(value) })).filter((entry) => entry.value).slice(0, 5);
+  const characters = getFallbackField(data, ["characters", "cast", "present"]);
+  const preferred = [
+    { key: "Location", value: compactValue(getFallbackField(data, ["sceneIdentity.location", "location", "current_location", "place"])) },
+    { key: "Time", value: compactValue(getFallbackField(data, ["sceneIdentity.time", "time", "timeOfDay", "scene_time"])) },
+    { key: "Weather", value: compactValue(getFallbackField(data, ["sceneIdentity.weather", "weather"])) },
+    { key: "Characters", value: Array.isArray(characters) ? characters.slice(0, 4).map(compactValue).filter(Boolean).join(", ") : "" }
+  ].filter((entry) => entry.value);
+  const skip = /* @__PURE__ */ new Set(["schemaversion", "schema_version", "scenetitle", "title", "name", "scene", "scenename", "sceneidentity", "narrativedelta", "characters", "cast", "present"]);
+  const remaining = Object.entries(data).filter(([key, value]) => !skip.has(key.toLowerCase()) && value !== null && value !== void 0 && value !== "").map(([key, value]) => ({ key, value: compactValue(value) })).filter((entry) => entry.value).slice(0, 5);
+  return [...preferred, ...remaining].slice(0, 5);
 }
 function renderCompactTrackerForState(tracker, state2) {
   const { preset, missing } = resolvePresetForTracker(state2, tracker);
-  const title = String(getFallbackField(tracker.data, ["sceneTitle", "title", "name", "sceneName", "scene"]) || tracker.compactSummary || "Continuity State");
+  const title = String(getFallbackField(tracker.data, [
+    "sceneIdentity.title",
+    "sceneTitle",
+    "title",
+    "name",
+    "sceneName",
+    "scene"
+  ]) || tracker.compactSummary || "Continuity State");
   const fields = collectCompactFields(tracker.data);
-  const summary = tracker.compactSummary && tracker.compactSummary !== title ? tracker.compactSummary : fields[0]?.value || "No compact summary recorded.";
+  const summary = String(getFallbackField(tracker.data, [
+    "narrativeDelta.whatChangedThisTurn",
+    "narrativeDelta.summary",
+    "delta",
+    "summary",
+    "compactSummary"
+  ]) || (tracker.compactSummary && tracker.compactSummary !== title ? tracker.compactSummary : fields[0]?.value) || "No compact summary recorded.");
   const chips = fields.slice(1, 5).map((field) => {
     return `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml2(field.key)}: ${escapeHtml2(field.value)}</span>`;
   }).join("");
@@ -1350,6 +2202,221 @@ function renderCompactTrackerForState(tracker, state2) {
 }
 
 // src/shared/validation.ts
+var VALID_ORIGINS = /* @__PURE__ */ new Set(["built-in", "custom", "imported", "duplicated"]);
+var VALID_TEMPLATE_ENGINES = /* @__PURE__ */ new Set(["loom", "handlebars_compat"]);
+var VALID_SOURCE_FORMATS = /* @__PURE__ */ new Set(["loom", "simtracker"]);
+function normalizePresetId(value, fallbackPrefix = "custom_loom") {
+  const raw = String(value || "").trim();
+  const slug = raw.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "").slice(0, 96);
+  return slug || `${fallbackPrefix}_${Date.now()}`;
+}
+function isBuiltInPresetId(presetId) {
+  return builtInPresets.some((preset) => preset.id === presetId);
+}
+function schemaType(schema) {
+  const type = schema.type;
+  return typeof type === "string" ? type : void 0;
+}
+function asObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function asString(value, fallback = "") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+function asStringArray(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim()) : [];
+}
+function normalizeTemplateField(value, index = 0) {
+  const record = asObject(value);
+  const key = asString(record.key, asString(record.path, asString(record.name, asString(record.label, `field_${index + 1}`))));
+  const description = asString(record.description, asString(record.desc, asString(record.label, key)));
+  const rawType = asString(record.type, asString(record.fieldType)).toLowerCase();
+  const type = rawType === "number" || rawType === "integer" || rawType === "boolean" || rawType === "array" || rawType === "object" ? rawType : rawType === "list" || rawType === "tags" ? "array" : "string";
+  const nested = record.itemSchema ?? record.fields ?? record.children;
+  return {
+    key,
+    description,
+    type,
+    itemSchema: Array.isArray(nested) ? nested.map((item, childIndex) => normalizeTemplateField(item, childIndex)) : typeof nested === "string" ? nested : void 0
+  };
+}
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function normalizePath2(path) {
+  return path.replace(/\[(\d+)\]/g, "").replace(/\[\]/g, "").split(".").map((part) => part.trim()).filter(Boolean);
+}
+function ensureObjectProperty(schema, key) {
+  if (!isPlainObject(schema.properties)) schema.properties = {};
+  const properties = schema.properties;
+  if (!isPlainObject(properties[key])) {
+    properties[key] = { type: "object", properties: {}, additionalProperties: true };
+  }
+  const child = properties[key];
+  if (!isPlainObject(child.properties)) child.properties = {};
+  return child;
+}
+function setNestedSchema(parent, path, fieldSchema) {
+  if (path.length === 0) return;
+  if (path.length === 1) {
+    if (!isPlainObject(parent.properties)) parent.properties = {};
+    parent.properties[path[0]] = fieldSchema;
+    return;
+  }
+  const next = ensureObjectProperty(parent, path[0]);
+  setNestedSchema(next, path.slice(1), fieldSchema);
+}
+function setNestedSample(parent, path, value) {
+  if (path.length === 0) return;
+  if (path.length === 1) {
+    parent[path[0]] = value;
+    return;
+  }
+  const key = path[0];
+  if (!isPlainObject(parent[key])) parent[key] = {};
+  setNestedSample(parent[key], path.slice(1), value);
+}
+function explicitFieldType(record) {
+  const raw = asString(record.type, asString(record.fieldType, asString(record.inputType))).toLowerCase();
+  if (raw === "integer" || raw === "int") return "integer";
+  if (raw === "number" || raw === "float" || raw === "range" || raw === "slider") return "number";
+  if (raw === "boolean" || raw === "bool" || raw === "checkbox" || raw === "toggle") return "boolean";
+  if (raw === "array" || raw === "list" || raw === "tags" || raw === "multi-select" || raw === "multiselect") return "array";
+  if (raw === "object" || raw === "group") return "object";
+  if (raw === "string" || raw === "text" || raw === "textarea" || raw === "select" || raw === "enum" || raw === "color") return "string";
+  return void 0;
+}
+function inferSchemaForField(value) {
+  const record = asObject(value);
+  const type = explicitFieldType(record);
+  const keyText = asString(record.key, asString(record.path, asString(record.name, ""))).toLowerCase();
+  const description = asString(record.description, asString(record.desc, asString(record.label, "")));
+  const options = asStringArray(record.options ?? record.choices ?? record.enum);
+  const base = {};
+  if (description) base.description = description;
+  if (options.length > 0) base.enum = options;
+  if (type === "array") {
+    const nested = record.itemSchema ?? record.fields ?? record.children;
+    if (Array.isArray(nested) && nested.length > 0) {
+      const child = { type: "object", properties: {}, additionalProperties: true };
+      nested.forEach((item, index) => {
+        const field = normalizeTemplateField(item, index);
+        setNestedSchema(child, normalizePath2(field.key), inferSchemaForField(item));
+      });
+      return { ...base, type: "array", items: child };
+    }
+    return { ...base, type: "array", items: { type: "string" } };
+  }
+  if (type === "object") return { ...base, type: "object", properties: {}, additionalProperties: true };
+  if (type === "number" || type === "integer" || type === "boolean") return { ...base, type };
+  if (typeof record.default === "number" || typeof record.value === "number" || /\b(score|rating|level|trust|fear|warmth|attraction|irritation|leverage|tension|risk|progress|percent)\b/i.test(keyText)) {
+    return { ...base, type: "number" };
+  }
+  if (typeof record.default === "boolean" || typeof record.value === "boolean") return { ...base, type: "boolean" };
+  return { ...base, type: "string" };
+}
+function sampleForField(value, fieldSchema, key) {
+  const record = asObject(value);
+  const defaultValue = record.default ?? record.value ?? record.sample ?? record.example;
+  if (defaultValue !== void 0) return defaultValue;
+  const type = schemaType(fieldSchema);
+  const keyLower = key.toLowerCase();
+  if (type === "number" || type === "integer") return keyLower.includes("trust") || keyLower.includes("warmth") ? 55 : 1;
+  if (type === "boolean") return true;
+  if (type === "array") return ["sample"];
+  if (type === "object") return {};
+  if (keyLower.includes("color")) return "#7b8cff";
+  if (keyLower.includes("name")) return "Sample Character";
+  if (keyLower.includes("status")) return "observing";
+  if (keyLower.includes("thought")) return "Quietly reassessing the scene.";
+  return asString(record.description, asString(record.label, "Sample detail"));
+}
+function simFieldTarget(path) {
+  const first = (path[0] || "").toLowerCase();
+  if (first === "worlddata" || first === "world" || first === "global" || first === "tracker") {
+    return { scope: "world", path: path.slice(1) };
+  }
+  if (first === "character" || first === "characters") {
+    return { scope: "character", path: path.slice(1) };
+  }
+  if (first === "stats") {
+    return { scope: "character", path };
+  }
+  if (["scenetitle", "title", "location", "time", "date", "weather", "lighting", "privacy", "mood", "delta", "summary", "compactsummary"].includes(first)) {
+    return { scope: "root", path };
+  }
+  return { scope: "character", path };
+}
+function synthesizePresetFromCustomFields(customFields) {
+  const fields = customFields.map((field, index) => normalizeTemplateField(field, index));
+  const characterSchema = {
+    type: "object",
+    required: ["name"],
+    properties: {
+      name: { type: "string" },
+      characterName: { type: "string" },
+      role: { type: "string" },
+      statusTag: { type: "string" },
+      stats: { type: "object", properties: {}, additionalProperties: true }
+    },
+    additionalProperties: true
+  };
+  const worldDataSchema = { type: "object", properties: {}, additionalProperties: true };
+  const rootSchema = {
+    type: "object",
+    required: ["schemaVersion", "sceneTitle", "characters"],
+    properties: {
+      schemaVersion: { type: "string" },
+      sceneTitle: { type: "string" },
+      compactSummary: { type: "string" },
+      worldData: worldDataSchema,
+      characters: { type: "array", items: characterSchema, maxItems: 12 }
+    },
+    additionalProperties: true
+  };
+  const sampleCharacter = {
+    name: "Sample Character",
+    characterName: "Sample Character",
+    role: "Present Character",
+    statusTag: "present",
+    stats: {}
+  };
+  const sampleData = {
+    schemaVersion: "1",
+    sceneTitle: "Imported Template Preview",
+    compactSummary: "Imported template preview with synthesized sample data.",
+    worldData: {},
+    characters: [sampleCharacter]
+  };
+  customFields.forEach((rawField, index) => {
+    const field = fields[index];
+    const path = normalizePath2(field.key);
+    if (path.length === 0) return;
+    const fieldSchema = inferSchemaForField(rawField);
+    const target = simFieldTarget(path);
+    const targetPath = target.path.length > 0 ? target.path : [field.key];
+    const sampleValue = sampleForField(rawField, fieldSchema, targetPath[targetPath.length - 1]);
+    if (target.scope === "world") {
+      setNestedSchema(worldDataSchema, targetPath, fieldSchema);
+      const world = sampleData.worldData;
+      setNestedSample(world, targetPath, sampleValue);
+    } else if (target.scope === "root") {
+      setNestedSchema(rootSchema, targetPath, fieldSchema);
+      setNestedSample(sampleData, targetPath, sampleValue);
+    } else {
+      setNestedSchema(characterSchema, targetPath, fieldSchema);
+      setNestedSample(sampleCharacter, targetPath, sampleValue);
+    }
+  });
+  return { schemaJson: rootSchema, sampleData, fields };
+}
+function extractImportCandidates(value) {
+  if (Array.isArray(value)) return value;
+  const record = asObject(value);
+  if (Array.isArray(record.presets)) return record.presets;
+  if (Array.isArray(record.templates)) return record.templates;
+  return [value];
+}
 function validateTemplateSafety(template) {
   const warnings = [];
   const lower = template.toLowerCase();
@@ -1398,6 +2465,19 @@ function validateTemplateSafety(template) {
     "hr",
     "br",
     "style",
+    "label",
+    "input",
+    "button",
+    "img",
+    "figure",
+    "figcaption",
+    "main",
+    "aside",
+    "nav",
+    "progress",
+    "meter",
+    "time",
+    "mark",
     "table",
     "thead",
     "tbody",
@@ -1430,6 +2510,135 @@ function validateTemplateSafety(template) {
     }
   }
   return warnings;
+}
+function coerceImportedPreset(value, index = 0) {
+  const record = asObject(value);
+  if (Object.keys(record).length === 0) return null;
+  const extSettings = asObject(record.extSettings);
+  const templateName = asString(record.templateName, asString(record.name, `Imported Template ${index + 1}`));
+  const htmlTemplate = asString(
+    record.htmlTemplate,
+    asString(record.templateHtml, asString(record.renderTemplate, asString(record.template)))
+  );
+  const hasNativeShape = typeof record.id === "string" && typeof record.name === "string" && typeof record.htmlTemplate === "string";
+  const hasSimTrackerShape = Boolean(
+    record.templateName || record.sysPrompt || record.customFields || record.extSettings || record.templatePosition
+  );
+  if (!hasNativeShape && !hasSimTrackerShape) return null;
+  if (!htmlTemplate) return null;
+  const rawFields = Array.isArray(record.customFields) ? record.customFields : Array.isArray(extSettings.customFields) ? extSettings.customFields : Array.isArray(record.fields) ? record.fields : [];
+  const synthesized = rawFields.length > 0 ? synthesizePresetFromCustomFields(rawFields) : null;
+  const schemaJson = isPlainObject(record.schemaJson) ? record.schemaJson : isPlainObject(record.schema) ? record.schema : synthesized?.schemaJson;
+  const sampleData = isPlainObject(record.sampleData) ? record.sampleData : isPlainObject(record.sample) ? record.sample : synthesized?.sampleData;
+  const rawId = asString(record.id, asString(record.templateId, templateName));
+  const normalizedId = normalizePresetId(rawId, "imported_loom");
+  const safeId = isBuiltInPresetId(normalizedId) ? `${normalizedId}_imported_${Date.now()}` : normalizedId;
+  const codeBlockNames = [
+    ...asStringArray(record.fenceNames),
+    ...asStringArray(asObject(record.parserOptions).fenceNames),
+    asString(record.codeBlockIdentifier),
+    asString(extSettings.codeBlockIdentifier),
+    "tracker",
+    "loom"
+  ].filter(Boolean);
+  const templatePosition = asString(record.templatePosition).toUpperCase();
+  const promptInstructions = asString(
+    record.promptInstructions,
+    asString(record.sysPrompt, asString(record.systemPrompt, asString(record.prompt)))
+  );
+  const isSimTracker = hasSimTrackerShape && !hasNativeShape;
+  const promptWithOverride = [
+    promptInstructions || "Track the current roleplay scene as structured continuity JSON.",
+    isSimTracker ? [
+      "",
+      "STATE OF THE LOOM IMPORT COMPATIBILITY OVERRIDE:",
+      "Return raw JSON only. Do not wrap output in markdown fences, SimTracker tags, HTML, prose, or comments.",
+      "The JSON must match the State of the Loom schema below and should include a characters array when character fields are present."
+    ].join("\n") : ""
+  ].filter(Boolean).join("\n");
+  const importedPreset = {
+    ...record,
+    id: safeId,
+    name: templateName,
+    version: asString(record.version, LOOM_VERSION),
+    description: asString(record.description, asString(record.templateDescription, asString(record.displayInstructions, "Imported tracker template."))),
+    origin: "imported",
+    templateEngine: isSimTracker || record.templateEngine === "handlebars_compat" ? "handlebars_compat" : "loom",
+    sourceFormat: isSimTracker ? "simtracker" : record.sourceFormat === "simtracker" ? "simtracker" : "loom",
+    mode: record.mode === "passive_extract" || record.mode === "sidecar_generate" || record.mode === "hybrid" ? record.mode : "hybrid",
+    htmlTemplate,
+    promptInstructions: promptWithOverride,
+    injectionTemplate: asString(record.injectionTemplate, "[Imported Loom]\n{{compactSummary}}"),
+    maxInjectionTokens: typeof record.maxInjectionTokens === "number" ? record.maxInjectionTokens : 220,
+    defaultPlacement: templatePosition === "TOP" || record.defaultPlacement === "top" ? "top" : record.defaultPlacement === "bottom" ? "bottom" : "top",
+    parserOptions: {
+      fenceNames: [...new Set(codeBlockNames)],
+      strictJson: asObject(record.parserOptions).strictJson === false ? false : true,
+      repairInvalidJson: asObject(record.parserOptions).repairInvalidJson === true
+    }
+  };
+  const normalizedFields = synthesized?.fields ?? (rawFields.length > 0 ? rawFields.map((field, fieldIndex) => normalizeTemplateField(field, fieldIndex)) : void 0);
+  if (normalizedFields) importedPreset.customFields = normalizedFields;
+  if (schemaJson) importedPreset.schemaJson = schemaJson;
+  if (sampleData) importedPreset.sampleData = sampleData;
+  return normalizePreset(importedPreset);
+}
+function coerceImportedPresets(value) {
+  const failures = [];
+  const presets = extractImportCandidates(value).map((candidate, index) => {
+    const preset = coerceImportedPreset(candidate, index);
+    if (!preset) failures.push(`Item ${index + 1} is missing a supported template shape or htmlTemplate.`);
+    return preset;
+  }).filter((preset) => Boolean(preset));
+  return { presets, failures };
+}
+function normalizePreset(preset) {
+  const now2 = (/* @__PURE__ */ new Date()).toISOString();
+  const id = normalizePresetId(preset.id || `custom_loom_${Date.now()}`);
+  const origin = preset.origin && VALID_ORIGINS.has(preset.origin) ? preset.origin : "custom";
+  const templateEngine = preset.templateEngine && VALID_TEMPLATE_ENGINES.has(preset.templateEngine) ? preset.templateEngine : "loom";
+  const sourceFormat = preset.sourceFormat && VALID_SOURCE_FORMATS.has(preset.sourceFormat) ? preset.sourceFormat : "loom";
+  return {
+    id,
+    name: String(preset.name || "Custom Loom Template"),
+    version: String(preset.version || LOOM_VERSION),
+    description: String(preset.description || ""),
+    origin: id && isBuiltInPresetId(id) ? "built-in" : origin === "built-in" ? "custom" : origin,
+    templateEngine,
+    sourceFormat,
+    customFields: Array.isArray(preset.customFields) ? preset.customFields.map((field, index) => normalizeTemplateField(field, index)) : void 0,
+    mode: preset.mode === "passive_extract" || preset.mode === "sidecar_generate" || preset.mode === "hybrid" ? preset.mode : "hybrid",
+    schemaJson: preset.schemaJson && typeof preset.schemaJson === "object" && !Array.isArray(preset.schemaJson) ? preset.schemaJson : {
+      type: "object",
+      required: ["schemaVersion", "sceneTitle", "location", "time", "mood", "delta"],
+      properties: {
+        schemaVersion: { type: "string", default: "1" },
+        sceneTitle: { type: "string", default: "" },
+        location: { type: "string", default: "" },
+        time: { type: "string", default: "" },
+        mood: { type: "string", default: "" },
+        delta: { type: "string", default: "" }
+      }
+    },
+    htmlTemplate: String(preset.htmlTemplate || ""),
+    promptInstructions: String(preset.promptInstructions || "Return valid JSON only. Do not use markdown fences. Update what changed."),
+    injectionTemplate: String(preset.injectionTemplate || "[Custom Loom]\n{{compactSummary}}"),
+    maxInjectionTokens: typeof preset.maxInjectionTokens === "number" ? preset.maxInjectionTokens : 150,
+    defaultPlacement: preset.defaultPlacement === "top" || preset.defaultPlacement === "bottom" ? preset.defaultPlacement : "top",
+    renderOptions: {
+      density: preset.renderOptions?.density === "compact" || preset.renderOptions?.density === "normal" || preset.renderOptions?.density === "expanded" ? preset.renderOptions.density : "compact",
+      theme: preset.renderOptions?.theme === "system" || preset.renderOptions?.theme === "glass" || preset.renderOptions?.theme === "paper" || preset.renderOptions?.theme === "terminal" || preset.renderOptions?.theme === "minimal" ? preset.renderOptions.theme : "system",
+      showControls: typeof preset.renderOptions?.showControls === "boolean" ? preset.renderOptions.showControls : true
+    },
+    parserOptions: {
+      fenceNames: Array.isArray(preset.parserOptions?.fenceNames) ? preset.parserOptions.fenceNames.filter((item) => typeof item === "string" && Boolean(item.trim())) : ["tracker", "loom"],
+      strictJson: typeof preset.parserOptions?.strictJson === "boolean" ? preset.parserOptions.strictJson : true,
+      repairInvalidJson: typeof preset.parserOptions?.repairInvalidJson === "boolean" ? preset.parserOptions.repairInvalidJson : false
+    },
+    sampleData: preset.sampleData && typeof preset.sampleData === "object" && !Array.isArray(preset.sampleData) ? preset.sampleData : { sceneTitle: "New Scene", location: "Foyer" },
+    createdAt: String(preset.createdAt || now2),
+    updatedAt: now2
+  };
 }
 function checkPresetReadiness(preset) {
   const reasons = [];
@@ -1544,15 +2753,12 @@ function runPreview() {
       compactSummary: "Preview compact summary",
       validation: { ok: true, issues: [] }
     };
-    lastPreviewReport = renderTrackerHtmlDetailed(mockTracker, editingPreset);
+    lastPreviewReport = renderTrackerHtmlDetailed(mockTracker, editingPreset, "trusted_layout");
     lastPreviewHtml = lastPreviewReport.html;
     lastJsonParseError = null;
   } catch (err) {
     lastJsonParseError = `Preview failed: ${err instanceof Error ? err.message : String(err)}`;
   }
-}
-function isPresetValid(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && typeof value.id === "string" && typeof value.name === "string" && typeof value.htmlTemplate === "string";
 }
 function renderPresetEditor(state2) {
   if (!editingPreset || !state2.presets.some((p) => p.id === editingPreset.id)) {
@@ -1563,6 +2769,8 @@ function renderPresetEditor(state2) {
     return '<p class="sotl-note">No templates are available to edit.</p>';
   }
   const isBuiltIn = builtInPresets.some((p) => p.id === editingPreset.id);
+  const latestData = state2.latestTracker?.presetId === editingPreset.id ? state2.latestTracker.data : void 0;
+  const compatibility = buildTemplateCompatibilityReport(editingPreset, editingPreset.sampleData || {}, latestData);
   const presetsOptions = state2.presets.map((p) => {
     const selected = p.id === editingPreset.id ? " selected" : "";
     const isB = builtInPresets.some((bp) => bp.id === p.id);
@@ -1576,7 +2784,7 @@ function renderPresetEditor(state2) {
     isBuiltIn ? '<p class="sotl-note" style="color: var(--lv-accent, #3864d9);">\u2139\uFE0F Built-in templates are read-only. Click "Duplicate to Edit" to customize.</p>' : '<p class="sotl-note" style="color: var(--lv-success-text, #176b43);">\u270F\uFE0F You are editing a custom template.</p>',
     (() => {
       const readiness = checkPresetReadiness(editingPreset);
-      const warningsList = readiness.templateWarnings.length > 0 ? `<div style="margin-top: 4px; padding: 4px 6px; border-radius: 4px; background: rgba(220,53,69,0.06); color: var(--lv-error-text,#bd2130); font-size: 10px;">\u26A0\uFE0F Unsafe elements: ${readiness.templateWarnings.map((w) => escapeHtml2(w)).join(", ")}</div>` : "";
+      const warningsList = readiness.templateWarnings.length > 0 ? `<div style="margin-top: 4px; padding: 4px 6px; border-radius: 4px; background: rgba(176,104,0,0.08); color: var(--lv-warning-text,#8a4f00); font-size: 10px;">Template cleanup will remove: ${readiness.templateWarnings.map((w) => escapeHtml2(w)).join(", ")}</div>` : "";
       return [
         '<div class="sotl-panel" style="margin-top: 6px; padding: 10px; background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.45)); display: grid; gap: 4px; border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.2));">',
         '  <strong style="font-size: 11px; display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">',
@@ -1585,7 +2793,7 @@ function renderPresetEditor(state2) {
         '  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; font-size: 11px;">',
         `    <div>${readiness.schemaValid ? "\u2705" : "\u274C"} <strong>Schema:</strong> ${readiness.schemaValid ? "Valid" : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml2(readiness.schemaError || "Invalid")}</span>`}</div>`,
         `    <div>${readiness.sampleDataValid ? "\u2705" : "\u274C"} <strong>Sample Data:</strong> ${readiness.sampleDataValid ? "Valid" : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml2(readiness.sampleDataError || "Invalid")}</span>`}</div>`,
-        `    <div>${readiness.templateSafe ? "\u2705" : "\u26A0\uFE0F"} <strong>Safety:</strong> ${readiness.templateSafe ? "Safe" : "Unsafe elements"}</div>`,
+        `    <div>${readiness.templateSafe ? "\u2705" : "\u26A0\uFE0F"} <strong>Template:</strong> ${readiness.templateSafe ? "Clean" : "Cleanup warnings"}</div>`,
         `    <div>${readiness.promptPresent ? "\u2705" : "\u274C"} <strong>Instructions:</strong> ${readiness.promptPresent ? "Present" : "Missing"}</div>`,
         "  </div>",
         warningsList,
@@ -1603,6 +2811,7 @@ function renderPresetEditor(state2) {
     // Collapsible Details Sections (All collapsed by default)
     '<details class="sotl-details" style="margin-top: 8px;"><summary>Metadata (Name, Description, Mode)</summary>',
     '<div class="sotl-fields" style="margin-top: 8px;">',
+    `  <p class="sotl-note">Origin: <code>${escapeHtml2(editingPreset.origin || (isBuiltIn ? "built-in" : "custom"))}</code> - Engine: <code>${escapeHtml2(editingPreset.templateEngine || "loom")}</code> - Source: <code>${escapeHtml2(editingPreset.sourceFormat || "loom")}</code></p>`,
     '  <label class="sotl-label">Template Name',
     `    <input class="sotl-input" type="text" data-sotl-editor-field="name" value="${escapeHtml2(editingPreset.name)}" ${isBuiltIn ? "disabled" : ""}>`,
     "  </label>",
@@ -1691,14 +2900,22 @@ function renderPresetEditor(state2) {
     "  </div>",
     lastJsonParseError ? `<p class="sotl-note sotl-warning" style="margin-bottom: 8px; color: var(--lv-error-text, #bd2130);">${escapeHtml2(lastJsonParseError)}</p>` : "",
     lastSanitizerWarnings.length > 0 ? [
-      '<div style="background: rgba(220,53,69,0.08); border-left: 3px solid var(--lv-error-border, #dc3545); padding: 8px; margin-bottom: 8px; border-radius: 4px;">',
-      '  <strong style="color: var(--lv-error-text, #bd2130); font-size: 11px;">\u26A0\uFE0F Sanitizer Allowlist Warnings:</strong>',
-      '  <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: var(--lv-error-text, #bd2130);">',
+      '<div style="background: rgba(176,104,0,0.08); border-left: 3px solid var(--lv-warning-border, #b06800); padding: 8px; margin-bottom: 8px; border-radius: 4px;">',
+      '  <strong style="color: var(--lv-warning-text, #8a4f00); font-size: 11px;">Template Cleanup Warnings:</strong>',
+      '  <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: var(--lv-warning-text, #8a4f00);">',
       ...lastSanitizerWarnings.map((w) => `    <li>${escapeHtml2(w)}</li>`),
       "  </ul>",
       "</div>"
     ].join("\n") : "",
     lastPreviewReport ? `<p class="sotl-note" style="margin-bottom: 8px;">Preview render: ${lastPreviewReport.success ? "template rendered" : "fallback used"}${lastPreviewReport.warning ? ` - ${escapeHtml2(lastPreviewReport.warning)}` : ""}</p>` : "",
+    [
+      '<div style="margin: 8px 0; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.04); display: grid; gap: 4px; font-size: 11px;">',
+      "  <strong>Template Compatibility Report</strong>",
+      `  <div>Engine: <code>${escapeHtml2(compatibility.templateEngine)}</code> - Source: <code>${escapeHtml2(compatibility.sourceFormat)}</code> - References: <code>${compatibility.referencedFields.length}</code></div>`,
+      `  <div>Missing from sample: <code>${escapeHtml2(compatibility.missingFromSample.join(", ") || "none")}</code></div>`,
+      latestData ? `  <div>Missing from latest tracker: <code>${escapeHtml2(compatibility.missingFromLatest.join(", ") || "none")}</code></div>` : "  <div>Latest tracker coverage: <code>no matching latest tracker</code></div>",
+      "</div>"
+    ].join("\n"),
     lastPreviewHtml ? [
       '<div style="margin-top: 8px;">',
       '  <span style="font-size: 11px; font-weight: 600; color: var(--lumiverse-text-muted, #64707d);">Mock Render Preview:</span>',
@@ -1717,7 +2934,7 @@ function renderFeatureBreakdown(collapsible = false) {
     '<div class="sotl-feature-grid">',
     "<article><strong>Drawer HUD</strong><span>Shows status, current tracker, controls, diagnostics, and preset details.</span></article>",
     "<article><strong>Settings panel</strong><span>Works from the extension list and exposes the core toggles.</span></article>",
-    "<article><strong>Slim Scene Loom</strong><span>Tracks scene title, location, time, mood, cast, inventory, anchors, and avoid-next notes.</span></article>",
+    "<article><strong>Grand Continuity Atlas</strong><span>New default tracker with rich scene, appearance, relationship, world-state, and next-turn continuity sections.</span></article>",
     "<article><strong>Passive extraction</strong><span>Reads fenced <code>tracker</code> and <code>loom</code> JSON blocks from assistant replies.</span></article>",
     "<article><strong>Generate tracker</strong><span>Uses a sidecar connection or default fallback to make tracker JSON for the latest assistant message.</span></article>",
     "<article><strong>Per-chat storage</strong><span>Saves latest and per-message tracker state through user storage.</span></article>",
@@ -1725,7 +2942,7 @@ function renderFeatureBreakdown(collapsible = false) {
     "<article><strong>Manual JSON edit</strong><span>Lets you correct the current tracker without regenerating.</span></article>",
     "<article><strong>Runtime recovery</strong><span>Repairs corrupt Loom storage and exposes Reset Loom Storage when the backend is slow or offline.</span></article>",
     "</div>",
-    '<p class="sotl-note">Not in this milestone: prompt injection, simulation clocks, entity inbox, companion autonomy, Council tools, and the large Universal Loom Ledger preset.</p>'
+    '<p class="sotl-note">Not in this milestone: prompt injection, simulation clocks, entity inbox, companion autonomy, Council tools, and arbitrary template JavaScript.</p>'
   ].join("");
   if (collapsible) {
     return [
@@ -1809,6 +3026,9 @@ function renderConnectionOptions(state2) {
   ];
   return options.join("");
 }
+function effectiveTemplateMode(state2) {
+  return state2.settings.useSafeRenderer ? "safe_generic" : state2.settings.customTemplateMode || "trusted_layout";
+}
 function renderPresetOptions(state2) {
   return state2.presets.map((preset) => {
     const selected = preset.id === state2.settings.activePresetId ? " selected" : "";
@@ -1818,6 +3038,7 @@ function renderPresetOptions(state2) {
     else if (preset.id === "balanced_story_loom") suffix = "[~400t - Balanced]";
     else if (preset.id === "cast_continuity_loom") suffix = "[~400t - Detailed]";
     else if (preset.id === "full_continuity_ledger") suffix = "[~450t - Full]";
+    else if (preset.id === "grand_continuity_atlas") suffix = "[~2500t - Grand]";
     return `<option value="${escapeHtml2(preset.id)}"${selected}>${escapeHtml2(preset.name)} ${suffix}</option>`;
   }).join("");
 }
@@ -1887,7 +3108,7 @@ function renderPipelineReport(state2) {
   const parseVal = report.parseSuccess ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml2(report.parseError || "Unknown parser error")}</span>`;
   const valVal = report.schemaValidationSuccess ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml2(report.schemaValidationError || "Invalid schema")}</span>`;
   const renderVal = report.renderSuccess ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml2(report.renderError || "Render error")}</span>`;
-  const sanitizerVal = report.sanitizerRemovedContent ? `<span style="color: ${errorColor}; font-weight: 600;">Yes (Check template safe tags)</span>` : `<span style="color: ${successColor}; font-weight: 600;">No (Clean)</span>`;
+  const sanitizerVal = report.sanitizerRemovedContent ? `<span style="color: ${errorColor}; font-weight: 600;">Yes (cleanup removed unsafe content)</span>` : `<span style="color: ${successColor}; font-weight: 600;">No (layout preserved)</span>`;
   const fallbackVal = report.fallbackUsed ? `<span style="color: #b58900; font-weight: 600;">Yes (Fallback active)</span>` : `<span style="color: ${successColor}; font-weight: 600;">No (Template OK)</span>`;
   return `
     <div style="font-size: 11px; display: grid; gap: 4px; padding: 10px; background: rgba(0,0,0,0.06); border-radius: 6px; border: 1px solid var(--lumiverse-border, rgba(80,88,100,0.15)); margin-top: 8px; line-height: 1.4;">
@@ -1907,8 +3128,11 @@ function renderPipelineReport(state2) {
       ${report.schemaValidationIssues && report.schemaValidationIssues.length > 0 ? `<div><strong>Schema Issues:</strong> <code>${escapeHtml2(report.schemaValidationIssues.map((issue) => `${issue.path || "(root)"} ${issue.message}`).join(" | "))}</code></div>` : ""}
       <div><strong>HTML Render:</strong> ${renderVal}</div>
       ${report.renderWarning ? `<div><strong>Render Warning:</strong> <code>${escapeHtml2(report.renderWarning)}</code></div>` : ""}
-      <div><strong>Sanitizer Removed Content:</strong> ${sanitizerVal}</div>
+      <div><strong>Template Mode:</strong> <code>${escapeHtml2(report.templateMode || "n/a")}</code></div>
+      <div><strong>Template Cleanup Removed Content:</strong> ${sanitizerVal}</div>
       <div><strong>Fallback Card Used:</strong> ${fallbackVal}</div>
+      <div><strong>Unrendered Data Appended:</strong> ${report.preservedData ? `<span style="color: ${successColor}; font-weight: 600;">Yes</span>` : "No"}</div>
+      ${report.templateCompatibility ? `<div><strong>Template Missing Latest Fields:</strong> <code>${escapeHtml2(report.templateCompatibility.missingFromLatest.join(", ") || "none")}</code></div>` : ""}
       ${report.trackerPresetId ? `<div><strong>Tracker Preset ID:</strong> <code>${escapeHtml2(report.trackerPresetId)}</code></div>` : ""}
       <div><strong>Latest Tracker Message ID:</strong> <code>${escapeHtml2(report.messageId)}</code></div>
       <div><strong>Chat ID:</strong> <code>${escapeHtml2(report.chatId)}</code></div>
@@ -1977,7 +3201,7 @@ function renderDrawer(state2, status = {}) {
           compactSummary: "Sample preview for " + state2.activePreset.name,
           validation: { ok: true, issues: [] }
         };
-        return renderTrackerHtml(mockTracker, state2.activePreset, state2.settings.useSafeRenderer);
+        return renderTrackerHtml(mockTracker, state2.activePreset, effectiveTemplateMode(state2));
       } catch (err) {
         return `<p class="sotl-note sotl-warning" style="color: var(--lv-error-text,#bd2130);">\u26A0\uFE0F Preview Render Failed: ${escapeHtml2(err instanceof Error ? err.message : String(err))}</p>`;
       }
@@ -2000,6 +3224,13 @@ function renderDrawer(state2, status = {}) {
     "</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderInMessages" ' + (state2.settings.renderInMessages ? "checked" : "") + "> Attach tracker cards to messages (Experimental)</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="useSafeRenderer" ' + (state2.settings.useSafeRenderer ? "checked" : "") + "> Use safe generic renderer for custom presets</label>",
+    '<label class="sotl-label">Custom template rendering',
+    `<select class="sotl-select" data-sotl-field="customTemplateMode" ${state2.settings.useSafeRenderer ? "disabled" : ""}>`,
+    `  <option value="trusted_layout"${effectiveTemplateMode(state2) === "trusted_layout" ? " selected" : ""}>Trusted layout (preserve custom HTML/CSS)</option>`,
+    `  <option value="strict_sanitized"${effectiveTemplateMode(state2) === "strict_sanitized" ? " selected" : ""}>Strict sanitized</option>`,
+    `  <option value="safe_generic"${effectiveTemplateMode(state2) === "safe_generic" ? " selected" : ""}>Safe generic renderer only</option>`,
+    "</select>",
+    "</label>",
     '<label class="sotl-label">Message card position',
     `<select class="sotl-select" data-sotl-field="messageCardPlacement">${renderPlacementOptions(state2)}</select>`,
     "</label>",
@@ -2902,8 +4133,12 @@ var loomStyles = `
 }
 .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
   position: fixed;
-  top: 60px;
+  top: 48px;
   right: 16px;
+  left: 16px;
+  width: auto;
+  max-width: 720px;
+  margin-left: auto;
 }
 .sotl-chat-pill {
   display: flex;
@@ -2942,6 +4177,10 @@ var loomStyles = `
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.sotl-chat-panel-container--expanded .sotl-chat-panel {
+  width: 100%;
+  max-height: calc(100vh - 136px);
 }
 .sotl-chat-panel__head {
   display: flex;
@@ -2996,11 +4235,21 @@ var loomStyles = `
   flex-direction: column;
   gap: 6px;
   font-size: 12px;
+  min-height: 0;
+}
+.sotl-chat-panel-container--expanded .sotl-chat-panel__body {
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 .sotl-chat-panel__scroll-body {
   overflow-y: auto;
   max-height: 280px;
   padding-right: 4px;
+  min-height: 0;
+}
+.sotl-chat-panel-container--expanded .sotl-chat-panel__scroll-body {
+  flex: 1 1 auto;
+  max-height: calc(100vh - 190px);
 }
 .sotl-chat-panel__scroll-body::-webkit-scrollbar {
   width: 5px;
@@ -3056,12 +4305,24 @@ var loomStyles = `
     display: flex !important;
   }
   .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
-    right: 12px;
-    top: 70px;
-    max-width: calc(100vw - 24px);
+    left: 6px;
+    right: 6px;
+    top: 40px;
+    bottom: 84px;
+    width: auto;
+    max-width: none;
+    margin-left: 0;
   }
   .sotl-chat-panel {
     width: 100%;
+  }
+  .sotl-chat-panel-container--expanded .sotl-chat-panel {
+    height: 100%;
+    max-height: none;
+    padding: 10px;
+  }
+  .sotl-chat-panel-container--expanded .sotl-chat-panel__scroll-body {
+    max-height: none;
   }
 }
 
@@ -3086,7 +4347,7 @@ var rootListenerCleanups = /* @__PURE__ */ new Map();
 function documentRef2() {
   return typeof document === "undefined" ? null : document;
 }
-function isRecord(value) {
+function isRecord2(value) {
   return Boolean(value) && typeof value === "object";
 }
 function isElement(value) {
@@ -3188,7 +4449,7 @@ function registerDrawer(ctx) {
         iconSvg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h2v18H5V3Zm12 0h2v18h-2V3ZM9 5h6v2H9V5Zm0 4h6v2H9V9Zm0 4h6v2H9v-2Zm0 4h6v2H9v-2Z"/></svg>'
       });
       drawerHandle = result ?? null;
-      if (isRecord(result) && isElement(result.root)) {
+      if (isRecord2(result) && isElement(result.root)) {
         drawerRoot = result.root;
         bindRootEvents(drawerRoot);
         renderInto(drawerRoot, html);
@@ -3220,7 +4481,7 @@ function registerSettingsMount(ctx) {
       renderInto(settingsRoot, renderSettingsPanel(state, uiStatus()));
       return;
     }
-    if (isRecord(result) && isElement(result.root)) {
+    if (isRecord2(result) && isElement(result.root)) {
       settingsHandle = result;
       settingsRoot = result.root;
       bindRootEvents(settingsRoot);
@@ -3282,6 +4543,9 @@ function paint(status) {
       report.fallbackUsed = render.fallbackUsed;
       report.renderSuccess = render.success;
       report.sanitizerRemovedContent = render.sanitizerRemovedContent;
+      report.templateMode = render.templateMode;
+      report.preservedData = render.preservedData;
+      report.templateCompatibility = render.compatibility;
       report.renderWarning = render.warning;
       report.renderError = render.error;
       report.trackerPresetId = state.latestTracker.presetId;
@@ -3389,9 +4653,11 @@ function handleDrawerEvent(event) {
       const newPreset = {
         id: newId,
         name: "New Custom Loom",
-        version: "1.0.12",
+        version: "1.0.13",
         description: "User custom continuity tracker.",
         mode: "hybrid",
+        templateEngine: "handlebars_compat",
+        sourceFormat: "loom",
         schemaJson: {
           type: "object",
           required: ["schemaVersion", "sceneTitle", "location", "time", "mood", "delta"],
@@ -3571,23 +4837,7 @@ function handleDrawerEvent(event) {
         } else {
           candidates = [parsed];
         }
-        const valid = [];
-        const failures = [];
-        for (const candidate of candidates) {
-          if (!isPresetValid(candidate)) {
-            failures.push("One item is missing required fields (id, name, htmlTemplate).");
-            continue;
-          }
-          const p = { ...candidate };
-          if (builtInPresets.some((bp) => bp.id === p.id)) {
-            p.id = `${p.id}_custom_${Date.now()}`;
-            p.name = `${p.name} (Custom Copy)`;
-          }
-          p.origin = "imported";
-          if (!p.createdAt) p.createdAt = (/* @__PURE__ */ new Date()).toISOString();
-          p.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-          valid.push(p);
-        }
+        const { presets: valid, failures } = coerceImportedPresets(candidates);
         if (valid.length === 0) {
           const failMsg = failures.length > 0 ? failures[0] : "No valid presets found in the pasted JSON.";
           setImportStatus({ ok: false, message: failMsg });
@@ -3638,10 +4888,8 @@ function handleDrawerEvent(event) {
             candidates = parsed;
           } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.presets)) {
             candidates = parsed.presets;
-          } else if (isPresetValid(parsed)) {
-            candidates = [parsed];
           } else {
-            throw new Error('Pack file must be a JSON array or an object with a "presets" array.');
+            candidates = [parsed];
           }
         } else {
           if (Array.isArray(parsed)) {
@@ -3652,23 +4900,7 @@ function handleDrawerEvent(event) {
             candidates = [parsed];
           }
         }
-        const valid = [];
-        const failures = [];
-        for (const candidate of candidates) {
-          if (!isPresetValid(candidate)) {
-            failures.push("One item is missing required fields.");
-            continue;
-          }
-          const p = { ...candidate };
-          if (builtInPresets.some((bp) => bp.id === p.id)) {
-            p.id = `${p.id}_custom_${Date.now()}`;
-            p.name = `${p.name} (Custom Copy)`;
-          }
-          p.origin = "imported";
-          if (!p.createdAt) p.createdAt = (/* @__PURE__ */ new Date()).toISOString();
-          p.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-          valid.push(p);
-        }
+        const { presets: valid, failures } = coerceImportedPresets(candidates);
         if (valid.length === 0) {
           const failMsg = failures.length > 0 ? failures[0] : "No valid presets found in the file.";
           setImportStatus({ ok: false, message: failMsg });
@@ -3751,7 +4983,16 @@ function handleDrawerEvent(event) {
     saveSettings({ stripTrackerBlocksFromMessages: field.checked });
   }
   if (fieldName === "useSafeRenderer" && field instanceof HTMLInputElement) {
-    saveSettings({ useSafeRenderer: field.checked });
+    saveSettings({
+      useSafeRenderer: field.checked,
+      customTemplateMode: field.checked ? "safe_generic" : "trusted_layout"
+    });
+  }
+  if (fieldName === "customTemplateMode" && field instanceof HTMLSelectElement) {
+    const value = field.value;
+    if (value === "trusted_layout" || value === "strict_sanitized" || value === "safe_generic") {
+      saveSettings({ customTemplateMode: value, useSafeRenderer: false });
+    }
   }
   if (fieldName === "messageCardPlacement" && field instanceof HTMLSelectElement) {
     saveSettings({ messageCardPlacement: field.value });

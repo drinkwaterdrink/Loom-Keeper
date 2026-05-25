@@ -1,8 +1,8 @@
-# State of the Loom (v1.0.12)
+# State of the Loom (v1.0.13)
 
 State of the Loom is a Lumiverse-native State of the Loom continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.12 is a custom preset reliability pass: tracker cards now render with the preset that generated the stored tracker, Duplicate/Import can save and activate presets atomically, compact HUD mode summarizes arbitrary custom schemas, and the Pipeline Report now exposes raw-response, parse, schema, render, sanitizer, fallback, timeout, and preset-origin details.
+Version 1.0.13 adds the Grand Continuity Atlas default tracker, a Handlebars-compatible interpreted template renderer, SimTracker-style import compatibility, trusted-layout custom rendering, template compatibility diagnostics, and a wider mobile HUD that sits higher above the input bar.
 
 ---
 
@@ -16,14 +16,15 @@ Version 1.0.12 is a custom preset reliability pass: tracker cards now render wit
    - **Duplication & Creation**: Click **New Template** or **Duplicate to Edit** to spin up custom presets with unique IDs.
    - **Details (Metadata)**: Customize the name, description, generation mode, default placement, and token targets.
    - **JSON Schema & Sample Data**: Validate prompt outputs using custom JSON schemas and sample datasets.
-   - **Strict DOM Sanitizer Allowlist**: All custom templates undergo browser-native `DOMParser` allowlist sanitization. Safe tags include structural HTML, tables, style blocks, and basic SVG shapes. Executable elements (`<script>`, `<iframe>`, `<object>`, `<embed>`), event handlers (`on*`), and unsafe link URIs (`javascript:`, `data:`) are stripped.
-   - **Preview & Validation**: Render the custom template against sample data in real-time. Unsafe HTML triggers immediate warning alerts inside the editor.
+   - **Trusted Layout Rendering**: Custom templates preserve layout HTML, inline CSS, tables, SVG, classes, and SimTracker-style helper syntax by default while executable hazards (`<script>`, event handlers, `javascript:` URLs) are stripped.
+   - **Preview & Validation**: Render the custom template against sample data in real-time, inspect missing template fields, and see whether fallback or unrendered-data preservation was needed.
 4. **Approximate Token Indicators**: Select dropdown choices are labeled with approximate token weights so you can manage your context size:
    - Micro Loom $\rightarrow$ `[~150t - Tiny]`
    - Slim Scene Loom $\rightarrow$ `[~350t - Slim]`
    - Balanced Story Loom $\rightarrow$ `[~400t - Balanced]`
    - Cast Continuity Loom $\rightarrow$ `[~400t - Detailed]`
    - Full Continuity Ledger $\rightarrow$ `[~450t - Full]`
+   - Grand Continuity Atlas $\rightarrow$ `[~2500t - Grand]`
 5. **Stale Tracker Detection**: Flags the Current Loom status with a yellow badge `⚠️ Stale: New messages sent` if new user or assistant messages are added to the chat history after the latest tracker was saved.
 6. **Quick Copy JSON**: Copy the entire Current Loom state to your clipboard with a single click.
 
@@ -87,25 +88,34 @@ npm run smoke:custom-preset
 
 # Run renderer and preset-resolution smoke test
 npm run smoke:renderer
+
+# Run SimTracker/native import compatibility smoke test
+npm run smoke:import-compat
+
+# Run default Grand Continuity Atlas smoke test
+npm run smoke:default-preset
+
+# Run HUD mobile layout CSS smoke test
+npm run smoke:hud-css
 ```
 
 ---
 
 ## Diagnostics & Troubleshooting
 
-State of the Loom (v1.0.12) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, and stuck generation states.
+State of the Loom (v1.0.13) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, and stuck generation states.
 
 ### 1. What to do when a Custom Preset renders blank
-* **Root Cause**: If a custom preset uses template property variables (like `{{time}}` or `{{location}}`) that are missing or misspelled in your custom JSON schema/data, the template compiler renders empty markup (e.g., `<h3></h3>`). The safe DOM sanitizer allows these structural tags, creating a completely blank visual block in the HUD instead of throwing an error.
-* **Troubleshooting Step**: Toggle the **Use safe generic renderer for custom presets** setting in the controls section. This bypasses custom templates and renders all generated primitive fields and cast arrays dynamically inside a pre-formatted clean card, ensuring no data is ever hidden.
-* **Automatic Fallback**: If a custom template fails compilation, has invalid tag structures, or renders entirely empty text content, the engine automatically catches the error and falls back to displaying a safe generic card detailing the render issue.
+* **Root Cause**: If a custom preset uses template variables that are missing from the generated JSON, those individual fields render empty. This is now a warning instead of a fatal blank-card condition.
+* **Troubleshooting Step**: Use **Custom template rendering** to switch between Trusted layout, Strict sanitized, and Safe generic renderer modes. Safe generic bypasses custom HTML and displays every valid primitive, array, and object value.
+* **Automatic Fallback**: If a custom template fails compilation, has invalid tag structures, or renders entirely empty text content, the engine automatically catches the error and falls back to displaying a safe generic card detailing the render issue. Valid but partially missing templates append an "Unrendered tracker data" section instead of hiding the JSON.
 * **Preset-Accurate Rendering**: Stored trackers render through their own `presetId`; switching the active preset no longer forces old trackers through the wrong template.
 
 ### 2. Collapsible Tracker Pipeline Report
 Expose exactly where a generation or render breaks using the **Tracker Pipeline Report** inside the Diagnostics drawer section:
 * **Active Preset Details**: Displays current preset ID, source type (built-in vs custom), and time.
 * **JSON Parse / Validation State**: Exposes whether the LLM output was valid JSON, the parse failure category, and whether it conformed to your custom preset's schema.
-* **Raw / Timeout / Render Flags**: Inspect raw response availability, elapsed generation time, configured timeout, render warnings, sanitizer stripping, and whether a safe fallback card was forced.
+* **Raw / Timeout / Render Flags**: Inspect raw response availability, elapsed generation time, configured timeout, render warnings, template cleanup, fallback usage, unrendered-data preservation, and missing latest-template fields.
 
 ---
 

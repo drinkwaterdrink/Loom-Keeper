@@ -9,6 +9,7 @@ export function buildTrackerPrompt(input: {
 }): Array<{ role: 'system' | 'user'; content: string }> {
   const previous = input.previousTracker ? JSON.stringify(input.previousTracker.data, null, 2) : '{}';
   const schema = JSON.stringify(input.preset.schemaJson, null, 2);
+  const sample = JSON.stringify(input.preset.sampleData || {}, null, 2);
   const histories = input.previousSummaries && input.previousSummaries.length > 0
     ? '\n\nRecent tracker history:\n' + input.previousSummaries.map((s, idx) => `[T-${idx + 1}] ${s}`).join('\n')
     : '';
@@ -23,6 +24,9 @@ export function buildTrackerPrompt(input: {
       content: [
         'Schema:',
         schema,
+        '',
+        'Sample JSON shape and naming conventions:',
+        sample,
         '',
         'Previous tracker state:',
         previous,
