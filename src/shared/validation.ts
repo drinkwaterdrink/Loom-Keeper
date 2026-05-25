@@ -129,7 +129,7 @@ export function normalizePreset(preset: Partial<LoomPreset>): LoomPreset {
   return {
     id: String(preset.id || `custom_loom_${Date.now()}`),
     name: String(preset.name || 'Custom Loom Template'),
-    version: String(preset.version || '1.0.8'),
+    version: String(preset.version || '1.0.9'),
     description: String(preset.description || ''),
     mode: (preset.mode === 'passive_extract' || preset.mode === 'sidecar_generate' || preset.mode === 'hybrid') 
       ? preset.mode 

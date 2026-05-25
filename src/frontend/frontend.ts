@@ -1,6 +1,7 @@
 import type { LoomBackendMessage, LoomFrontendMessage, LoomFrontendState, LoomSettings } from '../shared/types.js';
 import { renderDrawer } from './drawer.js';
 import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback } from './messageCards.js';
+import { renderTrackerHtml } from '../shared/renderer.js';
 import { renderSettingsPanel } from './settingsPanel.js';
 import { loomStyles } from './styles.js';
 import type { LoomUiStatus } from './ui.js';
@@ -253,6 +254,19 @@ function activateDrawer(): void {
 }
 
 function paint(status: LoomUiStatus): void {
+  if (state && state.latestTracker && state.diagnostics.pipelineReport) {
+    const useSafe = state.settings.useSafeRenderer || false;
+    try {
+      const html = renderTrackerHtml(state.latestTracker, state.activePreset, useSafe);
+      const report = state.diagnostics.pipelineReport;
+      report.fallbackUsed = html.includes('Safe Fallback') || html.includes('Loom Rendering Failed') || html.includes('sotl-pipeline-warning') || useSafe;
+      report.renderSuccess = !html.includes('Loom Rendering Failed') && !html.includes('Custom template failed');
+      report.sanitizerRemovedContent = html.includes('Purified HTML') || html.includes('sanitization') || html.includes('Purified');
+    } catch {
+      // Ignored
+    }
+  }
+
   renderInto(drawerRoot, renderDrawer(state, status));
   renderInto(settingsRoot, renderSettingsPanel(state, status));
   if (drawerHandle?.update) drawerHandle.update(renderDrawer(state, status));
@@ -364,7 +378,7 @@ function handleDrawerEvent(event: Event): void {
       const newPreset = {
         id: newId,
         name: 'New Custom Loom',
-        version: '1.0.8',
+        version: '1.0.9',
         description: 'User custom continuity tracker.',
         mode: 'hybrid' as const,
         schemaJson: {
@@ -745,6 +759,9 @@ function handleDrawerEvent(event: Event): void {
   }
   if (fieldName === 'stripBlocks' && field instanceof HTMLInputElement) {
     saveSettings({ stripTrackerBlocksFromMessages: field.checked });
+  }
+  if (fieldName === 'useSafeRenderer' && field instanceof HTMLInputElement) {
+    saveSettings({ useSafeRenderer: field.checked });
   }
   if (fieldName === 'messageCardPlacement' && field instanceof HTMLSelectElement) {
     saveSettings({ messageCardPlacement: field.value as LoomSettings['messageCardPlacement'] });

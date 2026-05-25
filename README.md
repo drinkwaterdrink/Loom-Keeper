@@ -1,8 +1,8 @@
-# State of the Loom (v1.0.8)
+# State of the Loom (v1.0.9)
 
-State of the Loom is a Lumiverse-native Spindle extension for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
+State of the Loom is a Lumiverse-native State of the Loom continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.8 is a comprehensive bugfix and UX polish pass: resolves custom/imported preset generation failures, fixes the Duplicate to Edit flow, eliminates HUD/drawer viewport layout split conflicts, repositions the paw launcher directly underneath the star icon with easy tuning, moves the expanded HUD slightly higher, implements settings-based long sidecar timeouts with an elapsed time counter, adds custom preset diagnostics/readiness reports, and introduces dynamic colored toast status messages.
+Version 1.0.9 is a deep debug and zTracker/WTracker-style reliability pass: resolves custom preset rendering blackouts, fixes HUD compact view preset-independence through dynamic field mapping, implements a secure backend error boundary try/catch with automatic stuck spinner recovery, introduces a toggleable safe generic renderer for custom presets, and builds a comprehensive step-by-step Loom Pipeline Report diagnostic panel inside the drawer.
 
 ---
 
@@ -85,9 +85,35 @@ npm run smoke:manual-generate
 
 ---
 
-## Roadmap
+## Diagnostics & Troubleshooting
 
-Planned future features:
-- **Prompt Interceptor Injection**: Automatically attach the generated Loom continuity delta to subsequent outgoing prompt blocks.
-- **narrative Simulation Systems**: Introduce scene trees, continuity clocks, companion tracking systems, and automated Council tools.
-- **LLM Auto-Repair Workflow**: Implement automatic JSON correction and recovery when LLM models emit malformed tracker block formats.
+State of the Loom (v1.0.9) introduces robust self-healing and debugging tools to prevent blank screens or stuck loading states.
+
+### 1. What to do when a Custom Preset renders blank
+* **Root Cause**: If a custom preset uses template property variables (like `{{time}}` or `{{location}}`) that are missing or misspelled in your custom JSON schema/data, the template compiler renders empty markup (e.g., `<h3></h3>`). The safe DOM sanitizer allows these structural tags, creating a completely blank visual block in the HUD instead of throwing an error.
+* **Troubleshooting Step**: Toggle the **Use safe generic renderer for custom presets** setting in the controls section. This bypasses custom templates and renders all generated primitive fields and cast arrays dynamically inside a pre-formatted clean card, ensuring no data is ever hidden.
+* **Automatic Fallback**: If a custom template fails compilation, has invalid tag structures, or renders entirely empty text content, the engine automatically catches the error and falls back to displaying a safe generic card detailing the render issue.
+
+### 2. Collapsible Tracker Pipeline Report
+Expose exactly where a generation or render breaks using the **Tracker Pipeline Report** inside the Diagnostics drawer section:
+* **Active Preset Details**: Displays current preset ID, source type (built-in vs custom), and time.
+* **JSON Parse / Validation State**: Exposes whether the LLM output was valid JSON and whether it conformed to your custom preset's schema.
+* **Sanitizer and Fallback Flags**: Inspect if the HTML compiler failed, if the DOM sanitizer stripped unsafe layout styles, or if a safe fallback card was forced.
+
+---
+
+## Roadmap (zTracker & WTracker Inspirations)
+
+We are adopting several concrete reliability and feature ideas from reference tools like **WTracker** and **zTracker**:
+
+### WTracker-Inspired Reliability (Adopted)
+* **Pair Persistence**: Preset schemas, prompts, templates, and sample data are saved as a combined database record to prevent partial states.
+* **Read-Only Built-Ins**: All system presets are locked from user overwrite or deletion, serving as clean starting points.
+
+### zTracker-Inspired UX (Adopted / Roadmap)
+* **Live Status Progress Indicator**: Sidecar generation progress is broadcast to the frontend in real time, displaying elapsed seconds during the spinner state.
+* **Backend Error Boundary**: Generation exceptions and parsing timeouts are safely caught to prevent locked spinner states.
+* **Sequential Generation** (Roadmap): Support multi-step tracking passes for massive roleplay logs.
+* **Per-Section Regeneration** (Roadmap): Allow regenerating a single subsection or field (e.g., character pockets or location description) rather than rebuilding the entire tracker.
+* **Message-Local Status Badges** (Roadmap): Display real-time progress indicators directly on the specific message being tracked.
+* **Compact Snapshot Injection** (Roadmap): Direct prompt insertion of compact continuity strings into native system commands.

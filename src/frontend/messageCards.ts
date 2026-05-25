@@ -1,4 +1,4 @@
-import { renderTrackerHtml } from '../shared/renderer.js';
+import { renderTrackerHtml, getFallbackField } from '../shared/renderer.js';
 import type { LoomFrontendState, LoomTrackerState } from '../shared/types.js';
 import { iconButton } from './ui.js';
 
@@ -72,7 +72,7 @@ function renderTrackerHtmlCard(tracker: LoomTrackerState, state: LoomFrontendSta
   const controls = state.settings.showMessageButtons
     ? `<div class="sotl-message-controls">${iconButton('Regenerate', 'card-regenerate', tracker.messageId || '')}${iconButton('Edit', 'card-edit', tracker.messageId || '')}${iconButton('Hide', 'card-hide', tracker.messageId || '')}${iconButton('Delete', 'card-delete', tracker.messageId || '')}</div>`
     : '';
-  return controls + renderTrackerHtml(tracker, state.activePreset);
+  return controls + renderTrackerHtml(tracker, state.activePreset, state.settings.useSafeRenderer);
 }
 
 export function cleanupMessageCards(ctx: FrontendContext): void {
@@ -255,23 +255,30 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
 
   let bodyContent = '';
   if (isCompact) {
-    const castChips = Array.isArray(tracker.data.cast) && tracker.data.cast.length > 0
+    const castData = getFallbackField(tracker.data, ['cast', 'present', 'characters', 'cast_present', 'actors']);
+    const castArray = Array.isArray(castData) ? castData : [];
+    const castChips = castArray.length > 0
       ? `<div class="sotl-cast-grid" style="margin-top: 4px;">` +
-        tracker.data.cast.slice(0, 3).map((c: any) => `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml(c.name || c || 'Cast')}</span>`).join('') +
-        (tracker.data.cast.length > 3 ? `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">+${tracker.data.cast.length - 3}</span>` : '') +
+        castArray.slice(0, 3).map((c: any) => `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml(c?.name || c || 'Cast')}</span>`).join('') +
+        (castArray.length > 3 ? `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">+${castArray.length - 3}</span>` : '') +
         `</div>`
       : '';
 
+    const title = String(getFallbackField(tracker.data, ['sceneTitle', 'title', 'name', 'sceneName', 'scene']) || 'Active Scene');
+    const location = String(getFallbackField(tracker.data, ['location', 'current_location', 'place', 'scene_location', 'environment']) || 'Unknown');
+    const time = String(getFallbackField(tracker.data, ['time', 'current_time', 'timeOfDay', 'scene_time']) || 'Unknown');
+    const delta = String(getFallbackField(tracker.data, ['delta', 'summary', 'description', 'updates', 'delta_summary', 'scene_delta']) || 'No deltas recorded.');
+
     bodyContent = [
-      `    <p class="sotl-chat-panel__scene">${escapeHtml(tracker.data.sceneTitle || 'Active Scene')}</p>`,
-      `    <div class="sotl-chat-panel__meta">📍 ${escapeHtml(tracker.data.location || 'Unknown')} • 🕒 ${escapeHtml(tracker.data.time || 'Unknown')}</div>`,
-      `    <p class="sotl-chat-panel__desc">${escapeHtml(tracker.data.delta || 'No deltas recorded.')}</p>`,
+      `    <p class="sotl-chat-panel__scene">${escapeHtml(title)}</p>`,
+      `    <div class="sotl-chat-panel__meta">📍 ${escapeHtml(location)} • 🕒 ${escapeHtml(time)}</div>`,
+      `    <p class="sotl-chat-panel__desc">${escapeHtml(delta)}</p>`,
       castChips,
     ].join('\n');
   } else {
     bodyContent = `
       <div class="sotl-chat-panel__scroll-body">
-        ${renderTrackerHtml(tracker, state.activePreset)}
+        ${renderTrackerHtml(tracker, state.activePreset, state.settings.useSafeRenderer)}
       </div>
     `;
   }

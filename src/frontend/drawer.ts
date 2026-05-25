@@ -53,7 +53,7 @@ function renderLatestTracker(state: LoomFrontendState): string {
   if (!state.latestTracker) {
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
   }
-  const html = renderTrackerHtml(state.latestTracker, state.activePreset);
+  const html = renderTrackerHtml(state.latestTracker, state.activePreset, state.settings.useSafeRenderer);
   const attachmentStatus = state.settings.renderInMessages && state.latestTracker.messageId
     ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">🔗 Attached to message card (${escapeHtml(state.latestTracker.messageId)})</p>`
     : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
@@ -90,6 +90,52 @@ function renderMessageList(state: LoomFrontendState): string {
       '</div>',
     ].join('');
   }).join('');
+}
+
+function renderPipelineReport(state: LoomFrontendState): string {
+  const report = state.diagnostics.pipelineReport;
+  if (!report) {
+    return '<p class="sotl-note" style="margin-top: 4px;">No generation has been performed yet in this session.</p>';
+  }
+
+  const successColor = 'var(--lv-success-text, #176b43)';
+  const errorColor = 'var(--lv-error-text, #bd2130)';
+
+  const rawVal = report.rawResponseAvailable ? `<span style="color: ${successColor}; font-weight: 600;">Yes</span>` : `<span style="color: ${errorColor}; font-weight: 600;">No</span>`;
+  const parseVal = report.parseSuccess 
+    ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` 
+    : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml(report.parseError || 'Unknown parser error')}</span>`;
+  const valVal = report.schemaValidationSuccess 
+    ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` 
+    : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml(report.schemaValidationError || 'Invalid schema')}</span>`;
+  const renderVal = report.renderSuccess 
+    ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` 
+    : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml(report.renderError || 'Render error')}</span>`;
+  const sanitizerVal = report.sanitizerRemovedContent 
+    ? `<span style="color: ${errorColor}; font-weight: 600;">Yes (Check template safe tags)</span>` 
+    : `<span style="color: ${successColor}; font-weight: 600;">No (Clean)</span>`;
+  const fallbackVal = report.fallbackUsed 
+    ? `<span style="color: #b58900; font-weight: 600;">Yes (Fallback active)</span>` 
+    : `<span style="color: ${successColor}; font-weight: 600;">No (Template OK)</span>`;
+
+  return `
+    <div style="font-size: 11px; display: grid; gap: 4px; padding: 10px; background: rgba(0,0,0,0.06); border-radius: 6px; border: 1px solid var(--lumiverse-border, rgba(80,88,100,0.15)); margin-top: 8px; line-height: 1.4;">
+      <div><strong>Active Preset ID:</strong> <code>${escapeHtml(report.activePresetId)}</code></div>
+      <div><strong>Preset Name:</strong> ${escapeHtml(report.presetName)}</div>
+      <div><strong>Preset Source:</strong> <code>${escapeHtml(report.presetSource)}</code></div>
+      <div><strong>Timestamp:</strong> <code>${escapeHtml(report.timestamp)}</code></div>
+      <div><strong>Raw Response Available:</strong> ${rawVal}</div>
+      <div><strong>JSON Parse:</strong> ${parseVal}</div>
+      <div><strong>Schema Validation:</strong> ${valVal}</div>
+      <div><strong>HTML Render:</strong> ${renderVal}</div>
+      <div><strong>Sanitizer Removed Content:</strong> ${sanitizerVal}</div>
+      <div><strong>Fallback Card Used:</strong> ${fallbackVal}</div>
+      <div><strong>Latest Tracker Message ID:</strong> <code>${escapeHtml(report.messageId)}</code></div>
+      <div><strong>Chat ID:</strong> <code>${escapeHtml(report.chatId)}</code></div>
+      <div><strong>HUD View Mode:</strong> <code>${escapeHtml(report.hudView)}</code></div>
+      <div><strong>Retained Tracker Count:</strong> <code>${report.retainedCount}</code></div>
+    </div>
+  `;
 }
 
 export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStatus = {}): string {
@@ -154,7 +200,7 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
           compactSummary: 'Sample preview for ' + state.activePreset.name,
           validation: { ok: true, issues: [] },
         };
-        return renderTrackerHtml(mockTracker, state.activePreset);
+        return renderTrackerHtml(mockTracker, state.activePreset, state.settings.useSafeRenderer);
       } catch (err) {
         return `<p class="sotl-note sotl-warning" style="color: var(--lv-error-text,#bd2130);">⚠️ Preview Render Failed: ${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`;
       }
@@ -179,6 +225,8 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     '</label>',
  
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderInMessages" ' + (state.settings.renderInMessages ? 'checked' : '') + '> Attach tracker cards to messages (Experimental)</label>',
+ 
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="useSafeRenderer" ' + (state.settings.useSafeRenderer ? 'checked' : '') + '> Use safe generic renderer for custom presets</label>',
  
     '<label class="sotl-label">Message card position',
     `<select class="sotl-select" data-sotl-field="messageCardPlacement">${renderPlacementOptions(state)}</select>`,
@@ -286,6 +334,9 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     state.diagnostics.lastGenerationError ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastGenerationError)}</p>` : '',
     status.lastRenderStatus ? `<p class="sotl-note">${escapeHtml(status.lastRenderStatus)}</p>` : '',
     state.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastRenderStatus)}</p>` : '',
+    '<details class="sotl-details" open style="margin-top: 8px;"><summary>🔍 Tracker Pipeline Report</summary>',
+    renderPipelineReport(state),
+    '</details>',
     (() => {
       const doc = typeof document !== 'undefined' ? document : null;
       const isMounted = doc ? Boolean(doc.querySelector('[data-sotl-chat-panel="true"]')) : false;

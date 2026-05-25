@@ -1,6 +1,6 @@
 import type { LoomPreset, LoomSettings } from './types.js';
 
-export const LOOM_VERSION = '1.0.8';
+export const LOOM_VERSION = '1.0.9';
 export const LOOM_SCHEMA_VERSION = '1';
 export const SLIM_SCENE_PRESET_ID = 'slim_scene_loom';
 export const STORAGE_KEYS = {
@@ -28,6 +28,7 @@ export const defaultSettings: LoomSettings = {
   cardDensity: 'compact',
   trackerHistoryLimit: 5,
   sidecarGenerationTimeoutMs: 180000,
+  useSafeRenderer: false,
 };
 
 // 1. Micro Loom Preset

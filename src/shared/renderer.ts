@@ -156,7 +156,114 @@ export function sanitizeDomHtml(html: string): string {
   }
 }
 
-export function renderTrackerHtml(tracker: LoomTrackerState, preset: LoomPreset): string {
+export function getFallbackField(data: Record<string, unknown>, keys: string[]): unknown {
+  if (!data || typeof data !== 'object') return undefined;
+  for (const key of keys) {
+    if (key in data) {
+      return data[key];
+    }
+    // Case-insensitive fallback
+    const lowerKey = key.toLowerCase();
+    for (const k of Object.keys(data)) {
+      if (k.toLowerCase() === lowerKey) {
+        return data[k];
+      }
+    }
+  }
+  return undefined;
+}
+
+export function renderGenericSafeCard(tracker: LoomTrackerState, preset: LoomPreset, warningMessage?: string): string {
+  const title = escapeHtml(String(getFallbackField(tracker.data, ['sceneTitle', 'title', 'name', 'sceneName', 'scene']) || 'Continuity State'));
+  const mood = escapeHtml(String(getFallbackField(tracker.data, ['mood', 'tone', 'emotion', 'scene_mood']) || ''));
+  
+  let warningHtml = '';
+  if (warningMessage) {
+    warningHtml = `
+      <div class="sotl-pipeline-warning" style="margin-bottom: 8px; padding: 6px 10px; background: rgba(220,10,10,0.06); border: 1px solid rgba(220,10,10,0.15); border-radius: 4px; font-size: 11px; color: var(--lv-error-text, #bd2130);">
+        <strong>⚠️ Notice:</strong> ${escapeHtml(warningMessage)}
+      </div>
+    `;
+  }
+
+  const density = preset.renderOptions?.density || 'compact';
+  const theme = preset.renderOptions?.theme || 'system';
+
+  // Compile entries dynamically
+  const rows: string[] = [];
+  const details: string[] = [];
+
+  for (const [key, value] of Object.entries(tracker.data)) {
+    if (key === 'schemaVersion' || key === 'schema_version') continue;
+    // Skip title, mood, location, time if we render them at the top
+    if (['scenetitle', 'title', 'name', 'mood', 'tone', 'emotion', 'scenemood'].includes(key.toLowerCase())) continue;
+
+    if (value === null || value === undefined) continue;
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) continue;
+      const itemsHtml = value.map((item) => {
+        if (item && typeof item === 'object') {
+          const props = Object.entries(item)
+            .map(([k, v]) => `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(safeObjectToString(v))}`)
+            .join(' • ');
+          return `<div style="font-size: 11px; padding: 4px; background: rgba(255,255,255,0.03); border-radius: 4px; margin-bottom: 2px;">${props}</div>`;
+        }
+        return `<li>${escapeHtml(safeObjectToString(item))}</li>`;
+      }).join('');
+
+      const listContent = value[0] && typeof value[0] === 'object'
+        ? `<div style="display: grid; gap: 4px; margin-top: 4px;">${itemsHtml}</div>`
+        : `<ul class="sotl-anchors-list">${itemsHtml}</ul>`;
+
+      details.push(`
+        <details class="sotl-card-details" open>
+          <summary>${escapeHtml(key)}</summary>
+          ${listContent}
+        </details>
+      `);
+    } else if (typeof value === 'object') {
+      details.push(`
+        <details class="sotl-card-details">
+          <summary>${escapeHtml(key)}</summary>
+          <pre style="font-size: 10px; margin: 4px 0 0; white-space: pre-wrap; font-family: monospace;">${escapeHtml(JSON.stringify(value, null, 2))}</pre>
+        </details>
+      `);
+    } else {
+      rows.push(`
+        <div class="sotl-grid-item">
+          <dt>${escapeHtml(key)}</dt>
+          <dd>${escapeHtml(String(value))}</dd>
+        </div>
+      `);
+    }
+  }
+
+  const gridHtml = rows.length > 0
+    ? `<dl class="sotl-grid">${rows.join('')}</dl>`
+    : '';
+
+  return `
+    <section class="sotl-card sotl-density-${density} sotl-theme-${theme}" data-sotl-card="true">
+      <header class="sotl-card__head">
+        <div class="sotl-card__header-main">
+          <div class="sotl-card__eyebrow">State of the Loom (Safe Renderer)</div>
+          <h3 class="sotl-card__title">${title}</h3>
+        </div>
+        ${mood ? `<span class="sotl-pill sotl-pill--mood">${mood}</span>` : ''}
+      </header>
+      ${warningHtml}
+      ${gridHtml}
+      ${details.join('')}
+    </section>
+  `;
+}
+
+export function renderTrackerHtml(tracker: LoomTrackerState, preset: LoomPreset, useSafeRenderer = false): string {
+  if (useSafeRenderer) {
+    return renderGenericSafeCard(tracker, preset, 'Safe generic renderer active.');
+  }
+
   const data = {
     ...tracker.data,
     density: preset.renderOptions.density,
@@ -174,25 +281,21 @@ export function renderTrackerHtml(tracker: LoomTrackerState, preset: LoomPreset)
       if (!sanitized || sanitized.trim() === '') {
         throw new Error('Purified HTML is empty. The template might have invalid/unsupported tags or failed sanitization.');
       }
+      // Issue #2 check: ensure template is not empty of actual text content
+      const textOnly = sanitized.replace(/<[^>]*>/g, '').trim();
+      if (!textOnly) {
+        throw new Error('Custom template rendered empty or produced blank text content.');
+      }
       return sanitized;
     }
     return rawHtml;
   } catch (error) {
     console.error('Loom template rendering failed, falling back to safe card:', error);
-    // Safe fallback default layout: guaranteed never to crash the UI
-    const title = escapeHtml(tracker.compactSummary || 'Continuity State');
-    return `
-      <section class="sotl-card sotl-density-compact sotl-theme-system" data-sotl-card="true">
-        <header class="sotl-card__head">
-          <div class="sotl-card__header-main">
-            <div class="sotl-card__eyebrow" style="color: var(--lv-error-text, #bd2130); font-weight: 600;">⚠️ Loom Rendering Failed</div>
-            <h3 class="sotl-card__title">${title}</h3>
-          </div>
-        </header>
-        <p class="sotl-delta" style="color: var(--lv-error-text, #bd2130); font-weight: 600; margin-bottom: 6px;">Error details: ${escapeHtml(error instanceof Error ? error.message : String(error))}</p>
-        <p class="sotl-delta">${escapeHtml(tracker.compactSummary || 'Continuity render failed due to a template rendering error.')}</p>
-      </section>
-    `;
+    return renderGenericSafeCard(
+      tracker,
+      preset,
+      `Custom template failed: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 

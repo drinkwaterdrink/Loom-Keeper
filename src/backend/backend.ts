@@ -22,9 +22,11 @@ import type {
   LoomPreset,
   LoomSettings,
   LoomTrackerState,
+  LoomPipelineReport,
 } from '../shared/types.js';
 import { makeCompactSummary } from '../shared/renderer.js';
 import { validateAgainstSchema } from '../shared/validation.js';
+import { builtInPresets } from '../shared/defaults.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -345,77 +347,153 @@ class StateOfTheLoomBackend {
     messageId?: string,
     targetOverride?: GenerationTarget | null,
   ): Promise<void> {
-    const state = await this.buildState(userId);
-    const target = targetOverride ?? await this.generationService.findLatestAssistantTarget(userId, chatId, messageId);
-    if (state.generation.disabledReason && state.generation.disabledReason !== 'No assistant message is available to track.') {
-      await this.send(userId, { type: 'tracker_error', message: state.generation.disabledReason, state });
-      return;
-    }
+    try {
+      const state = await this.buildState(userId);
+      const target = targetOverride ?? await this.generationService.findLatestAssistantTarget(userId, chatId, messageId);
+      if (state.generation.disabledReason && state.generation.disabledReason !== 'No assistant message is available to track.') {
+        await this.send(userId, { type: 'tracker_error', message: state.generation.disabledReason, state });
+        return;
+      }
 
-    if (!target) {
-      const latestState = await this.buildState(userId);
-      await this.send(userId, { type: 'tracker_error', message: 'No assistant message is available to track.', state: latestState });
-      return;
-    }
+      if (!target) {
+        const latestState = await this.buildState(userId);
+        await this.send(userId, { type: 'tracker_error', message: 'No assistant message is available to track.', state: latestState });
+        return;
+      }
 
-    const settings = state.settings;
-    const preset = state.activePreset;
-    const passive = preset.mode !== 'sidecar_generate'
-      ? this.generationService.tryPassiveExtract({ preset, settings, chatId: target.chatId, message: target.message })
-      : null;
-    if (!passive && !state.permissions.generation) {
-      await this.send(userId, {
-        type: 'tracker_error',
-        message: 'Missing generation permission; no passive tracker block was found in the assistant message.',
-        state: await this.buildState(userId),
-      });
-      return;
-    }
-    if (!passive && !settings.useDefaultConnectionFallback && !settings.sidecarConnectionId) {
-      await this.send(userId, {
-        type: 'tracker_error',
-        message: 'No sidecar connection profile selected.',
-        state: await this.buildState(userId),
-      });
-      return;
-    }
-    const recentTrackers = await this.trackerService.listForChat(userId, target.chatId);
-    const contextLimit = settings.trackerHistoryLimit > 0 ? settings.trackerHistoryLimit : 5;
-    const previousSummaries = recentTrackers
-      .slice(1, contextLimit)
-      .map((t) => `${t.generatedAt}: ${t.compactSummary}`);
+      const settings = state.settings;
+      const preset = state.activePreset;
+      const passive = preset.mode !== 'sidecar_generate'
+        ? this.generationService.tryPassiveExtract({ preset, settings, chatId: target.chatId, message: target.message })
+        : null;
+      if (!passive && !state.permissions.generation) {
+        await this.send(userId, {
+          type: 'tracker_error',
+          message: 'Missing generation permission; no passive tracker block was found in the assistant message.',
+          state: await this.buildState(userId),
+        });
+        return;
+      }
+      if (!passive && !settings.useDefaultConnectionFallback && !settings.sidecarConnectionId) {
+        await this.send(userId, {
+          type: 'tracker_error',
+          message: 'No sidecar connection profile selected.',
+          state: await this.buildState(userId),
+        });
+        return;
+      }
+      const recentTrackers = await this.trackerService.listForChat(userId, target.chatId);
+      const contextLimit = settings.trackerHistoryLimit > 0 ? settings.trackerHistoryLimit : 5;
+      const previousSummaries = recentTrackers
+        .slice(1, contextLimit)
+        .map((t) => `${t.generatedAt}: ${t.compactSummary}`);
 
-    const result = passive
-      ?? await this.generationService.generateSidecar({
-        userId,
-        settings,
-        preset,
-        previousTracker: state.latestTracker,
-        previousSummaries,
-        chatId: target.chatId,
-        message: target.message,
-        recentContext: target.recentContext,
-        onProgress: async () => {
-          try {
-            const statePatch = await this.buildState(userId);
-            await this.send(userId, { type: 'state', state: statePatch });
-          } catch {
-            // Ignored
+      const result = passive
+        ?? await this.generationService.generateSidecar({
+          userId,
+          settings,
+          preset,
+          previousTracker: state.latestTracker,
+          previousSummaries,
+          chatId: target.chatId,
+          message: target.message,
+          recentContext: target.recentContext,
+          onProgress: async () => {
+            try {
+              const statePatch = await this.buildState(userId);
+              await this.send(userId, { type: 'state', state: statePatch });
+            } catch {
+              // Ignored
+            }
           }
-        }
+        });
+
+      await this.trackerService.save(userId, result.tracker, settings.trackerHistoryLimit);
+      await this.generationService.stripPassiveBlockIfAllowed({
+        permissions: state.permissions,
+        settings,
+        userId,
+        chatId: target.chatId,
+        messageId: target.message.id,
+        cleanedContent: result.cleanedContent,
       });
 
-    await this.trackerService.save(userId, result.tracker, settings.trackerHistoryLimit);
-    await this.generationService.stripPassiveBlockIfAllowed({
-      permissions: state.permissions,
-      settings,
-      userId,
-      chatId: target.chatId,
-      messageId: target.message.id,
-      cleanedContent: result.cleanedContent,
-    });
-    this.diagnostics = { ...this.diagnostics, lastParserError: undefined, lastGenerationError: undefined };
-    await this.send(userId, { type: 'tracker_generated', tracker: result.tracker, state: await this.buildState(userId) });
+      // Construct and record Pipeline Report
+      const presetSource = builtInPresets.some((bp) => bp.id === preset.id) ? 'built-in' : 'custom';
+      const report: LoomPipelineReport = {
+        activePresetId: preset.id,
+        presetName: preset.name,
+        presetSource,
+        timestamp: new Date().toISOString(),
+        rawResponseAvailable: Boolean(result.tracker.rawOutput),
+        parseSuccess: true,
+        schemaValidationSuccess: result.tracker.validation.ok,
+        renderSuccess: true, // Will be updated dynamically on frontend
+        sanitizerRemovedContent: false, // Will be updated dynamically on frontend
+        fallbackUsed: false, // Will be updated dynamically on frontend
+        messageId: target.message.id || 'latest',
+        chatId: target.chatId,
+        hudView: settings.hudDefaultView,
+        retainedCount: recentTrackers.length,
+      };
+
+      const valError = result.tracker.validation.issues.filter(i => i.severity === 'error').map(i => i.message).join(', ');
+      if (valError) {
+        report.schemaValidationError = valError;
+      }
+
+      this.diagnostics = {
+        ...this.diagnostics,
+        lastParserError: undefined,
+        lastGenerationError: undefined,
+        pipelineReport: report,
+      };
+
+      await this.send(userId, { type: 'tracker_generated', tracker: result.tracker, state: await this.buildState(userId) });
+    } catch (error) {
+      // Clear generation spinner running state
+      this.generationService.clearStuckState();
+      
+      const message = error instanceof Error ? error.message : String(error);
+      this.diagnostics = {
+        ...this.diagnostics,
+        lastGenerationError: message,
+      };
+      
+      // Attempt to build a failed pipeline report to expose diagnostics
+      try {
+        const state = await this.buildState(userId);
+        const preset = state.activePreset;
+        const presetSource = builtInPresets.some((bp) => bp.id === preset.id) ? 'built-in' : 'custom';
+        const recentTrackers = chatId ? await this.trackerService.listForChat(userId, chatId).catch(() => []) : [];
+        
+        const report: LoomPipelineReport = {
+          activePresetId: preset.id,
+          presetName: preset.name,
+          presetSource,
+          timestamp: new Date().toISOString(),
+          rawResponseAvailable: false,
+          parseSuccess: false,
+          schemaValidationSuccess: false,
+          renderSuccess: false,
+          sanitizerRemovedContent: false,
+          fallbackUsed: true,
+          messageId: messageId || 'latest',
+          chatId: chatId || 'unknown',
+          hudView: state.settings.hudDefaultView,
+          retainedCount: recentTrackers.length,
+        };
+        
+        report.parseError = message;
+        
+        this.diagnostics.pipelineReport = report;
+      } catch {
+        // Ignored
+      }
+      
+      const errorState = await this.buildState(userId);
+      await this.send(userId, { type: 'tracker_error', message, state: errorState });
+    }
   }
 
   private async saveManualTracker(userId: string, tracker: LoomTrackerState): Promise<void> {

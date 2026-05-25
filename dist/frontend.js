@@ -790,7 +790,92 @@ function sanitizeDomHtml(html) {
     return "";
   }
 }
-function renderTrackerHtml(tracker, preset) {
+function getFallbackField(data, keys) {
+  if (!data || typeof data !== "object") return void 0;
+  for (const key of keys) {
+    if (key in data) {
+      return data[key];
+    }
+    const lowerKey = key.toLowerCase();
+    for (const k of Object.keys(data)) {
+      if (k.toLowerCase() === lowerKey) {
+        return data[k];
+      }
+    }
+  }
+  return void 0;
+}
+function renderGenericSafeCard(tracker, preset, warningMessage) {
+  const title = escapeHtml(String(getFallbackField(tracker.data, ["sceneTitle", "title", "name", "sceneName", "scene"]) || "Continuity State"));
+  const mood = escapeHtml(String(getFallbackField(tracker.data, ["mood", "tone", "emotion", "scene_mood"]) || ""));
+  let warningHtml = "";
+  if (warningMessage) {
+    warningHtml = `
+      <div class="sotl-pipeline-warning" style="margin-bottom: 8px; padding: 6px 10px; background: rgba(220,10,10,0.06); border: 1px solid rgba(220,10,10,0.15); border-radius: 4px; font-size: 11px; color: var(--lv-error-text, #bd2130);">
+        <strong>\u26A0\uFE0F Notice:</strong> ${escapeHtml(warningMessage)}
+      </div>
+    `;
+  }
+  const density = preset.renderOptions?.density || "compact";
+  const theme = preset.renderOptions?.theme || "system";
+  const rows = [];
+  const details = [];
+  for (const [key, value] of Object.entries(tracker.data)) {
+    if (key === "schemaVersion" || key === "schema_version") continue;
+    if (["scenetitle", "title", "name", "mood", "tone", "emotion", "scenemood"].includes(key.toLowerCase())) continue;
+    if (value === null || value === void 0) continue;
+    if (Array.isArray(value)) {
+      if (value.length === 0) continue;
+      const itemsHtml = value.map((item) => {
+        if (item && typeof item === "object") {
+          const props = Object.entries(item).map(([k, v]) => `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(safeObjectToString(v))}`).join(" \u2022 ");
+          return `<div style="font-size: 11px; padding: 4px; background: rgba(255,255,255,0.03); border-radius: 4px; margin-bottom: 2px;">${props}</div>`;
+        }
+        return `<li>${escapeHtml(safeObjectToString(item))}</li>`;
+      }).join("");
+      const listContent = value[0] && typeof value[0] === "object" ? `<div style="display: grid; gap: 4px; margin-top: 4px;">${itemsHtml}</div>` : `<ul class="sotl-anchors-list">${itemsHtml}</ul>`;
+      details.push(`
+        <details class="sotl-card-details" open>
+          <summary>${escapeHtml(key)}</summary>
+          ${listContent}
+        </details>
+      `);
+    } else if (typeof value === "object") {
+      details.push(`
+        <details class="sotl-card-details">
+          <summary>${escapeHtml(key)}</summary>
+          <pre style="font-size: 10px; margin: 4px 0 0; white-space: pre-wrap; font-family: monospace;">${escapeHtml(JSON.stringify(value, null, 2))}</pre>
+        </details>
+      `);
+    } else {
+      rows.push(`
+        <div class="sotl-grid-item">
+          <dt>${escapeHtml(key)}</dt>
+          <dd>${escapeHtml(String(value))}</dd>
+        </div>
+      `);
+    }
+  }
+  const gridHtml = rows.length > 0 ? `<dl class="sotl-grid">${rows.join("")}</dl>` : "";
+  return `
+    <section class="sotl-card sotl-density-${density} sotl-theme-${theme}" data-sotl-card="true">
+      <header class="sotl-card__head">
+        <div class="sotl-card__header-main">
+          <div class="sotl-card__eyebrow">State of the Loom (Safe Renderer)</div>
+          <h3 class="sotl-card__title">${title}</h3>
+        </div>
+        ${mood ? `<span class="sotl-pill sotl-pill--mood">${mood}</span>` : ""}
+      </header>
+      ${warningHtml}
+      ${gridHtml}
+      ${details.join("")}
+    </section>
+  `;
+}
+function renderTrackerHtml(tracker, preset, useSafeRenderer = false) {
+  if (useSafeRenderer) {
+    return renderGenericSafeCard(tracker, preset, "Safe generic renderer active.");
+  }
   const data = {
     ...tracker.data,
     density: preset.renderOptions.density,
@@ -805,24 +890,20 @@ function renderTrackerHtml(tracker, preset) {
       if (!sanitized || sanitized.trim() === "") {
         throw new Error("Purified HTML is empty. The template might have invalid/unsupported tags or failed sanitization.");
       }
+      const textOnly = sanitized.replace(/<[^>]*>/g, "").trim();
+      if (!textOnly) {
+        throw new Error("Custom template rendered empty or produced blank text content.");
+      }
       return sanitized;
     }
     return rawHtml;
   } catch (error) {
     console.error("Loom template rendering failed, falling back to safe card:", error);
-    const title = escapeHtml(tracker.compactSummary || "Continuity State");
-    return `
-      <section class="sotl-card sotl-density-compact sotl-theme-system" data-sotl-card="true">
-        <header class="sotl-card__head">
-          <div class="sotl-card__header-main">
-            <div class="sotl-card__eyebrow" style="color: var(--lv-error-text, #bd2130); font-weight: 600;">\u26A0\uFE0F Loom Rendering Failed</div>
-            <h3 class="sotl-card__title">${title}</h3>
-          </div>
-        </header>
-        <p class="sotl-delta" style="color: var(--lv-error-text, #bd2130); font-weight: 600; margin-bottom: 6px;">Error details: ${escapeHtml(error instanceof Error ? error.message : String(error))}</p>
-        <p class="sotl-delta">${escapeHtml(tracker.compactSummary || "Continuity render failed due to a template rendering error.")}</p>
-      </section>
-    `;
+    return renderGenericSafeCard(
+      tracker,
+      preset,
+      `Custom template failed: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -1313,7 +1394,7 @@ function renderLatestTracker(state2) {
   if (!state2.latestTracker) {
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
   }
-  const html = renderTrackerHtml(state2.latestTracker, state2.activePreset);
+  const html = renderTrackerHtml(state2.latestTracker, state2.activePreset, state2.settings.useSafeRenderer);
   const attachmentStatus = state2.settings.renderInMessages && state2.latestTracker.messageId ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">\u{1F517} Attached to message card (${escapeHtml2(state2.latestTracker.messageId)})</p>` : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
   return [
     `<p class="sotl-note">${escapeHtml2(state2.latestTracker.compactSummary)}</p>`,
@@ -1346,6 +1427,38 @@ function renderMessageList(state2) {
       "</div>"
     ].join("");
   }).join("");
+}
+function renderPipelineReport(state2) {
+  const report = state2.diagnostics.pipelineReport;
+  if (!report) {
+    return '<p class="sotl-note" style="margin-top: 4px;">No generation has been performed yet in this session.</p>';
+  }
+  const successColor = "var(--lv-success-text, #176b43)";
+  const errorColor = "var(--lv-error-text, #bd2130)";
+  const rawVal = report.rawResponseAvailable ? `<span style="color: ${successColor}; font-weight: 600;">Yes</span>` : `<span style="color: ${errorColor}; font-weight: 600;">No</span>`;
+  const parseVal = report.parseSuccess ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml2(report.parseError || "Unknown parser error")}</span>`;
+  const valVal = report.schemaValidationSuccess ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml2(report.schemaValidationError || "Invalid schema")}</span>`;
+  const renderVal = report.renderSuccess ? `<span style="color: ${successColor}; font-weight: 600;">Success</span>` : `<span style="color: ${errorColor}; font-weight: 600;">Failed: ${escapeHtml2(report.renderError || "Render error")}</span>`;
+  const sanitizerVal = report.sanitizerRemovedContent ? `<span style="color: ${errorColor}; font-weight: 600;">Yes (Check template safe tags)</span>` : `<span style="color: ${successColor}; font-weight: 600;">No (Clean)</span>`;
+  const fallbackVal = report.fallbackUsed ? `<span style="color: #b58900; font-weight: 600;">Yes (Fallback active)</span>` : `<span style="color: ${successColor}; font-weight: 600;">No (Template OK)</span>`;
+  return `
+    <div style="font-size: 11px; display: grid; gap: 4px; padding: 10px; background: rgba(0,0,0,0.06); border-radius: 6px; border: 1px solid var(--lumiverse-border, rgba(80,88,100,0.15)); margin-top: 8px; line-height: 1.4;">
+      <div><strong>Active Preset ID:</strong> <code>${escapeHtml2(report.activePresetId)}</code></div>
+      <div><strong>Preset Name:</strong> ${escapeHtml2(report.presetName)}</div>
+      <div><strong>Preset Source:</strong> <code>${escapeHtml2(report.presetSource)}</code></div>
+      <div><strong>Timestamp:</strong> <code>${escapeHtml2(report.timestamp)}</code></div>
+      <div><strong>Raw Response Available:</strong> ${rawVal}</div>
+      <div><strong>JSON Parse:</strong> ${parseVal}</div>
+      <div><strong>Schema Validation:</strong> ${valVal}</div>
+      <div><strong>HTML Render:</strong> ${renderVal}</div>
+      <div><strong>Sanitizer Removed Content:</strong> ${sanitizerVal}</div>
+      <div><strong>Fallback Card Used:</strong> ${fallbackVal}</div>
+      <div><strong>Latest Tracker Message ID:</strong> <code>${escapeHtml2(report.messageId)}</code></div>
+      <div><strong>Chat ID:</strong> <code>${escapeHtml2(report.chatId)}</code></div>
+      <div><strong>HUD View Mode:</strong> <code>${escapeHtml2(report.hudView)}</code></div>
+      <div><strong>Retained Tracker Count:</strong> <code>${report.retainedCount}</code></div>
+    </div>
+  `;
 }
 function renderDrawer(state2, status = {}) {
   if (!state2) {
@@ -1406,7 +1519,7 @@ function renderDrawer(state2, status = {}) {
           compactSummary: "Sample preview for " + state2.activePreset.name,
           validation: { ok: true, issues: [] }
         };
-        return renderTrackerHtml(mockTracker, state2.activePreset);
+        return renderTrackerHtml(mockTracker, state2.activePreset, state2.settings.useSafeRenderer);
       } catch (err) {
         return `<p class="sotl-note sotl-warning" style="color: var(--lv-error-text,#bd2130);">\u26A0\uFE0F Preview Render Failed: ${escapeHtml2(err instanceof Error ? err.message : String(err))}</p>`;
       }
@@ -1428,6 +1541,7 @@ function renderDrawer(state2, status = {}) {
     `</select>`,
     "</label>",
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderInMessages" ' + (state2.settings.renderInMessages ? "checked" : "") + "> Attach tracker cards to messages (Experimental)</label>",
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="useSafeRenderer" ' + (state2.settings.useSafeRenderer ? "checked" : "") + "> Use safe generic renderer for custom presets</label>",
     '<label class="sotl-label">Message card position',
     `<select class="sotl-select" data-sotl-field="messageCardPlacement">${renderPlacementOptions(state2)}</select>`,
     "</label>",
@@ -1520,6 +1634,9 @@ function renderDrawer(state2, status = {}) {
     state2.diagnostics.lastGenerationError ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastGenerationError)}</p>` : "",
     status.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(status.lastRenderStatus)}</p>` : "",
     state2.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastRenderStatus)}</p>` : "",
+    '<details class="sotl-details" open style="margin-top: 8px;"><summary>\u{1F50D} Tracker Pipeline Report</summary>',
+    renderPipelineReport(state2),
+    "</details>",
     (() => {
       const doc = typeof document !== "undefined" ? document : null;
       const isMounted = doc ? Boolean(doc.querySelector('[data-sotl-chat-panel="true"]')) : false;
@@ -1585,7 +1702,7 @@ function findMessageHost(doc, tracker) {
 }
 function renderTrackerHtmlCard(tracker, state2) {
   const controls = state2.settings.showMessageButtons ? `<div class="sotl-message-controls">${iconButton("Regenerate", "card-regenerate", tracker.messageId || "")}${iconButton("Edit", "card-edit", tracker.messageId || "")}${iconButton("Hide", "card-hide", tracker.messageId || "")}${iconButton("Delete", "card-delete", tracker.messageId || "")}</div>` : "";
-  return controls + renderTrackerHtml(tracker, state2.activePreset);
+  return controls + renderTrackerHtml(tracker, state2.activePreset, state2.settings.useSafeRenderer);
 }
 function cleanupMessageCards(ctx) {
   const domApi = ctx.dom && typeof ctx.dom === "object" ? ctx.dom : null;
@@ -1736,17 +1853,23 @@ function renderCompactPanel(tracker, state2) {
   }
   let bodyContent = "";
   if (isCompact) {
-    const castChips = Array.isArray(tracker.data.cast) && tracker.data.cast.length > 0 ? `<div class="sotl-cast-grid" style="margin-top: 4px;">` + tracker.data.cast.slice(0, 3).map((c) => `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml3(c.name || c || "Cast")}</span>`).join("") + (tracker.data.cast.length > 3 ? `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">+${tracker.data.cast.length - 3}</span>` : "") + `</div>` : "";
+    const castData = getFallbackField(tracker.data, ["cast", "present", "characters", "cast_present", "actors"]);
+    const castArray = Array.isArray(castData) ? castData : [];
+    const castChips = castArray.length > 0 ? `<div class="sotl-cast-grid" style="margin-top: 4px;">` + castArray.slice(0, 3).map((c) => `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml3(c?.name || c || "Cast")}</span>`).join("") + (castArray.length > 3 ? `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">+${castArray.length - 3}</span>` : "") + `</div>` : "";
+    const title = String(getFallbackField(tracker.data, ["sceneTitle", "title", "name", "sceneName", "scene"]) || "Active Scene");
+    const location = String(getFallbackField(tracker.data, ["location", "current_location", "place", "scene_location", "environment"]) || "Unknown");
+    const time = String(getFallbackField(tracker.data, ["time", "current_time", "timeOfDay", "scene_time"]) || "Unknown");
+    const delta = String(getFallbackField(tracker.data, ["delta", "summary", "description", "updates", "delta_summary", "scene_delta"]) || "No deltas recorded.");
     bodyContent = [
-      `    <p class="sotl-chat-panel__scene">${escapeHtml3(tracker.data.sceneTitle || "Active Scene")}</p>`,
-      `    <div class="sotl-chat-panel__meta">\u{1F4CD} ${escapeHtml3(tracker.data.location || "Unknown")} \u2022 \u{1F552} ${escapeHtml3(tracker.data.time || "Unknown")}</div>`,
-      `    <p class="sotl-chat-panel__desc">${escapeHtml3(tracker.data.delta || "No deltas recorded.")}</p>`,
+      `    <p class="sotl-chat-panel__scene">${escapeHtml3(title)}</p>`,
+      `    <div class="sotl-chat-panel__meta">\u{1F4CD} ${escapeHtml3(location)} \u2022 \u{1F552} ${escapeHtml3(time)}</div>`,
+      `    <p class="sotl-chat-panel__desc">${escapeHtml3(delta)}</p>`,
       castChips
     ].join("\n");
   } else {
     bodyContent = `
       <div class="sotl-chat-panel__scroll-body">
-        ${renderTrackerHtml(tracker, state2.activePreset)}
+        ${renderTrackerHtml(tracker, state2.activePreset, state2.settings.useSafeRenderer)}
       </div>
     `;
   }
@@ -2683,6 +2806,17 @@ function activateDrawer() {
   }
 }
 function paint(status) {
+  if (state && state.latestTracker && state.diagnostics.pipelineReport) {
+    const useSafe = state.settings.useSafeRenderer || false;
+    try {
+      const html = renderTrackerHtml(state.latestTracker, state.activePreset, useSafe);
+      const report = state.diagnostics.pipelineReport;
+      report.fallbackUsed = html.includes("Safe Fallback") || html.includes("Loom Rendering Failed") || html.includes("sotl-pipeline-warning") || useSafe;
+      report.renderSuccess = !html.includes("Loom Rendering Failed") && !html.includes("Custom template failed");
+      report.sanitizerRemovedContent = html.includes("Purified HTML") || html.includes("sanitization") || html.includes("Purified");
+    } catch {
+    }
+  }
   renderInto(drawerRoot, renderDrawer(state, status));
   renderInto(settingsRoot, renderSettingsPanel(state, status));
   if (drawerHandle?.update) drawerHandle.update(renderDrawer(state, status));
@@ -2784,7 +2918,7 @@ function handleDrawerEvent(event) {
       const newPreset = {
         id: newId,
         name: "New Custom Loom",
-        version: "1.0.8",
+        version: "1.0.9",
         description: "User custom continuity tracker.",
         mode: "hybrid",
         schemaJson: {
@@ -3144,6 +3278,9 @@ function handleDrawerEvent(event) {
   }
   if (fieldName === "stripBlocks" && field instanceof HTMLInputElement) {
     saveSettings({ stripTrackerBlocksFromMessages: field.checked });
+  }
+  if (fieldName === "useSafeRenderer" && field instanceof HTMLInputElement) {
+    saveSettings({ useSafeRenderer: field.checked });
   }
   if (fieldName === "messageCardPlacement" && field instanceof HTMLSelectElement) {
     saveSettings({ messageCardPlacement: field.value });

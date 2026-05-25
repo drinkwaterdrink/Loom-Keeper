@@ -76,6 +76,7 @@ export interface LoomSettings {
   cardDensity: 'compact' | 'normal';
   trackerHistoryLimit: number;
   sidecarGenerationTimeoutMs?: number | undefined;
+  useSafeRenderer?: boolean | undefined;
 }
 
 export interface LoomPermissionState {
@@ -105,6 +106,26 @@ export interface LoomGenerationStatus {
   disabledReason?: string | undefined;
 }
 
+export interface LoomPipelineReport {
+  activePresetId: string;
+  presetName: string;
+  presetSource: string;
+  timestamp: string;
+  rawResponseAvailable: boolean;
+  parseSuccess: boolean;
+  parseError?: string;
+  schemaValidationSuccess: boolean;
+  schemaValidationError?: string;
+  renderSuccess: boolean;
+  renderError?: string;
+  sanitizerRemovedContent: boolean;
+  fallbackUsed: boolean;
+  messageId: string;
+  chatId: string;
+  hudView: string;
+  retainedCount: number;
+}
+
 export interface LoomDiagnostics {
   backendReady: boolean;
   lastError?: string | undefined;
@@ -114,6 +135,7 @@ export interface LoomDiagnostics {
   lastRenderMessageId?: string | undefined;
   storageWarning?: string | undefined;
   renderLimitation?: string | undefined;
+  pipelineReport?: LoomPipelineReport | undefined;
 }
 
 export interface LoomFrontendState {
