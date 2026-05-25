@@ -16,7 +16,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.9";
+var LOOM_VERSION = "1.0.10";
 var LOOM_SCHEMA_VERSION = "1";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
 var STORAGE_KEYS = {
@@ -801,7 +801,11 @@ function asObject(value) {
 }
 function validateNode(value, schema, path, issues) {
   const expected = schemaType(schema);
-  if (expected && valueType(value) !== expected) {
+  let isTypeMatch = expected ? valueType(value) === expected : true;
+  if (expected === "integer" && typeof value === "number" && Number.isInteger(value)) {
+    isTypeMatch = true;
+  }
+  if (expected && !isTypeMatch) {
     issues.push({ path, message: `Expected ${expected}, received ${valueType(value)}.`, severity: "error" });
     return;
   }
@@ -853,7 +857,7 @@ function normalizePreset(preset) {
   return {
     id: String(preset.id || `custom_loom_${Date.now()}`),
     name: String(preset.name || "Custom Loom Template"),
-    version: String(preset.version || "1.0.9"),
+    version: String(preset.version || "1.0.10"),
     description: String(preset.description || ""),
     mode: preset.mode === "passive_extract" || preset.mode === "sidecar_generate" || preset.mode === "hybrid" ? preset.mode : "hybrid",
     schemaJson: preset.schemaJson && typeof preset.schemaJson === "object" && !Array.isArray(preset.schemaJson) ? preset.schemaJson : {

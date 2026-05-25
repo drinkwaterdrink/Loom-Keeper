@@ -1,8 +1,8 @@
-# State of the Loom (v1.0.9)
+# State of the Loom (v1.0.10)
 
 State of the Loom is a Lumiverse-native State of the Loom continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.9 is a deep debug and zTracker/WTracker-style reliability pass: resolves custom preset rendering blackouts, fixes HUD compact view preset-independence through dynamic field mapping, implements a secure backend error boundary try/catch with automatic stuck spinner recovery, introduces a toggleable safe generic renderer for custom presets, and builds a comprehensive step-by-step Loom Pipeline Report diagnostic panel inside the drawer.
+Version 1.0.10 is a deep HTML styling and template evaluation pass: unlocks support for standard Handlebars `this` scope references and `this.xxx` loop properties inside custom templates, enables dual-binding for both `{{data.xxx}}` (WTracker style) and `{{xxx}}` variables, relaxes the browser-native `DOMParser` security allowlist to permit `<style>` tags, inline visual `style` attributes, and `<table>` structural tags, and supports the standard JSON Schema `"integer"` primitive type safely in the validator.
 
 ---
 

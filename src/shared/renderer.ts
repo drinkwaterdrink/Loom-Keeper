@@ -35,7 +35,13 @@ function escapeHtml(value: unknown): string {
 
 function readPath(data: unknown, path: string): unknown {
   if (path === '.') return data;
-  return path.split('.').reduce<unknown>((current, part) => {
+  let cleanPath = path;
+  if (cleanPath.startsWith('this.')) {
+    cleanPath = cleanPath.slice(5);
+  } else if (cleanPath === 'this') {
+    return data;
+  }
+  return cleanPath.split('.').reduce<unknown>((current, part) => {
     if (!current || typeof current !== 'object') return '';
     return (current as Record<string, unknown>)[part] ?? '';
   }, data);
@@ -77,16 +83,17 @@ export function sanitizeDomHtml(html: string): string {
     const doc = parser.parseFromString(html, 'text/html');
     const body = doc.body;
 
-    // Strict Presentation Elements Allowlist
+    // Strict Presentation Elements Allowlist (including style and table structures)
     const allowedTags = new Set([
       'div', 'section', 'article', 'header', 'footer', 'span', 'p', 'b', 'strong', 
       'i', 'em', 'small', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'details', 'summary', 
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'br'
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'br', 'style',
+      'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th'
     ]);
 
-    // Strict Safe Attributes Allowlist (No inline style attribute is allowed)
+    // Strict Safe Attributes Allowlist (allowing inline styles)
     const allowedAttrs = new Set([
-      'class', 'title', 'aria-label', 'role'
+      'class', 'title', 'aria-label', 'role', 'style'
     ]);
 
     function sanitizeNode(node: Node): Node | null {
@@ -105,7 +112,7 @@ export function sanitizeDomHtml(html: string): string {
 
         const cleanEl = document.createElement(tag);
 
-        // 2. Enforce strict Attributes Allowlist (No event handlers, no inline styles)
+        // 2. Enforce strict Attributes Allowlist (No event handlers, allowing inline styles)
         for (let i = 0; i < el.attributes.length; i++) {
           const attr = el.attributes[i];
           const name = attr.name.toLowerCase();
@@ -266,6 +273,7 @@ export function renderTrackerHtml(tracker: LoomTrackerState, preset: LoomPreset,
 
   const data = {
     ...tracker.data,
+    data: tracker.data, // Map data property to itself for backward compatibility with WTracker templates
     density: preset.renderOptions.density,
     theme: preset.renderOptions.theme,
     compactSummary: tracker.compactSummary,

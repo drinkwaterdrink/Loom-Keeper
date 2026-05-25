@@ -669,7 +669,13 @@ function escapeHtml(value) {
 }
 function readPath(data, path) {
   if (path === ".") return data;
-  return path.split(".").reduce((current, part) => {
+  let cleanPath = path;
+  if (cleanPath.startsWith("this.")) {
+    cleanPath = cleanPath.slice(5);
+  } else if (cleanPath === "this") {
+    return data;
+  }
+  return cleanPath.split(".").reduce((current, part) => {
     if (!current || typeof current !== "object") return "";
     return current[part] ?? "";
   }, data);
@@ -767,13 +773,22 @@ function sanitizeDomHtml(html) {
       "h5",
       "h6",
       "hr",
-      "br"
+      "br",
+      "style",
+      "table",
+      "thead",
+      "tbody",
+      "tfoot",
+      "tr",
+      "td",
+      "th"
     ]);
     const allowedAttrs = /* @__PURE__ */ new Set([
       "class",
       "title",
       "aria-label",
-      "role"
+      "role",
+      "style"
     ]);
     const cleanBody = document.createElement("body");
     let rootChild = body.firstChild;
@@ -878,6 +893,8 @@ function renderTrackerHtml(tracker, preset, useSafeRenderer = false) {
   }
   const data = {
     ...tracker.data,
+    data: tracker.data,
+    // Map data property to itself for backward compatibility with WTracker templates
     density: preset.renderOptions.density,
     theme: preset.renderOptions.theme,
     compactSummary: tracker.compactSummary
@@ -2918,7 +2935,7 @@ function handleDrawerEvent(event) {
       const newPreset = {
         id: newId,
         name: "New Custom Loom",
-        version: "1.0.9",
+        version: "1.0.10",
         description: "User custom continuity tracker.",
         mode: "hybrid",
         schemaJson: {
