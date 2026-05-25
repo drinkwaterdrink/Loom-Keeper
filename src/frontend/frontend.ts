@@ -378,7 +378,7 @@ function handleDrawerEvent(event: Event): void {
       const newPreset = {
         id: newId,
         name: 'New Custom Loom',
-        version: '1.0.10',
+        version: '1.0.11',
         description: 'User custom continuity tracker.',
         mode: 'hybrid' as const,
         schemaJson: {

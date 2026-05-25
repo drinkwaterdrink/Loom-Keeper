@@ -83,17 +83,20 @@ export function sanitizeDomHtml(html: string): string {
     const doc = parser.parseFromString(html, 'text/html');
     const body = doc.body;
 
-    // Strict Presentation Elements Allowlist (including style and table structures)
+    // Strict Presentation Elements Allowlist (including style, table, and SVG structures)
     const allowedTags = new Set([
       'div', 'section', 'article', 'header', 'footer', 'span', 'p', 'b', 'strong', 
       'i', 'em', 'small', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'details', 'summary', 
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'br', 'style',
-      'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th'
+      'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
+      'svg', 'path', 'line', 'rect', 'circle', 'polygon', 'ellipse', 'g', 'text', 'defs', 'lineargradient', 'stop'
     ]);
 
-    // Strict Safe Attributes Allowlist (allowing inline styles)
+    // Strict Safe Attributes Allowlist (allowing inline styles, table dimensions, and SVG parameters)
     const allowedAttrs = new Set([
-      'class', 'title', 'aria-label', 'role', 'style'
+      'class', 'title', 'aria-label', 'role', 'style',
+      'viewbox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'd', 'x', 'y', 'width', 'height', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'transform', 'points', 'opacity',
+      'colspan', 'rowspan', 'cellspacing', 'cellpadding', 'border', 'id', 'offset', 'stop-color', 'stop-opacity', 'gradientunits', 'gradienttransform'
     ]);
 
     function sanitizeNode(node: Node): Node | null {
@@ -288,11 +291,6 @@ export function renderTrackerHtml(tracker: LoomTrackerState, preset: LoomPreset,
       const sanitized = sanitizeDomHtml(rawHtml);
       if (!sanitized || sanitized.trim() === '') {
         throw new Error('Purified HTML is empty. The template might have invalid/unsupported tags or failed sanitization.');
-      }
-      // Issue #2 check: ensure template is not empty of actual text content
-      const textOnly = sanitized.replace(/<[^>]*>/g, '').trim();
-      if (!textOnly) {
-        throw new Error('Custom template rendered empty or produced blank text content.');
       }
       return sanitized;
     }

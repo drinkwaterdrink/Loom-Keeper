@@ -94,9 +94,6 @@ export function validateTemplateSafety(template: string): string[] {
   if (lower.includes('<object') || lower.includes('<embed')) {
     warnings.push('Object and embed tags are blocked for safety.');
   }
-  if (lower.includes('style=')) {
-    warnings.push('Inline style attributes (style=) are stripped. Use CSS classes instead.');
-  }
   if (/\bon[a-zA-Z]+\s*=/i.test(template)) {
     warnings.push('Inline event handlers (e.g. onclick=) are blocked for safety.');
   }
@@ -104,11 +101,13 @@ export function validateTemplateSafety(template: string): string[] {
     warnings.push('javascript: and data: URIs inside attributes are blocked for safety.');
   }
 
-  // Check tags in template to see if any are not in our allowlist
+  // Check tags in template to see if any are not in our allowlist (harmonized with DOM sanitizer)
   const allowedTags = new Set([
     'div', 'section', 'article', 'header', 'footer', 'span', 'p', 'b', 'strong', 
     'i', 'em', 'small', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'details', 'summary', 
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'br'
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'br', 'style',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
+    'svg', 'path', 'line', 'rect', 'circle', 'polygon', 'ellipse', 'g', 'text', 'defs', 'lineargradient', 'stop'
   ]);
   
   // A simple regex tag extractor to warn about unknown tags
@@ -133,7 +132,7 @@ export function normalizePreset(preset: Partial<LoomPreset>): LoomPreset {
   return {
     id: String(preset.id || `custom_loom_${Date.now()}`),
     name: String(preset.name || 'Custom Loom Template'),
-    version: String(preset.version || '1.0.10'),
+    version: String(preset.version || '1.0.11'),
     description: String(preset.description || ''),
     mode: (preset.mode === 'passive_extract' || preset.mode === 'sidecar_generate' || preset.mode === 'hybrid') 
       ? preset.mode 
