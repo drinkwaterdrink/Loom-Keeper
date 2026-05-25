@@ -1,6 +1,29 @@
-import type { LoomValidationIssue, LoomValidationReport, LoomPreset } from './types.js';
+import { builtInPresets, LOOM_VERSION } from './defaults.js';
+import type { LoomPreset, LoomPresetOrigin, LoomValidationIssue, LoomValidationReport } from './types.js';
 
 type Schema = Record<string, unknown>;
+const VALID_ORIGINS = new Set<LoomPresetOrigin>(['built-in', 'custom', 'imported', 'duplicated']);
+
+export function normalizePresetId(value: unknown, fallbackPrefix = 'custom_loom'): string {
+  const raw = String(value || '').trim();
+  const slug = raw
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 96);
+  return slug || `${fallbackPrefix}_${Date.now()}`;
+}
+
+export function isBuiltInPresetId(presetId: string): boolean {
+  return builtInPresets.some((preset) => preset.id === presetId);
+}
+
+export function getPresetOrigin(preset: Pick<LoomPreset, 'id'> & { origin?: LoomPresetOrigin | undefined }): LoomPresetOrigin {
+  if (isBuiltInPresetId(preset.id)) return 'built-in';
+  if (preset.origin && VALID_ORIGINS.has(preset.origin) && preset.origin !== 'built-in') return preset.origin;
+  return 'custom';
+}
 
 function valueType(value: unknown): string {
   if (Array.isArray(value)) return 'array';
@@ -129,11 +152,14 @@ export function validateTemplateSafety(template: string): string[] {
 
 export function normalizePreset(preset: Partial<LoomPreset>): LoomPreset {
   const now = new Date().toISOString();
+  const id = normalizePresetId(preset.id || `custom_loom_${Date.now()}`);
+  const origin = preset.origin && VALID_ORIGINS.has(preset.origin) ? preset.origin : 'custom';
   return {
-    id: String(preset.id || `custom_loom_${Date.now()}`),
+    id,
     name: String(preset.name || 'Custom Loom Template'),
-    version: String(preset.version || '1.0.11'),
+    version: String(preset.version || LOOM_VERSION),
     description: String(preset.description || ''),
+    origin: id && isBuiltInPresetId(id) ? 'built-in' : origin === 'built-in' ? 'custom' : origin,
     mode: (preset.mode === 'passive_extract' || preset.mode === 'sidecar_generate' || preset.mode === 'hybrid') 
       ? preset.mode 
       : 'hybrid',

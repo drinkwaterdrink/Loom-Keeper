@@ -2,7 +2,7 @@ import { builtInPresets, SLIM_SCENE_PRESET_ID, STORAGE_KEYS } from '../shared/de
 import type { LoomPreset } from '../shared/types.js';
 import type { LoomSpindle } from './lumiverseApi.js';
 import { getJsonWithRecovery, setJsonWithRecovery, type StorageWarningSink } from './storageRecovery.js';
-import { normalizePreset } from '../shared/validation.js';
+import { getPresetOrigin, isBuiltInPresetId, normalizePreset, normalizePresetId } from '../shared/validation.js';
 
 function isPreset(value: unknown): value is LoomPreset {
   return Boolean(value)
@@ -11,6 +11,10 @@ function isPreset(value: unknown): value is LoomPreset {
     && typeof (value as LoomPreset).id === 'string'
     && typeof (value as LoomPreset).name === 'string'
     && typeof (value as LoomPreset).htmlTemplate === 'string';
+}
+
+function withBuiltInOrigin(preset: LoomPreset): LoomPreset {
+  return { ...preset, origin: 'built-in' };
 }
 
 export class LoomPresetService {
@@ -27,10 +31,10 @@ export class LoomPresetService {
       [],
       this.onStorageWarning,
     );
-    const custom = Array.isArray(stored) ? stored.filter(isPreset).map(normalizePreset) : [];
+    const custom = Array.isArray(stored) ? stored.filter(isPreset).map((preset) => this.normalizeCustomPreset(preset)) : [];
     const customIds = new Set(custom.map((preset) => preset.id));
     return [
-      ...builtInPresets.filter((preset) => !customIds.has(preset.id)),
+      ...builtInPresets.filter((preset) => !customIds.has(preset.id)).map(withBuiltInOrigin),
       ...custom,
     ];
   }
@@ -47,13 +51,8 @@ export class LoomPresetService {
     return this.loadAll(userId);
   }
 
-  async save(userId: string, preset: LoomPreset): Promise<LoomPreset[]> {
-    // Prevent editing built-in presets
-    if (builtInPresets.some((p) => p.id === preset.id)) {
-      throw new Error(`Cannot modify built-in preset: ${preset.id}`);
-    }
-
-    const normalized = normalizePreset(preset);
+  async save(userId: string, preset: LoomPreset): Promise<LoomPreset> {
+    const normalized = this.normalizeCustomPreset(preset);
 
     const stored = await getJsonWithRecovery<unknown[]>(
       this.spindle,
@@ -62,7 +61,7 @@ export class LoomPresetService {
       [],
       this.onStorageWarning,
     );
-    const custom = Array.isArray(stored) ? stored.filter(isPreset).map(normalizePreset) : [];
+    const custom = Array.isArray(stored) ? stored.filter(isPreset).map((item) => this.normalizeCustomPreset(item)) : [];
     
     const existingIndex = custom.findIndex((p) => p.id === normalized.id);
     if (existingIndex >= 0) {
@@ -72,7 +71,7 @@ export class LoomPresetService {
     }
 
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, custom);
-    return this.loadAll(userId);
+    return normalized;
   }
 
   async delete(userId: string, presetId: string): Promise<LoomPreset[]> {
@@ -93,5 +92,16 @@ export class LoomPresetService {
 
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, filtered);
     return this.loadAll(userId);
+  }
+
+  private normalizeCustomPreset(preset: Partial<LoomPreset>): LoomPreset {
+    const normalized = normalizePreset(preset);
+    let id = normalizePresetId(normalized.id);
+    if (isBuiltInPresetId(id)) id = `${id}_custom`;
+    return {
+      ...normalized,
+      id,
+      origin: getPresetOrigin({ ...normalized, id }),
+    };
   }
 }

@@ -1,5 +1,6 @@
-import { renderTrackerHtml, getFallbackField } from '../shared/renderer.js';
 import type { LoomFrontendState, LoomTrackerState } from '../shared/types.js';
+import { getFallbackField } from '../shared/renderer.js';
+import { renderCompactTrackerForState, renderTrackerForState } from './rendering.js';
 import { iconButton } from './ui.js';
 
 type FrontendContext = Record<string, unknown>;
@@ -72,7 +73,7 @@ function renderTrackerHtmlCard(tracker: LoomTrackerState, state: LoomFrontendSta
   const controls = state.settings.showMessageButtons
     ? `<div class="sotl-message-controls">${iconButton('Regenerate', 'card-regenerate', tracker.messageId || '')}${iconButton('Edit', 'card-edit', tracker.messageId || '')}${iconButton('Hide', 'card-hide', tracker.messageId || '')}${iconButton('Delete', 'card-delete', tracker.messageId || '')}</div>`
     : '';
-  return controls + renderTrackerHtml(tracker, state.activePreset, state.settings.useSafeRenderer);
+  return controls + renderTrackerForState(tracker, state).html;
 }
 
 export function cleanupMessageCards(ctx: FrontendContext): void {
@@ -253,6 +254,18 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
     ].join('\n');
   }
 
+  if (isCompact) {
+    const bodyContent = renderCompactTrackerForState(tracker, state);
+    return [
+      '<div class="sotl-chat-panel">',
+      header,
+      '  <div class="sotl-chat-panel__body">',
+      bodyContent,
+      '  </div>',
+      '</div>'
+    ].join('\n');
+  }
+
   let bodyContent = '';
   if (isCompact) {
     const castData = getFallbackField(tracker.data, ['cast', 'present', 'characters', 'cast_present', 'actors']);
@@ -278,7 +291,7 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
   } else {
     bodyContent = `
       <div class="sotl-chat-panel__scroll-body">
-        ${renderTrackerHtml(tracker, state.activePreset, state.settings.useSafeRenderer)}
+        ${renderTrackerForState(tracker, state).html}
       </div>
     `;
   }

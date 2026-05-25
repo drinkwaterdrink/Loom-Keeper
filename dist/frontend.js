@@ -636,7 +636,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.11",
+  version: "1.0.12",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -923,17 +923,12 @@ var builtInPresets = [
 function safeObjectToString(val) {
   if (val === null || val === void 0) return "";
   if (typeof val !== "object") return String(val);
-  if (Array.isArray(val)) {
-    return val.map(safeObjectToString).join(", ");
-  }
+  if (Array.isArray(val)) return val.map(safeObjectToString).join(", ");
   const obj = val;
   const keys = ["text", "value", "label", "name", "title", "summary", "description"];
   for (const key of keys) {
-    if (key in obj && obj[key] !== void 0 && obj[key] !== null) {
-      const fieldVal = obj[key];
-      if (typeof fieldVal !== "object") {
-        return String(fieldVal);
-      }
+    if (key in obj && obj[key] !== void 0 && obj[key] !== null && typeof obj[key] !== "object") {
+      return String(obj[key]);
     }
   }
   try {
@@ -962,57 +957,51 @@ function truthy(value) {
   if (Array.isArray(value)) return value.length > 0;
   return Boolean(value);
 }
-function renderTemplate(template, data) {
+function renderTemplate(template, data, missingFields = /* @__PURE__ */ new Set()) {
   let output = template;
   const sectionPattern = /{{#if\s+([\w.]+)}}([\s\S]*?){{\/if}}/g;
   output = output.replace(sectionPattern, (_match, path, inner) => {
-    return truthy(readPath(data, path)) ? renderTemplate(inner, data) : "";
+    return truthy(readPath(data, path)) ? renderTemplate(inner, data, missingFields) : "";
   });
   const eachPattern = /{{#each\s+([\w.]+)}}([\s\S]*?){{\/each}}/g;
   output = output.replace(eachPattern, (_match, path, inner) => {
     const value = readPath(data, path);
+    if (value === "" || value === void 0 || value === null) missingFields.add(path);
     if (!Array.isArray(value) || value.length === 0) return '<p class="sotl-empty">None</p>';
     return value.map((item) => {
       const scope = item && typeof item === "object" ? item : { ".": item };
-      return renderTemplate(inner, { ...data, ...scope, ".": item });
+      return renderTemplate(inner, { ...data, ...scope, ".": item }, missingFields);
     }).join("");
   });
-  return output.replace(/{{\s*([\w.]+|\.)\s*}}/g, (_match, path) => escapeHtml(readPath(data, path)));
+  return output.replace(/{{\s*([\w.]+|\.)\s*}}/g, (_match, path) => {
+    const value = readPath(data, path);
+    if (value === "" || value === void 0 || value === null) missingFields.add(path);
+    return escapeHtml(value);
+  });
 }
 function sanitizeDomHtml(html) {
-  if (typeof document === "undefined") {
-    return "";
-  }
+  if (typeof document === "undefined") return "";
   try {
     let sanitizeNode2 = function(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        return node;
-      }
+      if (node.nodeType === Node.TEXT_NODE) return node;
       if (node.nodeType === Node.ELEMENT_NODE) {
         const el = node;
         const tag = el.tagName.toLowerCase();
-        if (!allowedTags.has(tag)) {
-          return null;
-        }
+        if (!allowedTags.has(tag)) return null;
         const cleanEl = document.createElement(tag);
-        for (let i = 0; i < el.attributes.length; i++) {
+        for (let i = 0; i < el.attributes.length; i += 1) {
           const attr = el.attributes[i];
           const name = attr.name.toLowerCase();
-          if (allowedAttrs.has(name) || name.startsWith("data-")) {
-            const value = attr.value;
-            const cleanVal = value.trim().toLowerCase();
-            if (cleanVal.includes("javascript:") || cleanVal.includes("data:")) {
-              continue;
-            }
-            cleanEl.setAttribute(name, value);
-          }
+          if (!allowedAttrs.has(name) && !name.startsWith("data-")) continue;
+          const value = attr.value;
+          const cleanVal = value.trim().toLowerCase();
+          if (cleanVal.includes("javascript:") || cleanVal.includes("data:")) continue;
+          cleanEl.setAttribute(name, value);
         }
         let child = el.firstChild;
         while (child) {
           const cleanChild = sanitizeNode2(child);
-          if (cleanChild) {
-            cleanEl.appendChild(cleanChild);
-          }
+          if (cleanChild) cleanEl.appendChild(cleanChild);
           child = child.nextSibling;
         }
         return cleanEl;
@@ -1116,9 +1105,7 @@ function sanitizeDomHtml(html) {
     let rootChild = body.firstChild;
     while (rootChild) {
       const cleanChild = sanitizeNode2(rootChild);
-      if (cleanChild) {
-        cleanBody.appendChild(cleanChild);
-      }
+      if (cleanChild) cleanBody.appendChild(cleanChild);
       rootChild = rootChild.nextSibling;
     }
     return cleanBody.innerHTML;
@@ -1130,68 +1117,83 @@ function sanitizeDomHtml(html) {
 function getFallbackField(data, keys) {
   if (!data || typeof data !== "object") return void 0;
   for (const key of keys) {
-    if (key in data) {
-      return data[key];
-    }
+    if (key in data) return data[key];
     const lowerKey = key.toLowerCase();
     for (const k of Object.keys(data)) {
-      if (k.toLowerCase() === lowerKey) {
-        return data[k];
-      }
+      if (k.toLowerCase() === lowerKey) return data[k];
     }
   }
   return void 0;
 }
+function isCustomPreset(preset) {
+  return !builtInPresets.some((p) => p.id === preset.id);
+}
+function isVisuallyEmptyHtml(html, missingFields) {
+  if (!html.trim()) return true;
+  if (typeof document === "undefined") return false;
+  try {
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    const text = (template.content.textContent || "").replace(/\s+/g, "").trim();
+    const hasVisualElement = Boolean(template.content.querySelector("svg,path,rect,circle,line,polygon,ellipse,table,td,th,hr"));
+    return missingFields.length > 0 && !text && !hasVisualElement;
+  } catch {
+    return false;
+  }
+}
+function renderValueBlock(value, depth = 0) {
+  if (value === null || value === void 0 || value === "") return "";
+  if (typeof value !== "object") return `<span>${escapeHtml(String(value))}</span>`;
+  if (depth >= 3) return `<pre class="sotl-code">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '<p class="sotl-empty">None</p>';
+    const items = value.slice(0, 12).map((item) => {
+      if (item && typeof item === "object") return `<li>${renderValueBlock(item, depth + 1)}</li>`;
+      return `<li>${escapeHtml(String(item))}</li>`;
+    }).join("");
+    const more = value.length > 12 ? `<li>${escapeHtml(`+${value.length - 12} more`)}</li>` : "";
+    return `<ul class="sotl-anchors-list">${items}${more}</ul>`;
+  }
+  const entries = Object.entries(value).filter(([, entryValue]) => entryValue !== null && entryValue !== void 0 && entryValue !== "").slice(0, 16);
+  if (entries.length === 0) return '<p class="sotl-empty">None</p>';
+  return `<dl class="sotl-grid">${entries.map(([key, entryValue]) => `
+    <div class="sotl-grid-item">
+      <dt>${escapeHtml(key)}</dt>
+      <dd>${renderValueBlock(entryValue, depth + 1)}</dd>
+    </div>
+  `).join("")}</dl>`;
+}
 function renderGenericSafeCard(tracker, preset, warningMessage) {
   const title = escapeHtml(String(getFallbackField(tracker.data, ["sceneTitle", "title", "name", "sceneName", "scene"]) || "Continuity State"));
   const mood = escapeHtml(String(getFallbackField(tracker.data, ["mood", "tone", "emotion", "scene_mood"]) || ""));
-  let warningHtml = "";
-  if (warningMessage) {
-    warningHtml = `
-      <div class="sotl-pipeline-warning" style="margin-bottom: 8px; padding: 6px 10px; background: rgba(220,10,10,0.06); border: 1px solid rgba(220,10,10,0.15); border-radius: 4px; font-size: 11px; color: var(--lv-error-text, #bd2130);">
-        <strong>\u26A0\uFE0F Notice:</strong> ${escapeHtml(warningMessage)}
-      </div>
-    `;
-  }
   const density = preset.renderOptions?.density || "compact";
   const theme = preset.renderOptions?.theme || "system";
+  const warningHtml = warningMessage ? `
+      <div class="sotl-pipeline-warning" style="margin-bottom: 8px; padding: 6px 10px; background: rgba(220,10,10,0.06); border: 1px solid rgba(220,10,10,0.15); border-radius: 4px; font-size: 11px; color: var(--lv-error-text, #bd2130);">
+        <strong>Notice:</strong> ${escapeHtml(warningMessage)}
+      </div>
+    ` : "";
   const rows = [];
   const details = [];
   for (const [key, value] of Object.entries(tracker.data)) {
     if (key === "schemaVersion" || key === "schema_version") continue;
     if (["scenetitle", "title", "name", "mood", "tone", "emotion", "scenemood"].includes(key.toLowerCase())) continue;
-    if (value === null || value === void 0) continue;
-    if (Array.isArray(value)) {
-      if (value.length === 0) continue;
-      const itemsHtml = value.map((item) => {
-        if (item && typeof item === "object") {
-          const props = Object.entries(item).map(([k, v]) => `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(safeObjectToString(v))}`).join(" \u2022 ");
-          return `<div style="font-size: 11px; padding: 4px; background: rgba(255,255,255,0.03); border-radius: 4px; margin-bottom: 2px;">${props}</div>`;
-        }
-        return `<li>${escapeHtml(safeObjectToString(item))}</li>`;
-      }).join("");
-      const listContent = value[0] && typeof value[0] === "object" ? `<div style="display: grid; gap: 4px; margin-top: 4px;">${itemsHtml}</div>` : `<ul class="sotl-anchors-list">${itemsHtml}</ul>`;
+    if (value === null || value === void 0 || value === "") continue;
+    if (Array.isArray(value) || typeof value === "object") {
       details.push(`
-        <details class="sotl-card-details" open>
+        <details class="sotl-card-details" ${Array.isArray(value) ? "open" : ""}>
           <summary>${escapeHtml(key)}</summary>
-          ${listContent}
+          ${renderValueBlock(value)}
         </details>
       `);
-    } else if (typeof value === "object") {
-      details.push(`
-        <details class="sotl-card-details">
-          <summary>${escapeHtml(key)}</summary>
-          <pre style="font-size: 10px; margin: 4px 0 0; white-space: pre-wrap; font-family: monospace;">${escapeHtml(JSON.stringify(value, null, 2))}</pre>
-        </details>
-      `);
-    } else {
-      rows.push(`
-        <div class="sotl-grid-item">
-          <dt>${escapeHtml(key)}</dt>
-          <dd>${escapeHtml(String(value))}</dd>
-        </div>
-      `);
+      continue;
     }
+    rows.push(`
+      <div class="sotl-grid-item">
+        <dt>${escapeHtml(key)}</dt>
+        <dd>${escapeHtml(String(value))}</dd>
+      </div>
+    `);
   }
   const gridHtml = rows.length > 0 ? `<dl class="sotl-grid">${rows.join("")}</dl>` : "";
   return `
@@ -1209,37 +1211,69 @@ function renderGenericSafeCard(tracker, preset, warningMessage) {
     </section>
   `;
 }
-function renderTrackerHtml(tracker, preset, useSafeRenderer = false) {
+function renderTrackerHtmlDetailed(tracker, preset, useSafeRenderer = false) {
   if (useSafeRenderer) {
-    return renderGenericSafeCard(tracker, preset, "Safe generic renderer active.");
+    return {
+      html: renderGenericSafeCard(tracker, preset, "Safe generic renderer active."),
+      success: true,
+      fallbackUsed: true,
+      sanitizerRemovedContent: false,
+      warning: "Safe generic renderer active.",
+      missingFields: []
+    };
   }
   const data = {
     ...tracker.data,
     data: tracker.data,
-    // Map data property to itself for backward compatibility with WTracker templates
     density: preset.renderOptions.density,
     theme: preset.renderOptions.theme,
     compactSummary: tracker.compactSummary
   };
   try {
-    const rawHtml = renderTemplate(preset.htmlTemplate, data);
-    const isCustom = !builtInPresets.some((p) => p.id === preset.id);
-    if (isCustom) {
+    const missingFields = /* @__PURE__ */ new Set();
+    const rawHtml = renderTemplate(preset.htmlTemplate, data, missingFields);
+    const missing = [...missingFields];
+    if (isCustomPreset(preset)) {
       const sanitized = sanitizeDomHtml(rawHtml);
       if (!sanitized || sanitized.trim() === "") {
         throw new Error("Purified HTML is empty. The template might have invalid/unsupported tags or failed sanitization.");
       }
-      return sanitized;
+      if (isVisuallyEmptyHtml(sanitized, missing)) {
+        throw new Error(`Custom template rendered no visible tracker content. Missing fields: ${missing.join(", ") || "unknown"}.`);
+      }
+      return {
+        html: sanitized,
+        success: true,
+        fallbackUsed: false,
+        sanitizerRemovedContent: sanitized.trim() !== rawHtml.trim(),
+        warning: missing.length > 0 ? `Missing template fields: ${missing.join(", ")}` : void 0,
+        missingFields: missing
+      };
     }
-    return rawHtml;
+    return {
+      html: rawHtml,
+      success: true,
+      fallbackUsed: false,
+      sanitizerRemovedContent: false,
+      warning: missing.length > 0 ? `Missing template fields: ${missing.join(", ")}` : void 0,
+      missingFields: missing
+    };
   } catch (error) {
     console.error("Loom template rendering failed, falling back to safe card:", error);
-    return renderGenericSafeCard(
-      tracker,
-      preset,
-      `Custom template failed: ${error instanceof Error ? error.message : String(error)}`
-    );
+    const message = `Custom template failed: ${error instanceof Error ? error.message : String(error)}`;
+    return {
+      html: renderGenericSafeCard(tracker, preset, message),
+      success: false,
+      fallbackUsed: true,
+      sanitizerRemovedContent: false,
+      warning: message,
+      error: error instanceof Error ? error.message : String(error),
+      missingFields: []
+    };
   }
+}
+function renderTrackerHtml(tracker, preset, useSafeRenderer = false) {
+  return renderTrackerHtmlDetailed(tracker, preset, useSafeRenderer).html;
 }
 
 // src/frontend/ui.ts
@@ -1258,6 +1292,61 @@ function button(label, action, options = {}) {
 }
 function iconButton(label, action, id) {
   return `<button class="sotl-icon-button" type="button" data-sotl-action="${escapeHtml2(action)}" data-sotl-message-id="${escapeHtml2(id)}" title="${escapeHtml2(label)}" aria-label="${escapeHtml2(label)}">${escapeHtml2(label.slice(0, 1))}</button>`;
+}
+
+// src/frontend/rendering.ts
+function resolvePresetForTracker(state2, tracker) {
+  const preset = state2.presets.find((candidate) => candidate.id === tracker.presetId);
+  if (preset) return { preset, missing: false };
+  return { preset: state2.activePreset, missing: true };
+}
+function renderTrackerForState(tracker, state2, useSafeRenderer = Boolean(state2.settings.useSafeRenderer)) {
+  const { preset, missing } = resolvePresetForTracker(state2, tracker);
+  if (missing) {
+    const warning = `Preset '${tracker.presetId}' is not available. Showing tracker data with the safe generic renderer.`;
+    return {
+      html: renderGenericSafeCard(tracker, preset, warning),
+      success: false,
+      fallbackUsed: true,
+      sanitizerRemovedContent: false,
+      warning,
+      error: warning,
+      missingFields: []
+    };
+  }
+  return renderTrackerHtmlDetailed(tracker, preset, useSafeRenderer);
+}
+function compactValue(value) {
+  if (value === null || value === void 0 || value === "") return "";
+  if (typeof value !== "object") return String(value);
+  if (Array.isArray(value)) {
+    return value.slice(0, 3).map(compactValue).filter(Boolean).join(", ");
+  }
+  const record = value;
+  for (const key of ["name", "title", "label", "summary", "description", "value", "text"]) {
+    if (record[key] !== void 0 && record[key] !== null && typeof record[key] !== "object") return String(record[key]);
+  }
+  return Object.entries(record).filter(([, entryValue]) => entryValue !== null && entryValue !== void 0 && entryValue !== "").slice(0, 3).map(([key, entryValue]) => `${key}: ${compactValue(entryValue)}`).filter(Boolean).join("; ");
+}
+function collectCompactFields(data) {
+  const skip = /* @__PURE__ */ new Set(["schemaversion", "schema_version", "scenetitle", "title", "name", "scene", "scenename"]);
+  return Object.entries(data).filter(([key, value]) => !skip.has(key.toLowerCase()) && value !== null && value !== void 0 && value !== "").map(([key, value]) => ({ key, value: compactValue(value) })).filter((entry) => entry.value).slice(0, 5);
+}
+function renderCompactTrackerForState(tracker, state2) {
+  const { preset, missing } = resolvePresetForTracker(state2, tracker);
+  const title = String(getFallbackField(tracker.data, ["sceneTitle", "title", "name", "sceneName", "scene"]) || tracker.compactSummary || "Continuity State");
+  const fields = collectCompactFields(tracker.data);
+  const summary = tracker.compactSummary && tracker.compactSummary !== title ? tracker.compactSummary : fields[0]?.value || "No compact summary recorded.";
+  const chips = fields.slice(1, 5).map((field) => {
+    return `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml2(field.key)}: ${escapeHtml2(field.value)}</span>`;
+  }).join("");
+  return [
+    `    <p class="sotl-chat-panel__scene">${escapeHtml2(title)}</p>`,
+    `    <div class="sotl-chat-panel__meta">Preset: ${escapeHtml2(preset.name)}${missing ? " (missing original preset)" : ""}</div>`,
+    `    <p class="sotl-chat-panel__desc">${escapeHtml2(summary)}</p>`,
+    chips ? `    <div class="sotl-cast-grid" style="margin-top: 4px;">${chips}</div>` : "",
+    tracker.validation.ok ? "" : '    <p class="sotl-chat-panel__desc sotl-warning">Tracker JSON has validation warnings. Open the drawer for details.</p>'
+  ].filter(Boolean).join("\n");
 }
 
 // src/shared/validation.ts
@@ -1392,6 +1481,7 @@ function checkPresetReadiness(preset) {
 // src/frontend/presetEditor.ts
 var editingPreset = null;
 var lastPreviewHtml = "";
+var lastPreviewReport = null;
 var lastSanitizerWarnings = [];
 var lastJsonParseError = null;
 var lastImportStatus = null;
@@ -1404,6 +1494,7 @@ function setImportStatus(status) {
 function selectPresetForEditing(preset) {
   editingPreset = JSON.parse(JSON.stringify(preset));
   lastPreviewHtml = "";
+  lastPreviewReport = null;
   lastSanitizerWarnings = [];
   lastJsonParseError = null;
 }
@@ -1453,7 +1544,8 @@ function runPreview() {
       compactSummary: "Preview compact summary",
       validation: { ok: true, issues: [] }
     };
-    lastPreviewHtml = renderTrackerHtml(mockTracker, editingPreset);
+    lastPreviewReport = renderTrackerHtmlDetailed(mockTracker, editingPreset);
+    lastPreviewHtml = lastPreviewReport.html;
     lastJsonParseError = null;
   } catch (err) {
     lastJsonParseError = `Preview failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -1606,6 +1698,7 @@ function renderPresetEditor(state2) {
       "  </ul>",
       "</div>"
     ].join("\n") : "",
+    lastPreviewReport ? `<p class="sotl-note" style="margin-bottom: 8px;">Preview render: ${lastPreviewReport.success ? "template rendered" : "fallback used"}${lastPreviewReport.warning ? ` - ${escapeHtml2(lastPreviewReport.warning)}` : ""}</p>` : "",
     lastPreviewHtml ? [
       '<div style="margin-top: 8px;">',
       '  <span style="font-size: 11px; font-weight: 600; color: var(--lumiverse-text-muted, #64707d);">Mock Render Preview:</span>',
@@ -1746,11 +1839,14 @@ function renderLatestTracker(state2) {
   if (!state2.latestTracker) {
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
   }
-  const html = renderTrackerHtml(state2.latestTracker, state2.activePreset, state2.settings.useSafeRenderer);
+  const render = renderTrackerForState(state2.latestTracker, state2);
+  const html = render.html;
+  const renderWarning = render.warning ? `<p class="sotl-note sotl-warning" style="margin-top: 8px;">${escapeHtml2(render.warning)}</p>` : "";
   const attachmentStatus = state2.settings.renderInMessages && state2.latestTracker.messageId ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">\u{1F517} Attached to message card (${escapeHtml2(state2.latestTracker.messageId)})</p>` : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
   return [
     `<p class="sotl-note">${escapeHtml2(state2.latestTracker.compactSummary)}</p>`,
     `<div class="sotl-preview">${html}</div>`,
+    renderWarning,
     attachmentStatus,
     '<details class="sotl-details"><summary>Manual JSON edit</summary>',
     '<div class="sotl-fields" style="margin-top: 10px;">',
@@ -1799,16 +1895,26 @@ function renderPipelineReport(state2) {
       <div><strong>Preset Name:</strong> ${escapeHtml2(report.presetName)}</div>
       <div><strong>Preset Source:</strong> <code>${escapeHtml2(report.presetSource)}</code></div>
       <div><strong>Timestamp:</strong> <code>${escapeHtml2(report.timestamp)}</code></div>
+      <div><strong>Generation Started:</strong> <code>${escapeHtml2(report.generationStartedAt || "n/a")}</code></div>
+      <div><strong>Generation Completed:</strong> <code>${escapeHtml2(report.generationCompletedAt || "n/a")}</code></div>
+      <div><strong>Elapsed:</strong> <code>${report.elapsedMs !== void 0 ? `${Math.round(report.elapsedMs / 100) / 10}s` : "n/a"}</code></div>
+      <div><strong>Timeout:</strong> <code>${report.timeoutMs === 0 ? "manual cancel only" : report.timeoutMs ? `${Math.round(report.timeoutMs / 1e3)}s` : "n/a"}</code></div>
       <div><strong>Raw Response Available:</strong> ${rawVal}</div>
+      ${report.rawResponsePreview ? `<div><strong>Raw Response Preview:</strong> <code>${escapeHtml2(report.rawResponsePreview)}</code></div>` : ""}
       <div><strong>JSON Parse:</strong> ${parseVal}</div>
+      ${report.parseFailureCategory ? `<div><strong>Parse Category:</strong> <code>${escapeHtml2(report.parseFailureCategory)}</code></div>` : ""}
       <div><strong>Schema Validation:</strong> ${valVal}</div>
+      ${report.schemaValidationIssues && report.schemaValidationIssues.length > 0 ? `<div><strong>Schema Issues:</strong> <code>${escapeHtml2(report.schemaValidationIssues.map((issue) => `${issue.path || "(root)"} ${issue.message}`).join(" | "))}</code></div>` : ""}
       <div><strong>HTML Render:</strong> ${renderVal}</div>
+      ${report.renderWarning ? `<div><strong>Render Warning:</strong> <code>${escapeHtml2(report.renderWarning)}</code></div>` : ""}
       <div><strong>Sanitizer Removed Content:</strong> ${sanitizerVal}</div>
       <div><strong>Fallback Card Used:</strong> ${fallbackVal}</div>
+      ${report.trackerPresetId ? `<div><strong>Tracker Preset ID:</strong> <code>${escapeHtml2(report.trackerPresetId)}</code></div>` : ""}
       <div><strong>Latest Tracker Message ID:</strong> <code>${escapeHtml2(report.messageId)}</code></div>
       <div><strong>Chat ID:</strong> <code>${escapeHtml2(report.chatId)}</code></div>
       <div><strong>HUD View Mode:</strong> <code>${escapeHtml2(report.hudView)}</code></div>
       <div><strong>Retained Tracker Count:</strong> <code>${report.retainedCount}</code></div>
+      ${report.lastError ? `<div><strong>Last Error:</strong> <code>${escapeHtml2(report.lastError)}</code></div>` : ""}
     </div>
   `;
 }
@@ -2054,7 +2160,7 @@ function findMessageHost(doc, tracker) {
 }
 function renderTrackerHtmlCard(tracker, state2) {
   const controls = state2.settings.showMessageButtons ? `<div class="sotl-message-controls">${iconButton("Regenerate", "card-regenerate", tracker.messageId || "")}${iconButton("Edit", "card-edit", tracker.messageId || "")}${iconButton("Hide", "card-hide", tracker.messageId || "")}${iconButton("Delete", "card-delete", tracker.messageId || "")}</div>` : "";
-  return controls + renderTrackerHtml(tracker, state2.activePreset, state2.settings.useSafeRenderer);
+  return controls + renderTrackerForState(tracker, state2).html;
 }
 function cleanupMessageCards(ctx) {
   const domApi = ctx.dom && typeof ctx.dom === "object" ? ctx.dom : null;
@@ -2203,6 +2309,17 @@ function renderCompactPanel(tracker, state2) {
       "</div>"
     ].join("\n");
   }
+  if (isCompact) {
+    const bodyContent2 = renderCompactTrackerForState(tracker, state2);
+    return [
+      '<div class="sotl-chat-panel">',
+      header,
+      '  <div class="sotl-chat-panel__body">',
+      bodyContent2,
+      "  </div>",
+      "</div>"
+    ].join("\n");
+  }
   let bodyContent = "";
   if (isCompact) {
     const castData = getFallbackField(tracker.data, ["cast", "present", "characters", "cast_present", "actors"]);
@@ -2221,7 +2338,7 @@ function renderCompactPanel(tracker, state2) {
   } else {
     bodyContent = `
       <div class="sotl-chat-panel__scroll-body">
-        ${renderTrackerHtml(tracker, state2.activePreset, state2.settings.useSafeRenderer)}
+        ${renderTrackerForState(tracker, state2).html}
       </div>
     `;
   }
@@ -3159,13 +3276,15 @@ function activateDrawer() {
 }
 function paint(status) {
   if (state && state.latestTracker && state.diagnostics.pipelineReport) {
-    const useSafe = state.settings.useSafeRenderer || false;
     try {
-      const html = renderTrackerHtml(state.latestTracker, state.activePreset, useSafe);
+      const render = renderTrackerForState(state.latestTracker, state);
       const report = state.diagnostics.pipelineReport;
-      report.fallbackUsed = html.includes("Safe Fallback") || html.includes("Loom Rendering Failed") || html.includes("sotl-pipeline-warning") || useSafe;
-      report.renderSuccess = !html.includes("Loom Rendering Failed") && !html.includes("Custom template failed");
-      report.sanitizerRemovedContent = html.includes("Purified HTML") || html.includes("sanitization") || html.includes("Purified");
+      report.fallbackUsed = render.fallbackUsed;
+      report.renderSuccess = render.success;
+      report.sanitizerRemovedContent = render.sanitizerRemovedContent;
+      report.renderWarning = render.warning;
+      report.renderError = render.error;
+      report.trackerPresetId = state.latestTracker.presetId;
     } catch {
     }
   }
@@ -3270,7 +3389,7 @@ function handleDrawerEvent(event) {
       const newPreset = {
         id: newId,
         name: "New Custom Loom",
-        version: "1.0.11",
+        version: "1.0.12",
         description: "User custom continuity tracker.",
         mode: "hybrid",
         schemaJson: {
@@ -3318,11 +3437,11 @@ function handleDrawerEvent(event) {
         ...editingPreset,
         id: newId,
         name: `${editingPreset.name} Copy`,
+        origin: "duplicated",
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
-      postToBackend(contextRef, { type: "save_preset", preset: newPreset });
-      postToBackend(contextRef, { type: "select_preset", presetId: newPreset.id });
+      postToBackend(contextRef, { type: "save_preset", preset: newPreset, makeActive: true });
       selectPresetForEditing(newPreset);
       lastToast = { level: "success", message: `Duplicated and active preset set to custom duplicate '${newPreset.name}'.` };
       rerender();
@@ -3464,6 +3583,7 @@ function handleDrawerEvent(event) {
             p.id = `${p.id}_custom_${Date.now()}`;
             p.name = `${p.name} (Custom Copy)`;
           }
+          p.origin = "imported";
           if (!p.createdAt) p.createdAt = (/* @__PURE__ */ new Date()).toISOString();
           p.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
           valid.push(p);
@@ -3474,12 +3594,11 @@ function handleDrawerEvent(event) {
           rerender();
           return;
         }
-        for (const p of valid) {
-          postToBackend(contextRef, { type: "save_preset", preset: p });
+        for (let i = 0; i < valid.length; i += 1) {
+          postToBackend(contextRef, { type: "save_preset", preset: valid[i], makeActive: i === 0 });
         }
         const first = valid[0];
         selectPresetForEditing(first);
-        postToBackend(contextRef, { type: "select_preset", presetId: first.id });
         if (textarea) textarea.value = "";
         const plural = valid.length > 1 ? `${valid.length} templates` : `"${first.name}"`;
         const failNote = failures.length > 0 ? ` (${failures.length} item(s) skipped \u2014 missing required fields)` : "";
@@ -3545,6 +3664,7 @@ function handleDrawerEvent(event) {
             p.id = `${p.id}_custom_${Date.now()}`;
             p.name = `${p.name} (Custom Copy)`;
           }
+          p.origin = "imported";
           if (!p.createdAt) p.createdAt = (/* @__PURE__ */ new Date()).toISOString();
           p.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
           valid.push(p);
@@ -3556,12 +3676,11 @@ function handleDrawerEvent(event) {
           target.value = "";
           return;
         }
-        for (const p of valid) {
-          if (contextRef) postToBackend(contextRef, { type: "save_preset", preset: p });
+        for (let i = 0; i < valid.length; i += 1) {
+          if (contextRef) postToBackend(contextRef, { type: "save_preset", preset: valid[i], makeActive: i === 0 });
         }
         const first = valid[0];
         selectPresetForEditing(first);
-        if (contextRef) postToBackend(contextRef, { type: "select_preset", presetId: first.id });
         const plural = valid.length > 1 ? `${valid.length} templates` : `"${first.name}"`;
         const failNote = failures.length > 0 ? ` (${failures.length} skipped \u2014 missing fields)` : "";
         setImportStatus({

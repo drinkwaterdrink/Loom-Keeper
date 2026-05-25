@@ -1,7 +1,7 @@
 import { describeInjectionStatus } from './injectionService.js';
 import { getCompanionMilestoneStatus } from './companionService.js';
 import { getEntityCaptureMilestoneStatus } from './entityCaptureService.js';
-import { LoomGenerationService, type GenerationTarget } from './generationService.js';
+import { LoomGenerationFailure, LoomGenerationService, type GenerationTarget } from './generationService.js';
 import {
   getActiveChat,
   getGlobalSpindle,
@@ -25,8 +25,7 @@ import type {
   LoomPipelineReport,
 } from '../shared/types.js';
 import { makeCompactSummary } from '../shared/renderer.js';
-import { validateAgainstSchema } from '../shared/validation.js';
-import { builtInPresets } from '../shared/defaults.js';
+import { getPresetOrigin, validateAgainstSchema } from '../shared/validation.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -49,6 +48,12 @@ function isAssistantMessage(message: { role?: string | undefined; content?: stri
 function messageChatId(message: LoomFrontendMessage): string | null {
   const record = message as Record<string, unknown>;
   return typeof record.chatId === 'string' && record.chatId.trim() ? record.chatId : null;
+}
+
+function previewRawOutput(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const compact = value.replace(/\s+/g, ' ').trim();
+  return compact.length > 700 ? `${compact.slice(0, 700)}...` : compact;
 }
 
 class StateOfTheLoomBackend {
@@ -130,7 +135,7 @@ class StateOfTheLoomBackend {
   }
 
   private async buildState(userId: string): Promise<LoomFrontendState> {
-    const [settings, permissions] = await Promise.all([
+    let [settings, permissions] = await Promise.all([
       this.settingsService.load(userId),
       getPermissionState(this.spindle).catch((error) => {
         this.recordRuntimeError('Permission lookup failed', error);
@@ -139,6 +144,9 @@ class StateOfTheLoomBackend {
     ]);
     const presets = await this.presetService.loadAll(userId);
     const activePreset = await this.presetService.resolve(userId, settings.activePresetId);
+    if (activePreset.id !== settings.activePresetId) {
+      settings = await this.settingsService.save(userId, { activePresetId: activePreset.id });
+    }
     const active = permissions.chats
       ? await getActiveChat(this.spindle, userId).catch((error) => {
         this.recordRuntimeError('Active chat lookup failed', error);
@@ -312,10 +320,13 @@ class StateOfTheLoomBackend {
       }
 
       if (message.type === 'save_preset') {
-        await this.presetService.save(userId, message.preset);
+        const savedPreset = await this.presetService.save(userId, message.preset);
+        if (message.makeActive) {
+          await this.settingsService.save(userId, { activePresetId: savedPreset.id });
+        }
         const state = await this.buildState(userId);
         await this.send(userId, { type: 'state', state });
-        await this.send(userId, { type: 'toast', level: 'success', message: `Template '${message.preset.name}' saved.` });
+        await this.send(userId, { type: 'toast', level: 'success', message: `Template '${savedPreset.name}' saved.` });
         return;
       }
 
@@ -419,18 +430,26 @@ class StateOfTheLoomBackend {
       });
 
       // Construct and record Pipeline Report
-      const presetSource = builtInPresets.some((bp) => bp.id === preset.id) ? 'built-in' : 'custom';
+      const presetSource = getPresetOrigin(preset);
+      const completedAt = result.generationCompletedAt ?? result.tracker.generatedAt;
       const report: LoomPipelineReport = {
         activePresetId: preset.id,
         presetName: preset.name,
         presetSource,
-        timestamp: new Date().toISOString(),
+        timestamp: completedAt,
+        generationStartedAt: result.generationStartedAt ?? result.tracker.generatedAt,
+        generationCompletedAt: completedAt,
+        elapsedMs: result.elapsedMs,
+        timeoutMs: result.timeoutMs ?? settings.sidecarGenerationTimeoutMs ?? 180000,
         rawResponseAvailable: Boolean(result.tracker.rawOutput),
+        rawResponsePreview: previewRawOutput(result.tracker.rawOutput),
         parseSuccess: true,
         schemaValidationSuccess: result.tracker.validation.ok,
+        schemaValidationIssues: result.tracker.validation.issues,
         renderSuccess: true, // Will be updated dynamically on frontend
         sanitizerRemovedContent: false, // Will be updated dynamically on frontend
         fallbackUsed: false, // Will be updated dynamically on frontend
+        trackerPresetId: result.tracker.presetId,
         messageId: target.message.id || 'latest',
         chatId: target.chatId,
         hudView: settings.hudDefaultView,
@@ -464,24 +483,32 @@ class StateOfTheLoomBackend {
       try {
         const state = await this.buildState(userId);
         const preset = state.activePreset;
-        const presetSource = builtInPresets.some((bp) => bp.id === preset.id) ? 'built-in' : 'custom';
+        const presetSource = getPresetOrigin(preset);
         const recentTrackers = chatId ? await this.trackerService.listForChat(userId, chatId).catch(() => []) : [];
+        const generationFailure = error instanceof LoomGenerationFailure ? error : null;
+        const rawOutput = generationFailure?.rawOutput;
         
         const report: LoomPipelineReport = {
           activePresetId: preset.id,
           presetName: preset.name,
           presetSource,
           timestamp: new Date().toISOString(),
-          rawResponseAvailable: false,
+          generationCompletedAt: new Date().toISOString(),
+          timeoutMs: state.settings.sidecarGenerationTimeoutMs ?? 180000,
+          rawResponseAvailable: Boolean(rawOutput),
+          rawResponsePreview: previewRawOutput(rawOutput),
           parseSuccess: false,
+          parseFailureCategory: generationFailure?.parseFailureCategory ?? 'unknown',
           schemaValidationSuccess: false,
           renderSuccess: false,
           sanitizerRemovedContent: false,
           fallbackUsed: true,
+          trackerPresetId: preset.id,
           messageId: messageId || 'latest',
           chatId: chatId || 'unknown',
           hudView: state.settings.hudDefaultView,
           retainedCount: recentTrackers.length,
+          lastError: message,
         };
         
         report.parseError = message;

@@ -1,5 +1,6 @@
 import { renderTrackerHtml } from '../shared/renderer.js';
 import type { LoomFrontendState } from '../shared/types.js';
+import { renderTrackerForState } from './rendering.js';
 import { renderPresetEditor } from './presetEditor.js';
 import { renderFeatureBreakdown } from './settingsPanel.js';
 import { badge, button, escapeHtml, type LoomUiStatus } from './ui.js';
@@ -53,7 +54,11 @@ function renderLatestTracker(state: LoomFrontendState): string {
   if (!state.latestTracker) {
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
   }
-  const html = renderTrackerHtml(state.latestTracker, state.activePreset, state.settings.useSafeRenderer);
+  const render = renderTrackerForState(state.latestTracker, state);
+  const html = render.html;
+  const renderWarning = render.warning
+    ? `<p class="sotl-note sotl-warning" style="margin-top: 8px;">${escapeHtml(render.warning)}</p>`
+    : '';
   const attachmentStatus = state.settings.renderInMessages && state.latestTracker.messageId
     ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">🔗 Attached to message card (${escapeHtml(state.latestTracker.messageId)})</p>`
     : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
@@ -61,6 +66,7 @@ function renderLatestTracker(state: LoomFrontendState): string {
   return [
     `<p class="sotl-note">${escapeHtml(state.latestTracker.compactSummary)}</p>`,
     `<div class="sotl-preview">${html}</div>`,
+    renderWarning,
     attachmentStatus,
     '<details class="sotl-details"><summary>Manual JSON edit</summary>',
     '<div class="sotl-fields" style="margin-top: 10px;">',
@@ -124,16 +130,26 @@ function renderPipelineReport(state: LoomFrontendState): string {
       <div><strong>Preset Name:</strong> ${escapeHtml(report.presetName)}</div>
       <div><strong>Preset Source:</strong> <code>${escapeHtml(report.presetSource)}</code></div>
       <div><strong>Timestamp:</strong> <code>${escapeHtml(report.timestamp)}</code></div>
+      <div><strong>Generation Started:</strong> <code>${escapeHtml(report.generationStartedAt || 'n/a')}</code></div>
+      <div><strong>Generation Completed:</strong> <code>${escapeHtml(report.generationCompletedAt || 'n/a')}</code></div>
+      <div><strong>Elapsed:</strong> <code>${report.elapsedMs !== undefined ? `${Math.round(report.elapsedMs / 100) / 10}s` : 'n/a'}</code></div>
+      <div><strong>Timeout:</strong> <code>${report.timeoutMs === 0 ? 'manual cancel only' : report.timeoutMs ? `${Math.round(report.timeoutMs / 1000)}s` : 'n/a'}</code></div>
       <div><strong>Raw Response Available:</strong> ${rawVal}</div>
+      ${report.rawResponsePreview ? `<div><strong>Raw Response Preview:</strong> <code>${escapeHtml(report.rawResponsePreview)}</code></div>` : ''}
       <div><strong>JSON Parse:</strong> ${parseVal}</div>
+      ${report.parseFailureCategory ? `<div><strong>Parse Category:</strong> <code>${escapeHtml(report.parseFailureCategory)}</code></div>` : ''}
       <div><strong>Schema Validation:</strong> ${valVal}</div>
+      ${report.schemaValidationIssues && report.schemaValidationIssues.length > 0 ? `<div><strong>Schema Issues:</strong> <code>${escapeHtml(report.schemaValidationIssues.map((issue) => `${issue.path || '(root)'} ${issue.message}`).join(' | '))}</code></div>` : ''}
       <div><strong>HTML Render:</strong> ${renderVal}</div>
+      ${report.renderWarning ? `<div><strong>Render Warning:</strong> <code>${escapeHtml(report.renderWarning)}</code></div>` : ''}
       <div><strong>Sanitizer Removed Content:</strong> ${sanitizerVal}</div>
       <div><strong>Fallback Card Used:</strong> ${fallbackVal}</div>
+      ${report.trackerPresetId ? `<div><strong>Tracker Preset ID:</strong> <code>${escapeHtml(report.trackerPresetId)}</code></div>` : ''}
       <div><strong>Latest Tracker Message ID:</strong> <code>${escapeHtml(report.messageId)}</code></div>
       <div><strong>Chat ID:</strong> <code>${escapeHtml(report.chatId)}</code></div>
       <div><strong>HUD View Mode:</strong> <code>${escapeHtml(report.hudView)}</code></div>
       <div><strong>Retained Tracker Count:</strong> <code>${report.retainedCount}</code></div>
+      ${report.lastError ? `<div><strong>Last Error:</strong> <code>${escapeHtml(report.lastError)}</code></div>` : ''}
     </div>
   `;
 }

@@ -6,6 +6,7 @@ import type {
   LoomChatMessage,
   LoomConnectionProfile,
   LoomGenerationStatus,
+  LoomParseFailureCategory,
   LoomPermissionState,
   LoomPreset,
   LoomSettings,
@@ -30,6 +31,30 @@ export interface GenerationTarget {
 export interface GenerationResult {
   tracker: LoomTrackerState;
   cleanedContent?: string | undefined;
+  generationStartedAt?: string | undefined;
+  generationCompletedAt?: string | undefined;
+  elapsedMs?: number | undefined;
+  timeoutMs?: number | undefined;
+}
+
+export class LoomGenerationFailure extends Error {
+  rawOutput?: string | undefined;
+  parseFailureCategory?: LoomParseFailureCategory | undefined;
+
+  constructor(message: string, options: { rawOutput?: string | undefined; parseFailureCategory?: LoomParseFailureCategory | undefined } = {}) {
+    super(message);
+    this.name = 'LoomGenerationFailure';
+    this.rawOutput = options.rawOutput;
+    this.parseFailureCategory = options.parseFailureCategory;
+  }
+}
+
+function classifyParseFailure(raw: string, message: string): LoomParseFailureCategory {
+  if (!raw || !raw.trim()) return 'empty';
+  if (/```/.test(raw)) return 'fenced_markdown';
+  if (/required field|schema/i.test(message)) return 'schema_invalid';
+  if (/json|object|brace|unexpected|closed/i.test(message)) return 'invalid_json';
+  return 'unknown';
 }
 
 export class LoomGenerationService {
@@ -165,6 +190,10 @@ export class LoomGenerationService {
     return {
       tracker,
       cleanedContent: parse.cleanedContent,
+      generationStartedAt: tracker.generatedAt,
+      generationCompletedAt: tracker.generatedAt,
+      elapsedMs: 0,
+      timeoutMs: 0,
     };
   }
 
@@ -185,10 +214,12 @@ export class LoomGenerationService {
     this.runningKeys.add(key);
 
     const startTime = Date.now();
+    const generationStartedAt = new Date(startTime).toISOString();
     this.status = { running: true, message: 'Generating tracker... 0s' };
 
     let elapsedTimer: any;
     let timeoutTimer: any;
+    let timeoutMs = 180000;
 
     try {
       const prompt = buildTrackerPrompt({
@@ -200,7 +231,7 @@ export class LoomGenerationService {
       });
 
       // 1. Configurable Timeout setup
-      const timeoutMs = typeof input.settings.sidecarGenerationTimeoutMs === 'number'
+      timeoutMs = typeof input.settings.sidecarGenerationTimeoutMs === 'number'
         ? input.settings.sidecarGenerationTimeoutMs
         : 180000; // Default 180 seconds (3 minutes)
 
@@ -249,8 +280,18 @@ export class LoomGenerationService {
       if (elapsedTimer) clearInterval(elapsedTimer);
       if (timeoutTimer) clearTimeout(timeoutTimer);
 
-      const data = parseJsonObject(raw);
+      let data: Record<string, unknown>;
+      try {
+        data = parseJsonObject(raw);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new LoomGenerationFailure(message, {
+          rawOutput: raw,
+          parseFailureCategory: classifyParseFailure(raw, message),
+        });
+      }
       const validation = validateAgainstSchema(data, input.preset.schemaJson);
+      const generationCompletedAt = new Date().toISOString();
       const tracker: LoomTrackerState = {
         version: LOOM_VERSION,
         schemaVersion: String(data.schemaVersion || LOOM_SCHEMA_VERSION),
@@ -266,7 +307,13 @@ export class LoomGenerationService {
         validation,
         rawOutput: raw,
       };
-      return { tracker };
+      return {
+        tracker,
+        generationStartedAt,
+        generationCompletedAt,
+        elapsedMs: Date.now() - startTime,
+        timeoutMs,
+      };
     } finally {
       if (elapsedTimer) clearInterval(elapsedTimer);
       if (timeoutTimer) clearTimeout(timeoutTimer);

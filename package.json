@@ -1,15 +1,17 @@
 {
   "name": "state-of-the-loom",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "type": "module",
   "private": true,
   "scripts": {
     "check": "tsc --noEmit",
     "build": "npm run build:backend && npm run build:frontend",
-    "build:backend": "esbuild ./src/backend.ts --bundle --format=esm --platform=neutral --target=es2020 --outfile=dist/backend.js",
-    "build:frontend": "esbuild ./src/frontend.ts --bundle --format=esm --platform=browser --target=es2020 --outfile=dist/frontend.js",
+    "build:backend": "node ./scripts/build.mjs backend",
+    "build:frontend": "node ./scripts/build.mjs frontend",
     "smoke:storage": "node ./scripts/storage-recovery-smoke.mjs",
-    "smoke:manual-generate": "node ./scripts/manual-generate-smoke.mjs"
+    "smoke:manual-generate": "node ./scripts/manual-generate-smoke.mjs",
+    "smoke:custom-preset": "node ./scripts/custom-preset-smoke.mjs",
+    "smoke:renderer": "node ./scripts/renderer-smoke.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.0",

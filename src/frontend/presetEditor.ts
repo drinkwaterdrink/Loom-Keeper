@@ -1,11 +1,12 @@
-import type { LoomPreset, LoomFrontendState } from '../shared/types.js';
+import type { LoomFrontendState, LoomPreset, LoomRenderReport } from '../shared/types.js';
 import { escapeHtml, button } from './ui.js';
 import { validateTemplateSafety, checkPresetReadiness } from '../shared/validation.js';
-import { renderTrackerHtml } from '../shared/renderer.js';
+import { renderTrackerHtmlDetailed } from '../shared/renderer.js';
 import { builtInPresets } from '../shared/defaults.js';
 
 export let editingPreset: LoomPreset | null = null;
 export let lastPreviewHtml: string = '';
+export let lastPreviewReport: LoomRenderReport | null = null;
 export let lastSanitizerWarnings: string[] = [];
 export let lastJsonParseError: string | null = null;
 export let lastImportStatus: { ok: boolean; message: string; presetName?: string; presetId?: string } | null = null;
@@ -21,6 +22,7 @@ export function setImportStatus(status: { ok: boolean; message: string; presetNa
 export function selectPresetForEditing(preset: LoomPreset): void {
   editingPreset = JSON.parse(JSON.stringify(preset));
   lastPreviewHtml = '';
+  lastPreviewReport = null;
   lastSanitizerWarnings = [];
   lastJsonParseError = null;
 }
@@ -79,7 +81,8 @@ export function runPreview(): void {
       validation: { ok: true, issues: [] },
     };
     
-    lastPreviewHtml = renderTrackerHtml(mockTracker, editingPreset);
+    lastPreviewReport = renderTrackerHtmlDetailed(mockTracker, editingPreset);
+    lastPreviewHtml = lastPreviewReport.html;
     lastJsonParseError = null;
   } catch (err) {
     lastJsonParseError = `Preview failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -265,6 +268,10 @@ export function renderPresetEditor(state: LoomFrontendState): string {
           '  </ul>',
           '</div>',
         ].join('\n')
+      : '',
+
+    lastPreviewReport
+      ? `<p class="sotl-note" style="margin-bottom: 8px;">Preview render: ${lastPreviewReport.success ? 'template rendered' : 'fallback used'}${lastPreviewReport.warning ? ` - ${escapeHtml(lastPreviewReport.warning)}` : ''}</p>`
       : '',
 
     lastPreviewHtml

@@ -1,6 +1,6 @@
 import type { LoomPreset, LoomSettings } from './types.js';
 
-export const LOOM_VERSION = '1.0.11';
+export const LOOM_VERSION = '1.0.12';
 export const LOOM_SCHEMA_VERSION = '1';
 export const SLIM_SCENE_PRESET_ID = 'slim_scene_loom';
 export const STORAGE_KEYS = {
@@ -677,7 +677,7 @@ export const fullContinuityLedgerPreset: LoomPreset = {
 export const chronoscopeOccultLedgerPreset: LoomPreset = {
   id: 'chronoscope_occult_ledger',
   name: 'Chronoscope Occult Ledger',
-  version: '1.0.11',
+  version: '1.0.12',
   description: 'A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.',
   mode: 'hybrid',
   schemaJson: {

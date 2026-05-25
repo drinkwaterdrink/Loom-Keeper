@@ -1,7 +1,7 @@
 import type { LoomBackendMessage, LoomFrontendMessage, LoomFrontendState, LoomSettings } from '../shared/types.js';
 import { renderDrawer } from './drawer.js';
 import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback } from './messageCards.js';
-import { renderTrackerHtml } from '../shared/renderer.js';
+import { renderTrackerForState } from './rendering.js';
 import { renderSettingsPanel } from './settingsPanel.js';
 import { loomStyles } from './styles.js';
 import type { LoomUiStatus } from './ui.js';
@@ -255,13 +255,15 @@ function activateDrawer(): void {
 
 function paint(status: LoomUiStatus): void {
   if (state && state.latestTracker && state.diagnostics.pipelineReport) {
-    const useSafe = state.settings.useSafeRenderer || false;
     try {
-      const html = renderTrackerHtml(state.latestTracker, state.activePreset, useSafe);
+      const render = renderTrackerForState(state.latestTracker, state);
       const report = state.diagnostics.pipelineReport;
-      report.fallbackUsed = html.includes('Safe Fallback') || html.includes('Loom Rendering Failed') || html.includes('sotl-pipeline-warning') || useSafe;
-      report.renderSuccess = !html.includes('Loom Rendering Failed') && !html.includes('Custom template failed');
-      report.sanitizerRemovedContent = html.includes('Purified HTML') || html.includes('sanitization') || html.includes('Purified');
+      report.fallbackUsed = render.fallbackUsed;
+      report.renderSuccess = render.success;
+      report.sanitizerRemovedContent = render.sanitizerRemovedContent;
+      report.renderWarning = render.warning;
+      report.renderError = render.error;
+      report.trackerPresetId = state.latestTracker.presetId;
     } catch {
       // Ignored
     }
@@ -378,7 +380,7 @@ function handleDrawerEvent(event: Event): void {
       const newPreset = {
         id: newId,
         name: 'New Custom Loom',
-        version: '1.0.11',
+        version: '1.0.12',
         description: 'User custom continuity tracker.',
         mode: 'hybrid' as const,
         schemaJson: {
@@ -427,12 +429,12 @@ function handleDrawerEvent(event: Event): void {
         ...editingPreset,
         id: newId,
         name: `${editingPreset.name} Copy`,
+        origin: 'duplicated' as const,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      // Immediately save to backend, make active, and select for editing
-      postToBackend(contextRef, { type: 'save_preset', preset: newPreset });
-      postToBackend(contextRef, { type: 'select_preset', presetId: newPreset.id });
+      // Save and activate atomically so generation sees the same preset as the UI.
+      postToBackend(contextRef, { type: 'save_preset', preset: newPreset, makeActive: true });
       selectPresetForEditing(newPreset);
       lastToast = { level: 'success', message: `Duplicated and active preset set to custom duplicate '${newPreset.name}'.` };
       rerender();
@@ -582,6 +584,7 @@ function handleDrawerEvent(event: Event): void {
             p.id = `${p.id}_custom_${Date.now()}`;
             p.name = `${p.name} (Custom Copy)`;
           }
+          p.origin = 'imported';
           // Ensure required timestamps exist
           if (!p.createdAt) p.createdAt = new Date().toISOString();
           p.updatedAt = new Date().toISOString();
@@ -594,13 +597,11 @@ function handleDrawerEvent(event: Event): void {
           return;
         }
         // Save all valid presets; auto-select the first one
-        for (const p of valid) {
-          postToBackend(contextRef, { type: 'save_preset', preset: p });
+        for (let i = 0; i < valid.length; i += 1) {
+          postToBackend(contextRef, { type: 'save_preset', preset: valid[i], makeActive: i === 0 });
         }
         const first = valid[0];
         selectPresetForEditing(first);
-        // Also select it as the active preset so it appears in the main dropdown immediately
-        postToBackend(contextRef, { type: 'select_preset', presetId: first.id });
         if (textarea) textarea.value = '';
         const plural = valid.length > 1 ? `${valid.length} templates` : `"${first.name}"`;
         const failNote = failures.length > 0 ? ` (${failures.length} item(s) skipped — missing required fields)` : '';
@@ -671,6 +672,7 @@ function handleDrawerEvent(event: Event): void {
             p.id = `${p.id}_custom_${Date.now()}`;
             p.name = `${p.name} (Custom Copy)`;
           }
+          p.origin = 'imported';
           if (!p.createdAt) p.createdAt = new Date().toISOString();
           p.updatedAt = new Date().toISOString();
           valid.push(p);
@@ -682,12 +684,11 @@ function handleDrawerEvent(event: Event): void {
           target.value = '';
           return;
         }
-        for (const p of valid) {
-          if (contextRef) postToBackend(contextRef, { type: 'save_preset', preset: p });
+        for (let i = 0; i < valid.length; i += 1) {
+          if (contextRef) postToBackend(contextRef, { type: 'save_preset', preset: valid[i], makeActive: i === 0 });
         }
         const first = valid[0];
         selectPresetForEditing(first);
-        if (contextRef) postToBackend(contextRef, { type: 'select_preset', presetId: first.id });
         const plural = valid.length > 1 ? `${valid.length} templates` : `"${first.name}"`;
         const failNote = failures.length > 0 ? ` (${failures.length} skipped — missing fields)` : '';
         setImportStatus({

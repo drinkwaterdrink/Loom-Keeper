@@ -2,6 +2,8 @@ export type LoomPlacement = 'top' | 'bottom' | 'pinned' | 'drawer' | 'hidden' | 
 export type LoomDensity = 'compact' | 'normal' | 'expanded';
 export type LoomTheme = 'system' | 'glass' | 'paper' | 'terminal' | 'minimal';
 export type LoomTrackerSource = 'passive_extract' | 'sidecar_generate' | 'manual_edit' | 'repair';
+export type LoomPresetOrigin = 'built-in' | 'custom' | 'imported' | 'duplicated';
+export type LoomParseFailureCategory = 'empty' | 'invalid_json' | 'fenced_markdown' | 'schema_invalid' | 'missing_required_fields' | 'unknown';
 
 export interface LoomValidationIssue {
   path: string;
@@ -36,6 +38,7 @@ export interface LoomPreset {
   name: string;
   version: string;
   description: string;
+  origin?: LoomPresetOrigin | undefined;
   mode: 'passive_extract' | 'sidecar_generate' | 'hybrid';
   schemaJson: Record<string, unknown>;
   htmlTemplate: string;
@@ -106,24 +109,44 @@ export interface LoomGenerationStatus {
   disabledReason?: string | undefined;
 }
 
+export interface LoomRenderReport {
+  html: string;
+  success: boolean;
+  fallbackUsed: boolean;
+  sanitizerRemovedContent: boolean;
+  warning?: string | undefined;
+  error?: string | undefined;
+  missingFields: string[];
+}
+
 export interface LoomPipelineReport {
   activePresetId: string;
   presetName: string;
-  presetSource: string;
+  presetSource: LoomPresetOrigin | string;
   timestamp: string;
+  generationStartedAt?: string | undefined;
+  generationCompletedAt?: string | undefined;
+  elapsedMs?: number | undefined;
+  timeoutMs?: number | undefined;
   rawResponseAvailable: boolean;
+  rawResponsePreview?: string | undefined;
   parseSuccess: boolean;
-  parseError?: string;
+  parseError?: string | undefined;
+  parseFailureCategory?: LoomParseFailureCategory | undefined;
   schemaValidationSuccess: boolean;
-  schemaValidationError?: string;
+  schemaValidationError?: string | undefined;
+  schemaValidationIssues?: LoomValidationIssue[] | undefined;
   renderSuccess: boolean;
-  renderError?: string;
+  renderError?: string | undefined;
+  renderWarning?: string | undefined;
   sanitizerRemovedContent: boolean;
   fallbackUsed: boolean;
+  trackerPresetId?: string | undefined;
   messageId: string;
   chatId: string;
   hudView: string;
   retainedCount: number;
+  lastError?: string | undefined;
 }
 
 export interface LoomDiagnostics {
@@ -163,7 +186,7 @@ export type LoomFrontendMessage =
   | { type: 'hide_tracker'; chatId: string; messageId?: string | undefined; hidden: boolean }
   | { type: 'reset_storage' }
   | { type: 'export_diagnostics' }
-  | { type: 'save_preset'; preset: LoomPreset }
+  | { type: 'save_preset'; preset: LoomPreset; makeActive?: boolean | undefined }
   | { type: 'delete_preset'; presetId: string }
   | { type: 'reset_presets' }
   | { type: 'cancel_generation' };

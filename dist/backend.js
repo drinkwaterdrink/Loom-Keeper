@@ -16,7 +16,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.11";
+var LOOM_VERSION = "1.0.12";
 var LOOM_SCHEMA_VERSION = "1";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
 var STORAGE_KEYS = {
@@ -678,7 +678,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.11",
+  version: "1.0.12",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -1059,12 +1059,26 @@ function buildTrackerPrompt(input) {
 
 // src/shared/renderer.ts
 function makeCompactSummary(data) {
-  const scene = String(data.sceneTitle || data.location || "Current scene");
-  const delta = String(data.delta || data.activeThread || "").trim();
+  const scene = String(data.sceneTitle || data.location || data.title || data.name || "Current scene");
+  const delta = String(data.delta || data.activeThread || data.summary || data.description || "").trim();
   return delta ? `${scene}: ${delta}` : scene;
 }
 
 // src/shared/validation.ts
+var VALID_ORIGINS = /* @__PURE__ */ new Set(["built-in", "custom", "imported", "duplicated"]);
+function normalizePresetId(value, fallbackPrefix = "custom_loom") {
+  const raw = String(value || "").trim();
+  const slug = raw.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "").slice(0, 96);
+  return slug || `${fallbackPrefix}_${Date.now()}`;
+}
+function isBuiltInPresetId(presetId) {
+  return builtInPresets.some((preset) => preset.id === presetId);
+}
+function getPresetOrigin(preset) {
+  if (isBuiltInPresetId(preset.id)) return "built-in";
+  if (preset.origin && VALID_ORIGINS.has(preset.origin) && preset.origin !== "built-in") return preset.origin;
+  return "custom";
+}
 function valueType(value) {
   if (Array.isArray(value)) return "array";
   if (value === null) return "null";
@@ -1132,11 +1146,14 @@ function validateAgainstSchema(data, schema) {
 }
 function normalizePreset(preset) {
   const now2 = (/* @__PURE__ */ new Date()).toISOString();
+  const id = normalizePresetId(preset.id || `custom_loom_${Date.now()}`);
+  const origin = preset.origin && VALID_ORIGINS.has(preset.origin) ? preset.origin : "custom";
   return {
-    id: String(preset.id || `custom_loom_${Date.now()}`),
+    id,
     name: String(preset.name || "Custom Loom Template"),
-    version: String(preset.version || "1.0.11"),
+    version: String(preset.version || LOOM_VERSION),
     description: String(preset.description || ""),
+    origin: id && isBuiltInPresetId(id) ? "built-in" : origin === "built-in" ? "custom" : origin,
     mode: preset.mode === "passive_extract" || preset.mode === "sidecar_generate" || preset.mode === "hybrid" ? preset.mode : "hybrid",
     schemaJson: preset.schemaJson && typeof preset.schemaJson === "object" && !Array.isArray(preset.schemaJson) ? preset.schemaJson : {
       type: "object",
@@ -1391,6 +1408,21 @@ async function updateMessageContent(spindle2, chatId, messageId, content, userId
 }
 
 // src/backend/generationService.ts
+var LoomGenerationFailure = class extends Error {
+  constructor(message, options = {}) {
+    super(message);
+    this.name = "LoomGenerationFailure";
+    this.rawOutput = options.rawOutput;
+    this.parseFailureCategory = options.parseFailureCategory;
+  }
+};
+function classifyParseFailure(raw, message) {
+  if (!raw || !raw.trim()) return "empty";
+  if (/```/.test(raw)) return "fenced_markdown";
+  if (/required field|schema/i.test(message)) return "schema_invalid";
+  if (/json|object|brace|unexpected|closed/i.test(message)) return "invalid_json";
+  return "unknown";
+}
 var LoomGenerationService = class {
   constructor(spindle2) {
     this.spindle = spindle2;
@@ -1488,7 +1520,11 @@ var LoomGenerationService = class {
     };
     return {
       tracker,
-      cleanedContent: parse.cleanedContent
+      cleanedContent: parse.cleanedContent,
+      generationStartedAt: tracker.generatedAt,
+      generationCompletedAt: tracker.generatedAt,
+      elapsedMs: 0,
+      timeoutMs: 0
     };
   }
   async generateSidecar(input) {
@@ -1497,9 +1533,11 @@ var LoomGenerationService = class {
     if (this.runningKeys.has(key)) throw new Error("Generation already running for this message.");
     this.runningKeys.add(key);
     const startTime = Date.now();
+    const generationStartedAt = new Date(startTime).toISOString();
     this.status = { running: true, message: "Generating tracker... 0s" };
     let elapsedTimer;
     let timeoutTimer;
+    let timeoutMs = 18e4;
     try {
       const prompt = buildTrackerPrompt({
         preset: input.preset,
@@ -1508,7 +1546,7 @@ var LoomGenerationService = class {
         previousSummaries: input.previousSummaries,
         recentContext: input.recentContext
       });
-      const timeoutMs = typeof input.settings.sidecarGenerationTimeoutMs === "number" ? input.settings.sidecarGenerationTimeoutMs : 18e4;
+      timeoutMs = typeof input.settings.sidecarGenerationTimeoutMs === "number" ? input.settings.sidecarGenerationTimeoutMs : 18e4;
       const timeoutPromise = new Promise((_, reject) => {
         if (timeoutMs > 0) {
           timeoutTimer = setTimeout(() => {
@@ -1545,8 +1583,18 @@ var LoomGenerationService = class {
       ]);
       if (elapsedTimer) clearInterval(elapsedTimer);
       if (timeoutTimer) clearTimeout(timeoutTimer);
-      const data = parseJsonObject(raw);
+      let data;
+      try {
+        data = parseJsonObject(raw);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new LoomGenerationFailure(message, {
+          rawOutput: raw,
+          parseFailureCategory: classifyParseFailure(raw, message)
+        });
+      }
       const validation = validateAgainstSchema(data, input.preset.schemaJson);
+      const generationCompletedAt = (/* @__PURE__ */ new Date()).toISOString();
       const tracker = {
         version: LOOM_VERSION,
         schemaVersion: String(data.schemaVersion || LOOM_SCHEMA_VERSION),
@@ -1562,7 +1610,13 @@ var LoomGenerationService = class {
         validation,
         rawOutput: raw
       };
-      return { tracker };
+      return {
+        tracker,
+        generationStartedAt,
+        generationCompletedAt,
+        elapsedMs: Date.now() - startTime,
+        timeoutMs
+      };
     } finally {
       if (elapsedTimer) clearInterval(elapsedTimer);
       if (timeoutTimer) clearTimeout(timeoutTimer);
@@ -1616,6 +1670,9 @@ async function getJsonWithRecovery(spindle2, key, userId, fallback, onWarning) {
 function isPreset(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value) && typeof value.id === "string" && typeof value.name === "string" && typeof value.htmlTemplate === "string";
 }
+function withBuiltInOrigin(preset) {
+  return { ...preset, origin: "built-in" };
+}
 var LoomPresetService = class {
   constructor(spindle2, onStorageWarning) {
     this.spindle = spindle2;
@@ -1629,10 +1686,10 @@ var LoomPresetService = class {
       [],
       this.onStorageWarning
     );
-    const custom = Array.isArray(stored) ? stored.filter(isPreset).map(normalizePreset) : [];
+    const custom = Array.isArray(stored) ? stored.filter(isPreset).map((preset) => this.normalizeCustomPreset(preset)) : [];
     const customIds = new Set(custom.map((preset) => preset.id));
     return [
-      ...builtInPresets.filter((preset) => !customIds.has(preset.id)),
+      ...builtInPresets.filter((preset) => !customIds.has(preset.id)).map(withBuiltInOrigin),
       ...custom
     ];
   }
@@ -1645,10 +1702,7 @@ var LoomPresetService = class {
     return this.loadAll(userId);
   }
   async save(userId, preset) {
-    if (builtInPresets.some((p) => p.id === preset.id)) {
-      throw new Error(`Cannot modify built-in preset: ${preset.id}`);
-    }
-    const normalized = normalizePreset(preset);
+    const normalized = this.normalizeCustomPreset(preset);
     const stored = await getJsonWithRecovery(
       this.spindle,
       STORAGE_KEYS.presets,
@@ -1656,7 +1710,7 @@ var LoomPresetService = class {
       [],
       this.onStorageWarning
     );
-    const custom = Array.isArray(stored) ? stored.filter(isPreset).map(normalizePreset) : [];
+    const custom = Array.isArray(stored) ? stored.filter(isPreset).map((item) => this.normalizeCustomPreset(item)) : [];
     const existingIndex = custom.findIndex((p) => p.id === normalized.id);
     if (existingIndex >= 0) {
       custom[existingIndex] = normalized;
@@ -1664,7 +1718,7 @@ var LoomPresetService = class {
       custom.push(normalized);
     }
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, custom);
-    return this.loadAll(userId);
+    return normalized;
   }
   async delete(userId, presetId) {
     if (builtInPresets.some((p) => p.id === presetId)) {
@@ -1681,6 +1735,16 @@ var LoomPresetService = class {
     const filtered = custom.filter((p) => p.id !== presetId);
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.presets, userId, filtered);
     return this.loadAll(userId);
+  }
+  normalizeCustomPreset(preset) {
+    const normalized = normalizePreset(preset);
+    let id = normalizePresetId(normalized.id);
+    if (isBuiltInPresetId(id)) id = `${id}_custom`;
+    return {
+      ...normalized,
+      id,
+      origin: getPresetOrigin({ ...normalized, id })
+    };
   }
 };
 
@@ -1879,6 +1943,11 @@ function messageChatId(message) {
   const record = message;
   return typeof record.chatId === "string" && record.chatId.trim() ? record.chatId : null;
 }
+function previewRawOutput(value) {
+  if (!value) return void 0;
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact.length > 700 ? `${compact.slice(0, 700)}...` : compact;
+}
 var StateOfTheLoomBackend = class {
   constructor(spindle2) {
     this.spindle = spindle2;
@@ -1945,7 +2014,7 @@ var StateOfTheLoomBackend = class {
     await sendFrontend(this.spindle, userId, message);
   }
   async buildState(userId) {
-    const [settings, permissions] = await Promise.all([
+    let [settings, permissions] = await Promise.all([
       this.settingsService.load(userId),
       getPermissionState(this.spindle).catch((error) => {
         this.recordRuntimeError("Permission lookup failed", error);
@@ -1954,6 +2023,9 @@ var StateOfTheLoomBackend = class {
     ]);
     const presets = await this.presetService.loadAll(userId);
     const activePreset = await this.presetService.resolve(userId, settings.activePresetId);
+    if (activePreset.id !== settings.activePresetId) {
+      settings = await this.settingsService.save(userId, { activePresetId: activePreset.id });
+    }
     const active = permissions.chats ? await getActiveChat(this.spindle, userId).catch((error) => {
       this.recordRuntimeError("Active chat lookup failed", error);
       return { chat: { id: null, name: "Active chat unavailable" }, messages: [] };
@@ -2109,10 +2181,13 @@ var StateOfTheLoomBackend = class {
         return;
       }
       if (message.type === "save_preset") {
-        await this.presetService.save(userId, message.preset);
+        const savedPreset = await this.presetService.save(userId, message.preset);
+        if (message.makeActive) {
+          await this.settingsService.save(userId, { activePresetId: savedPreset.id });
+        }
         const state = await this.buildState(userId);
         await this.send(userId, { type: "state", state });
-        await this.send(userId, { type: "toast", level: "success", message: `Template '${message.preset.name}' saved.` });
+        await this.send(userId, { type: "toast", level: "success", message: `Template '${savedPreset.name}' saved.` });
         return;
       }
       if (message.type === "delete_preset") {
@@ -2196,21 +2271,29 @@ var StateOfTheLoomBackend = class {
         messageId: target.message.id,
         cleanedContent: result.cleanedContent
       });
-      const presetSource = builtInPresets.some((bp) => bp.id === preset.id) ? "built-in" : "custom";
+      const presetSource = getPresetOrigin(preset);
+      const completedAt = result.generationCompletedAt ?? result.tracker.generatedAt;
       const report = {
         activePresetId: preset.id,
         presetName: preset.name,
         presetSource,
-        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        timestamp: completedAt,
+        generationStartedAt: result.generationStartedAt ?? result.tracker.generatedAt,
+        generationCompletedAt: completedAt,
+        elapsedMs: result.elapsedMs,
+        timeoutMs: result.timeoutMs ?? settings.sidecarGenerationTimeoutMs ?? 18e4,
         rawResponseAvailable: Boolean(result.tracker.rawOutput),
+        rawResponsePreview: previewRawOutput(result.tracker.rawOutput),
         parseSuccess: true,
         schemaValidationSuccess: result.tracker.validation.ok,
+        schemaValidationIssues: result.tracker.validation.issues,
         renderSuccess: true,
         // Will be updated dynamically on frontend
         sanitizerRemovedContent: false,
         // Will be updated dynamically on frontend
         fallbackUsed: false,
         // Will be updated dynamically on frontend
+        trackerPresetId: result.tracker.presetId,
         messageId: target.message.id || "latest",
         chatId: target.chatId,
         hudView: settings.hudDefaultView,
@@ -2237,23 +2320,31 @@ var StateOfTheLoomBackend = class {
       try {
         const state = await this.buildState(userId);
         const preset = state.activePreset;
-        const presetSource = builtInPresets.some((bp) => bp.id === preset.id) ? "built-in" : "custom";
+        const presetSource = getPresetOrigin(preset);
         const recentTrackers = chatId ? await this.trackerService.listForChat(userId, chatId).catch(() => []) : [];
+        const generationFailure = error instanceof LoomGenerationFailure ? error : null;
+        const rawOutput = generationFailure?.rawOutput;
         const report = {
           activePresetId: preset.id,
           presetName: preset.name,
           presetSource,
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          rawResponseAvailable: false,
+          generationCompletedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          timeoutMs: state.settings.sidecarGenerationTimeoutMs ?? 18e4,
+          rawResponseAvailable: Boolean(rawOutput),
+          rawResponsePreview: previewRawOutput(rawOutput),
           parseSuccess: false,
+          parseFailureCategory: generationFailure?.parseFailureCategory ?? "unknown",
           schemaValidationSuccess: false,
           renderSuccess: false,
           sanitizerRemovedContent: false,
           fallbackUsed: true,
+          trackerPresetId: preset.id,
           messageId: messageId || "latest",
           chatId: chatId || "unknown",
           hudView: state.settings.hudDefaultView,
-          retainedCount: recentTrackers.length
+          retainedCount: recentTrackers.length,
+          lastError: message
         };
         report.parseError = message;
         this.diagnostics.pipelineReport = report;
