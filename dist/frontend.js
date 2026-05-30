@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.14";
+var LOOM_VERSION = "1.0.15";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -7,7 +7,7 @@ var now = "2026-01-01T00:00:00.000Z";
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.14",
+  version: "1.0.15",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -1011,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.14",
+  version: "1.0.15",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -2120,7 +2120,15 @@ function button(label, action, options = {}) {
   return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml2(action)}"${primary}${disabled}${title}${style}>${escapeHtml2(label)}</button>`;
 }
 function iconButton(label, action, id) {
-  return `<button class="sotl-icon-button" type="button" data-sotl-action="${escapeHtml2(action)}" data-sotl-message-id="${escapeHtml2(id)}" title="${escapeHtml2(label)}" aria-label="${escapeHtml2(label)}">${escapeHtml2(label.slice(0, 1))}</button>`;
+  const icons = {
+    Regenerate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.7 6.3A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.8-4.3L13 11h8V3l-3.3 3.3Z" fill="currentColor"/></svg>',
+    Edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.7V20h3.3L18.6 9.7l-3.3-3.3L5 16.7Zm15-9.1c.4-.4.4-1 0-1.4L17.8 4c-.4-.4-1-.4-1.4 0l-1.1 1.1 3.3 3.3L20 7.6Z" fill="currentColor"/></svg>',
+    Hide: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.3 2 18.7 18.7-1.3 1.3-3-3A12.8 12.8 0 0 1 12 20C6.5 20 2.2 16.5 1 12c.5-1.8 1.6-3.4 3-4.7L2 3.3 3.3 2Zm6.2 6.2 1.6 1.6A2.5 2.5 0 0 1 14.2 13l1.6 1.6A4.5 4.5 0 0 0 9.5 8.2ZM12 4c5.5 0 9.8 3.5 11 8a9.6 9.6 0 0 1-2.4 4.1l-3.1-3.1A5.5 5.5 0 0 0 11 6.1L8.7 3.8c1-.2 2.1.2 3.3.2Z" fill="currentColor"/></svg>',
+    Show: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4C6.5 4 2.2 7.5 1 12c1.2 4.5 5.5 8 11 8s9.8-3.5 11-8c-1.2-4.5-5.5-8-11-8Zm0 13a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.2a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6Z" fill="currentColor"/></svg>',
+    Delete: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-1.1 0-2-.9-2-2V8h14v11c0 1.1-.9 2-2 2H7ZM9 4h6l1 2h4v2H4V6h4l1-2Zm0 7v7h2v-7H9Zm4 0v7h2v-7h-2Z" fill="currentColor"/></svg>'
+  };
+  const icon = icons[label] || escapeHtml2(label.slice(0, 1));
+  return `<button class="sotl-icon-button" type="button" data-sotl-action="${escapeHtml2(action)}" data-sotl-message-id="${escapeHtml2(id)}" title="${escapeHtml2(label)}" aria-label="${escapeHtml2(label)}">${icon}</button>`;
 }
 
 // src/frontend/rendering.ts
@@ -2687,6 +2695,111 @@ function checkPresetReadiness(preset) {
   };
 }
 
+// src/frontend/uiState.ts
+var sectionState = /* @__PURE__ */ new Map();
+function documentRef() {
+  return typeof document === "undefined" ? null : document;
+}
+function windowRef() {
+  return typeof window === "undefined" ? null : window;
+}
+function attrEscape(value) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+function activeSelector(element) {
+  const htmlElement = element;
+  if (htmlElement.id) return `[id="${attrEscape(htmlElement.id)}"]`;
+  const editorField = htmlElement.getAttribute("data-sotl-editor-field");
+  if (editorField) return `[data-sotl-editor-field="${attrEscape(editorField)}"]`;
+  const settingsField = htmlElement.getAttribute("data-sotl-field");
+  if (settingsField) return `[data-sotl-field="${attrEscape(settingsField)}"]`;
+  const section = htmlElement.getAttribute("data-sotl-section");
+  if (section) return `[data-sotl-section="${attrEscape(section)}"]`;
+  const name = htmlElement.getAttribute("name");
+  if (name) return `[name="${attrEscape(name)}"]`;
+  return void 0;
+}
+function isInputWithSelection(value) {
+  if (!value) return false;
+  if (typeof HTMLInputElement !== "undefined" && value instanceof HTMLInputElement) return true;
+  if (typeof HTMLTextAreaElement !== "undefined" && value instanceof HTMLTextAreaElement) return true;
+  return false;
+}
+function isDetailsElement(value) {
+  return typeof HTMLDetailsElement !== "undefined" && value instanceof HTMLDetailsElement;
+}
+function setUiSectionOpen(id, open) {
+  if (!id) return;
+  sectionState.set(id, open);
+}
+function isUiSectionOpen(id, defaultOpen = false) {
+  const stored = sectionState.get(id);
+  return stored === void 0 ? defaultOpen : stored;
+}
+function getOpenSectionIds() {
+  return Array.from(sectionState.entries()).filter(([, open]) => open).map(([id]) => id);
+}
+function captureUiState(root) {
+  const doc = documentRef();
+  const scope = root ?? doc;
+  const details = scope?.querySelectorAll?.("details[data-sotl-section]");
+  details?.forEach((node) => {
+    if (isDetailsElement(node)) {
+      setUiSectionOpen(node.dataset.sotlSection || "", node.open);
+    }
+  });
+  const activeElement = doc?.activeElement ?? null;
+  const selector = activeElement ? activeSelector(activeElement) : void 0;
+  let active;
+  if (selector) {
+    active = { selector };
+    if (isInputWithSelection(activeElement)) {
+      active.selectionStart = activeElement.selectionStart;
+      active.selectionEnd = activeElement.selectionEnd;
+    }
+  }
+  return {
+    openSections: getOpenSectionIds(),
+    rootScrollTop: root && root instanceof HTMLElement ? root.scrollTop : void 0,
+    windowScrollY: windowRef()?.scrollY,
+    active
+  };
+}
+function restoreUiState(root, snapshot) {
+  const doc = documentRef();
+  const scope = root ?? doc;
+  const openSections = new Set(snapshot.openSections);
+  scope?.querySelectorAll?.("details[data-sotl-section]").forEach((node) => {
+    if (!isDetailsElement(node)) return;
+    const id = node.dataset.sotlSection || "";
+    node.open = openSections.has(id);
+  });
+  const restore = () => {
+    if (root && root instanceof HTMLElement && typeof snapshot.rootScrollTop === "number") {
+      root.scrollTop = snapshot.rootScrollTop;
+    }
+    if (typeof snapshot.windowScrollY === "number") {
+      windowRef()?.scrollTo?.({ top: snapshot.windowScrollY });
+    }
+    if (!snapshot.active) return;
+    const target = scope?.querySelector?.(snapshot.active.selector);
+    if (target instanceof HTMLElement) {
+      target.focus({ preventScroll: true });
+      if (isInputWithSelection(target) && typeof snapshot.active.selectionStart === "number") {
+        try {
+          target.setSelectionRange(snapshot.active.selectionStart, snapshot.active.selectionEnd ?? snapshot.active.selectionStart);
+        } catch {
+        }
+      }
+    }
+  };
+  if (typeof globalThis.requestAnimationFrame === "function") {
+    globalThis.requestAnimationFrame(restore);
+  } else {
+    restore();
+  }
+}
+
 // src/frontend/presetEditor.ts
 var editingPreset = null;
 var lastPreviewHtml = "";
@@ -2760,6 +2873,14 @@ function runPreview() {
     lastJsonParseError = `Preview failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
+function editorDetails(id, title, body, defaultOpen = false) {
+  return [
+    `<details class="sotl-details" data-sotl-section="${escapeHtml2(id)}"${isUiSectionOpen(id, defaultOpen) ? " open" : ""}>`,
+    `<summary>${escapeHtml2(title)}</summary>`,
+    body,
+    "</details>"
+  ].join("");
+}
 function renderPresetEditor(state2) {
   if (!editingPreset || !state2.presets.some((p) => p.id === editingPreset.id)) {
     const active = state2.presets.find((p) => p.id === state2.settings.activePresetId);
@@ -2781,20 +2902,20 @@ function renderPresetEditor(state2) {
     '<label class="sotl-label">Template to edit/inspect',
     `  <select class="sotl-select" data-sotl-editor-field="selectedPresetId">${presetsOptions}</select>`,
     "</label>",
-    isBuiltIn ? '<p class="sotl-note" style="color: var(--lv-accent, #3864d9);">\u2139\uFE0F Built-in templates are read-only. Click "Duplicate to Edit" to customize.</p>' : '<p class="sotl-note" style="color: var(--lv-success-text, #176b43);">\u270F\uFE0F You are editing a custom template.</p>',
+    isBuiltIn ? '<p class="sotl-note" style="color: var(--lv-accent, #3864d9);">Built-in templates are read-only. Click "Duplicate to Edit" to customize.</p>' : '<p class="sotl-note" style="color: var(--lv-success-text, #176b43);">Editing a custom template.</p>',
     (() => {
       const readiness = checkPresetReadiness(editingPreset);
       const warningsList = readiness.templateWarnings.length > 0 ? `<div style="margin-top: 4px; padding: 4px 6px; border-radius: 4px; background: rgba(176,104,0,0.08); color: var(--lv-warning-text,#8a4f00); font-size: 10px;">Template cleanup will remove: ${readiness.templateWarnings.map((w) => escapeHtml2(w)).join(", ")}</div>` : "";
       return [
         '<div class="sotl-panel" style="margin-top: 6px; padding: 10px; background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.45)); display: grid; gap: 4px; border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.2));">',
         '  <strong style="font-size: 11px; display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">',
-        readiness.ready ? '\u{1F7E2} <span style="color: var(--lv-success-text, #176b43);">Ready to Generate</span>' : '\u{1F534} <span style="color: var(--lv-error-text, #bd2130);">Not Ready to Generate</span>',
+        readiness.ready ? '<span style="color: var(--lv-success-text, #176b43);">Ready to Generate</span>' : '<span style="color: var(--lv-error-text, #bd2130);">Not Ready to Generate</span>',
         "  </strong>",
         '  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; font-size: 11px;">',
-        `    <div>${readiness.schemaValid ? "\u2705" : "\u274C"} <strong>Schema:</strong> ${readiness.schemaValid ? "Valid" : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml2(readiness.schemaError || "Invalid")}</span>`}</div>`,
-        `    <div>${readiness.sampleDataValid ? "\u2705" : "\u274C"} <strong>Sample Data:</strong> ${readiness.sampleDataValid ? "Valid" : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml2(readiness.sampleDataError || "Invalid")}</span>`}</div>`,
-        `    <div>${readiness.templateSafe ? "\u2705" : "\u26A0\uFE0F"} <strong>Template:</strong> ${readiness.templateSafe ? "Clean" : "Cleanup warnings"}</div>`,
-        `    <div>${readiness.promptPresent ? "\u2705" : "\u274C"} <strong>Instructions:</strong> ${readiness.promptPresent ? "Present" : "Missing"}</div>`,
+        `    <div><strong>Schema:</strong> ${readiness.schemaValid ? "Valid" : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml2(readiness.schemaError || "Invalid")}</span>`}</div>`,
+        `    <div><strong>Sample Data:</strong> ${readiness.sampleDataValid ? "Valid" : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml2(readiness.sampleDataError || "Invalid")}</span>`}</div>`,
+        `    <div><strong>Template:</strong> ${readiness.templateSafe ? "Clean" : "Cleanup warnings"}</div>`,
+        `    <div><strong>Instructions:</strong> ${readiness.promptPresent ? "Present" : "Missing"}</div>`,
         "  </div>",
         warningsList,
         readiness.reasons.length > 0 ? `  <p style="margin: 2px 0 0; font-size: 10px; color: var(--lv-error-text, #bd2130);"><strong>Blockers:</strong> ${escapeHtml2(readiness.reasons.join(", "))}</p>` : "",
@@ -2808,122 +2929,125 @@ function renderPresetEditor(state2) {
     button("Delete Custom", "editor-delete", { disabled: isBuiltIn, title: isBuiltIn ? "Built-in templates cannot be deleted" : "Delete custom template" }),
     button("Reset Custom Templates", "editor-reset", { title: "Delete all custom templates" }),
     "</div>",
-    // Collapsible Details Sections (All collapsed by default)
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Metadata (Name, Description, Mode)</summary>',
-    '<div class="sotl-fields" style="margin-top: 8px;">',
-    `  <p class="sotl-note">Origin: <code>${escapeHtml2(editingPreset.origin || (isBuiltIn ? "built-in" : "custom"))}</code> - Engine: <code>${escapeHtml2(editingPreset.templateEngine || "loom")}</code> - Source: <code>${escapeHtml2(editingPreset.sourceFormat || "loom")}</code></p>`,
-    '  <label class="sotl-label">Template Name',
-    `    <input class="sotl-input" type="text" data-sotl-editor-field="name" value="${escapeHtml2(editingPreset.name)}" ${isBuiltIn ? "disabled" : ""}>`,
-    "  </label>",
-    '  <label class="sotl-label">Description',
-    `    <input class="sotl-input" type="text" data-sotl-editor-field="description" value="${escapeHtml2(editingPreset.description)}" ${isBuiltIn ? "disabled" : ""}>`,
-    "  </label>",
-    '  <label class="sotl-label">Mode',
-    `    <select class="sotl-select" data-sotl-editor-field="mode" ${isBuiltIn ? "disabled" : ""}>`,
-    `      <option value="hybrid"${editingPreset.mode === "hybrid" ? " selected" : ""}>Hybrid (passive extract + sidecar)</option>`,
-    `      <option value="sidecar_generate"${editingPreset.mode === "sidecar_generate" ? " selected" : ""}>Sidecar generation only</option>`,
-    `      <option value="passive_extract"${editingPreset.mode === "passive_extract" ? " selected" : ""}>Passive extraction only</option>`,
-    "    </select>",
-    "  </label>",
-    '  <label class="sotl-label">Default Placement',
-    `    <select class="sotl-select" data-sotl-editor-field="defaultPlacement" ${isBuiltIn ? "disabled" : ""}>`,
-    `      <option value="top"${editingPreset.defaultPlacement === "top" ? " selected" : ""}>Top of message</option>`,
-    `      <option value="bottom"${editingPreset.defaultPlacement === "bottom" ? " selected" : ""}>Bottom of message</option>`,
-    "    </select>",
-    "  </label>",
-    '  <label class="sotl-label">Max Injection Tokens',
-    `    <input class="sotl-input" type="number" data-sotl-editor-field="maxInjectionTokens" value="${editingPreset.maxInjectionTokens}" ${isBuiltIn ? "disabled" : ""}>`,
-    "  </label>",
-    "</div>",
-    "</details>",
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>HTML Template</summary>',
-    '<div class="sotl-fields" style="margin-top: 8px;">',
-    `  <textarea class="sotl-textarea" data-sotl-editor-field="htmlTemplate" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(editingPreset.htmlTemplate)}</textarea>`,
-    "</div>",
-    "</details>",
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Prompt Instructions</summary>',
-    '<div class="sotl-fields" style="margin-top: 8px;">',
-    `  <textarea class="sotl-textarea" data-sotl-editor-field="promptInstructions" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(editingPreset.promptInstructions)}</textarea>`,
-    "</div>",
-    "</details>",
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Schema JSON</summary>',
-    '<div class="sotl-fields" style="margin-top: 8px;">',
-    `  <textarea class="sotl-textarea" data-sotl-editor-field="schemaJson" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(JSON.stringify(editingPreset.schemaJson, null, 2))}</textarea>`,
-    "</div>",
-    "</details>",
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Sample Data JSON</summary>',
-    '<div class="sotl-fields" style="margin-top: 8px;">',
-    `  <textarea class="sotl-textarea" data-sotl-editor-field="sampleData" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(JSON.stringify(editingPreset.sampleData, null, 2))}</textarea>`,
-    "</div>",
-    "</details>",
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Injection Template</summary>',
-    '<div class="sotl-fields" style="margin-top: 8px;">',
-    `  <textarea class="sotl-textarea" data-sotl-editor-field="injectionTemplate" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(editingPreset.injectionTemplate)}</textarea>`,
-    "</div>",
-    "</details>",
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Import / Export</summary>',
-    '<div class="sotl-fields" style="margin-top: 8px;">',
-    '  <div class="sotl-actions" style="margin-bottom: 8px; flex-wrap: wrap;">',
-    button("Copy Template JSON", "editor-export"),
-    button("Download Template JSON", "editor-download", { title: "Download current template as a .json file" }),
-    "  </div>",
-    '  <div class="sotl-actions" style="margin-bottom: 8px; flex-wrap: wrap;">',
-    button("Upload Template JSON", "editor-upload-single", { title: "Upload a template .json file from your device" }),
-    button("Download All Custom", "editor-download-all", { title: "Download all custom templates as a pack .json file" }),
-    button("Upload Template Pack", "editor-upload-pack", { title: "Upload a template pack .json file" }),
-    "  </div>",
-    '  <input type="file" id="sotl-upload-single" accept=".json" style="display:none;" data-sotl-file-action="file-upload-single">',
-    '  <input type="file" id="sotl-upload-pack" accept=".json" style="display:none;" data-sotl-file-action="file-upload-pack">',
-    '  <label class="sotl-label">Paste Template JSON to Import',
-    `    <textarea class="sotl-textarea" id="sotl-import-paste" placeholder='Paste preset JSON here (single preset or array of presets)...'></textarea>`,
-    "  </label>",
-    '  <div class="sotl-actions">',
-    button("Import Pasted Template", "editor-import", { primary: true }),
-    "  </div>",
-    lastImportStatus ? [
-      `<div style="margin-top: 10px; padding: 8px 10px; border-radius: 6px; border-left: 3px solid ${lastImportStatus.ok ? "var(--lv-success-text,#176b43)" : "#dc3545"}; background: ${lastImportStatus.ok ? "rgba(27,126,80,0.07)" : "rgba(220,53,69,0.08)"};">`,
-      `  <strong style="font-size: 11px; color: ${lastImportStatus.ok ? "var(--lv-success-text,#176b43)" : "var(--lv-error-text,#bd2130)"};">`,
-      lastImportStatus.ok ? "\u2705 Import succeeded" : "\u274C Import failed",
-      "</strong>",
-      `  <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.4;">${escapeHtml2(lastImportStatus.message)}</p>`,
-      lastImportStatus.presetName ? `  <p style="margin: 4px 0 0; font-size: 11px; color: var(--lumiverse-text-muted,#64707d);">Template: <strong>${escapeHtml2(lastImportStatus.presetName)}</strong></p>` : "",
-      lastImportStatus.presetId ? `  <p style="margin: 2px 0 0; font-size: 11px; color: var(--lumiverse-text-muted,#64707d);">ID: <code>${escapeHtml2(lastImportStatus.presetId)}</code></p>` : "",
+    // Collapsible details sections preserve their open state during autosaves.
+    editorDetails("editor-metadata", "Metadata", [
+      '<div class="sotl-fields" style="margin-top: 8px;">',
+      `  <p class="sotl-note">Origin: <code>${escapeHtml2(editingPreset.origin || (isBuiltIn ? "built-in" : "custom"))}</code> - Engine: <code>${escapeHtml2(editingPreset.templateEngine || "loom")}</code> - Source: <code>${escapeHtml2(editingPreset.sourceFormat || "loom")}</code></p>`,
+      '  <label class="sotl-label">Template Name',
+      `    <input class="sotl-input" type="text" data-sotl-editor-field="name" value="${escapeHtml2(editingPreset.name)}" ${isBuiltIn ? "disabled" : ""}>`,
+      "  </label>",
+      '  <label class="sotl-label">Description',
+      `    <input class="sotl-input" type="text" data-sotl-editor-field="description" value="${escapeHtml2(editingPreset.description)}" ${isBuiltIn ? "disabled" : ""}>`,
+      "  </label>",
+      '  <label class="sotl-label">Mode',
+      `    <select class="sotl-select" data-sotl-editor-field="mode" ${isBuiltIn ? "disabled" : ""}>`,
+      `      <option value="hybrid"${editingPreset.mode === "hybrid" ? " selected" : ""}>Hybrid (passive extract + sidecar)</option>`,
+      `      <option value="sidecar_generate"${editingPreset.mode === "sidecar_generate" ? " selected" : ""}>Sidecar generation only</option>`,
+      `      <option value="passive_extract"${editingPreset.mode === "passive_extract" ? " selected" : ""}>Passive extraction only</option>`,
+      "    </select>",
+      "  </label>",
+      '  <label class="sotl-label">Default Placement',
+      `    <select class="sotl-select" data-sotl-editor-field="defaultPlacement" ${isBuiltIn ? "disabled" : ""}>`,
+      `      <option value="top"${editingPreset.defaultPlacement === "top" ? " selected" : ""}>Top of message</option>`,
+      `      <option value="bottom"${editingPreset.defaultPlacement === "bottom" ? " selected" : ""}>Bottom of message</option>`,
+      "    </select>",
+      "  </label>",
       "</div>"
-    ].join("") : "",
-    "</div>",
-    "</details>",
+    ].join("")),
+    editorDetails("editor-html-template", "HTML Template", [
+      '<div class="sotl-fields" style="margin-top: 8px;">',
+      `  <textarea class="sotl-textarea" data-sotl-editor-field="htmlTemplate" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(editingPreset.htmlTemplate)}</textarea>`,
+      "</div>"
+    ].join("")),
+    editorDetails("editor-prompt", "Prompt Instructions", [
+      '<div class="sotl-fields" style="margin-top: 8px;">',
+      `  <textarea class="sotl-textarea" data-sotl-editor-field="promptInstructions" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(editingPreset.promptInstructions)}</textarea>`,
+      "</div>"
+    ].join("")),
+    editorDetails("editor-schema", "Schema JSON", [
+      '<div class="sotl-fields" style="margin-top: 8px;">',
+      `  <textarea class="sotl-textarea" data-sotl-editor-field="schemaJson" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(JSON.stringify(editingPreset.schemaJson, null, 2))}</textarea>`,
+      "</div>"
+    ].join("")),
+    editorDetails("editor-sample-data", "Sample Data JSON", [
+      '<div class="sotl-fields" style="margin-top: 8px;">',
+      `  <textarea class="sotl-textarea" data-sotl-editor-field="sampleData" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(JSON.stringify(editingPreset.sampleData, null, 2))}</textarea>`,
+      "</div>"
+    ].join("")),
+    editorDetails("editor-legacy-injection", "Legacy Preset Injection Fields", [
+      '<div class="sotl-fields" style="margin-top: 8px;">',
+      '  <p class="sotl-note">Legacy per-preset fields. Context Injection Lite uses the global Context Injection settings in the drawer.</p>',
+      '  <label class="sotl-label">Max Injection Tokens',
+      `    <input class="sotl-input" type="number" data-sotl-editor-field="maxInjectionTokens" value="${editingPreset.maxInjectionTokens}" ${isBuiltIn ? "disabled" : ""}>`,
+      "  </label>",
+      '  <label class="sotl-label">Injection Template',
+      `  <textarea class="sotl-textarea" data-sotl-editor-field="injectionTemplate" ${isBuiltIn ? "disabled" : ""}>${escapeHtml2(editingPreset.injectionTemplate)}</textarea>`,
+      "  </label>",
+      "</div>"
+    ].join("")),
+    editorDetails("editor-import-export", "Import / Export", [
+      '<div class="sotl-fields" style="margin-top: 8px;">',
+      '  <div class="sotl-actions" style="margin-bottom: 8px; flex-wrap: wrap;">',
+      button("Copy Template JSON", "editor-export"),
+      button("Download Template JSON", "editor-download", { title: "Download current template as a .json file" }),
+      "  </div>",
+      '  <div class="sotl-actions" style="margin-bottom: 8px; flex-wrap: wrap;">',
+      button("Upload Template JSON", "editor-upload-single", { title: "Upload a template .json file from your device" }),
+      button("Download All Custom", "editor-download-all", { title: "Download all custom templates as a pack .json file" }),
+      button("Upload Template Pack", "editor-upload-pack", { title: "Upload a template pack .json file" }),
+      "  </div>",
+      '  <input type="file" id="sotl-upload-single" accept=".json" style="display:none;" data-sotl-file-action="file-upload-single">',
+      '  <input type="file" id="sotl-upload-pack" accept=".json" style="display:none;" data-sotl-file-action="file-upload-pack">',
+      '  <label class="sotl-label">Paste Template JSON to Import',
+      `    <textarea class="sotl-textarea" id="sotl-import-paste" placeholder='Paste preset JSON here (single preset or array of presets)...'></textarea>`,
+      "  </label>",
+      '  <div class="sotl-actions">',
+      button("Import Pasted Template", "editor-import", { primary: true }),
+      "  </div>",
+      lastImportStatus ? [
+        `<div style="margin-top: 10px; padding: 8px 10px; border-radius: 6px; border-left: 3px solid ${lastImportStatus.ok ? "var(--lv-success-text,#176b43)" : "#dc3545"}; background: ${lastImportStatus.ok ? "rgba(27,126,80,0.07)" : "rgba(220,53,69,0.08)"};">`,
+        `  <strong style="font-size: 11px; color: ${lastImportStatus.ok ? "var(--lv-success-text,#176b43)" : "var(--lv-error-text,#bd2130)"};">`,
+        lastImportStatus.ok ? "Import succeeded" : "Import failed",
+        "</strong>",
+        `  <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.4;">${escapeHtml2(lastImportStatus.message)}</p>`,
+        lastImportStatus.presetName ? `  <p style="margin: 4px 0 0; font-size: 11px; color: var(--lumiverse-text-muted,#64707d);">Template: <strong>${escapeHtml2(lastImportStatus.presetName)}</strong></p>` : "",
+        lastImportStatus.presetId ? `  <p style="margin: 2px 0 0; font-size: 11px; color: var(--lumiverse-text-muted,#64707d);">ID: <code>${escapeHtml2(lastImportStatus.presetId)}</code></p>` : "",
+        "</div>"
+      ].join("") : "",
+      "</div>"
+    ].join("")),
     // Preview / Validation Section
-    '<details class="sotl-details" style="margin-top: 8px;" open><summary>Preview & Validation</summary>',
-    '<div style="margin-top: 8px;">',
-    '  <div class="sotl-actions" style="margin-bottom: 8px;">',
-    button("Run Template Preview", "editor-preview", { primary: true }),
-    "  </div>",
-    lastJsonParseError ? `<p class="sotl-note sotl-warning" style="margin-bottom: 8px; color: var(--lv-error-text, #bd2130);">${escapeHtml2(lastJsonParseError)}</p>` : "",
-    lastSanitizerWarnings.length > 0 ? [
-      '<div style="background: rgba(176,104,0,0.08); border-left: 3px solid var(--lv-warning-border, #b06800); padding: 8px; margin-bottom: 8px; border-radius: 4px;">',
-      '  <strong style="color: var(--lv-warning-text, #8a4f00); font-size: 11px;">Template Cleanup Warnings:</strong>',
-      '  <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: var(--lv-warning-text, #8a4f00);">',
-      ...lastSanitizerWarnings.map((w) => `    <li>${escapeHtml2(w)}</li>`),
-      "  </ul>",
-      "</div>"
-    ].join("\n") : "",
-    lastPreviewReport ? `<p class="sotl-note" style="margin-bottom: 8px;">Preview render: ${lastPreviewReport.success ? "template rendered" : "fallback used"}${lastPreviewReport.warning ? ` - ${escapeHtml2(lastPreviewReport.warning)}` : ""}</p>` : "",
-    [
-      '<div style="margin: 8px 0; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.04); display: grid; gap: 4px; font-size: 11px;">',
-      "  <strong>Template Compatibility Report</strong>",
-      `  <div>Engine: <code>${escapeHtml2(compatibility.templateEngine)}</code> - Source: <code>${escapeHtml2(compatibility.sourceFormat)}</code> - References: <code>${compatibility.referencedFields.length}</code></div>`,
-      `  <div>Missing from sample: <code>${escapeHtml2(compatibility.missingFromSample.join(", ") || "none")}</code></div>`,
-      latestData ? `  <div>Missing from latest tracker: <code>${escapeHtml2(compatibility.missingFromLatest.join(", ") || "none")}</code></div>` : "  <div>Latest tracker coverage: <code>no matching latest tracker</code></div>",
-      "</div>"
-    ].join("\n"),
-    lastPreviewHtml ? [
+    editorDetails("editor-preview-validation", "Preview & Validation", [
       '<div style="margin-top: 8px;">',
-      '  <span style="font-size: 11px; font-weight: 600; color: var(--lumiverse-text-muted, #64707d);">Mock Render Preview:</span>',
-      `  <div class="sotl-preview" style="margin-top: 4px; max-height: 250px; overflow-y: auto;">${lastPreviewHtml}</div>`,
+      '  <div class="sotl-actions" style="margin-bottom: 8px;">',
+      button("Run Template Preview", "editor-preview", { primary: true }),
+      "  </div>",
+      lastJsonParseError ? `<p class="sotl-note sotl-warning" style="margin-bottom: 8px; color: var(--lv-error-text, #bd2130);">${escapeHtml2(lastJsonParseError)}</p>` : "",
+      lastSanitizerWarnings.length > 0 ? [
+        '<div style="background: rgba(176,104,0,0.08); border-left: 3px solid var(--lv-warning-border, #b06800); padding: 8px; margin-bottom: 8px; border-radius: 4px;">',
+        '  <strong style="color: var(--lv-warning-text, #8a4f00); font-size: 11px;">Template Cleanup Warnings:</strong>',
+        '  <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: var(--lv-warning-text, #8a4f00);">',
+        ...lastSanitizerWarnings.map((w) => `    <li>${escapeHtml2(w)}</li>`),
+        "  </ul>",
+        "</div>"
+      ].join("\n") : "",
+      lastPreviewReport ? `<p class="sotl-note" style="margin-bottom: 8px;">Preview render: ${lastPreviewReport.success ? "template rendered" : "fallback used"}${lastPreviewReport.warning ? ` - ${escapeHtml2(lastPreviewReport.warning)}` : ""}</p>` : "",
+      [
+        '<div style="margin: 8px 0; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.04); display: grid; gap: 4px; font-size: 11px;">',
+        "  <strong>Template Compatibility Report</strong>",
+        `  <div>Engine: <code>${escapeHtml2(compatibility.templateEngine)}</code> - Source: <code>${escapeHtml2(compatibility.sourceFormat)}</code> - References: <code>${compatibility.referencedFields.length}</code></div>`,
+        `  <div>Missing from sample: <code>${escapeHtml2(compatibility.missingFromSample.join(", ") || "none")}</code></div>`,
+        latestData ? `  <div>Missing from latest tracker: <code>${escapeHtml2(compatibility.missingFromLatest.join(", ") || "none")}</code></div>` : "  <div>Latest tracker coverage: <code>no matching latest tracker</code></div>",
+        "</div>"
+      ].join("\n"),
+      lastPreviewHtml ? [
+        '<div style="margin-top: 8px;">',
+        '  <span style="font-size: 11px; font-weight: 600; color: var(--lumiverse-text-muted, #64707d);">Mock Render Preview:</span>',
+        `  <div class="sotl-preview" style="margin-top: 4px; max-height: 250px; overflow-y: auto;">${lastPreviewHtml}</div>`,
+        "</div>"
+      ].join("\n") : '<p class="sotl-note">Click "Run Template Preview" to check how this template renders with the sample data.</p>',
       "</div>"
-    ].join("\n") : '<p class="sotl-note">Click "Run Template Preview" to check how this template renders with the sample data.</p>',
-    "</div>",
-    "</details>",
+    ].join(""), true),
     "</div>"
   ].join("");
 }
@@ -2948,7 +3072,7 @@ function renderFeatureBreakdown(collapsible = false) {
   if (collapsible) {
     return [
       '<section class="sotl-panel">',
-      '<details class="sotl-details"><summary>What this version does (Features)</summary>',
+      '<details class="sotl-details" data-sotl-section="features"><summary>What this version does (Features)</summary>',
       content,
       "</details>",
       "</section>"
@@ -2996,7 +3120,7 @@ function renderSettingsPanel(state2, status = {}) {
     button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
     "</div>",
     status.lastToast ? `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid ${status.lastToast.level === "success" ? "#176b43" : status.lastToast.level === "error" ? "#bd2130" : "#b06800"}; background: ${status.lastToast.level === "success" ? "rgba(27,126,80,0.07)" : status.lastToast.level === "error" ? "rgba(220,53,69,0.08)" : "rgba(255,193,7,0.08)"}; display: flex; align-items: center; gap: 8px; font-size: 12px;">
-          <span>${status.lastToast.level === "success" ? "\u2705" : status.lastToast.level === "error" ? "\u274C" : "\u26A0\uFE0F"}</span>
+          <strong>${escapeHtml2(status.lastToast.level)}</strong>
           <div style="flex: 1; line-height: 1.4; color: ${status.lastToast.level === "success" ? "var(--lv-success-text,#176b43)" : status.lastToast.level === "error" ? "var(--lv-error-text,#bd2130)" : "var(--lv-warning-text,#8a4f00)"}; font-weight: 500;">${escapeHtml2(status.lastToast.message)}</div>
         </div>` : "",
     "</section>",
@@ -3059,6 +3183,61 @@ function renderCardDensityOptions(state2) {
     const selected = state2.settings.cardDensity === density ? " selected" : "";
     return `<option value="${density}"${selected}>${label}</option>`;
   }).join("");
+}
+function detailOpenAttr(id, defaultOpen = false) {
+  return isUiSectionOpen(id, defaultOpen) ? " open" : "";
+}
+function renderSettingsSection(id, title, meta, body, defaultOpen = false) {
+  return [
+    `<details class="sotl-details sotl-settings-section" data-sotl-section="${escapeHtml2(id)}"${detailOpenAttr(id, defaultOpen)}>`,
+    `<summary><span class="sotl-summary-title">${escapeHtml2(title)}</span>${meta ? `<span class="sotl-summary-meta">${escapeHtml2(meta)}</span>` : ""}</summary>`,
+    body,
+    "</details>"
+  ].join("");
+}
+function renderSavePulse(status) {
+  if (!status.lastSettingsSavedAt) return "";
+  return '<span class="sotl-save-pulse">Saved</span>';
+}
+function formatTrackerAge(generatedAt) {
+  if (!generatedAt) return "none yet";
+  const time = Date.parse(generatedAt);
+  if (Number.isNaN(time)) return generatedAt;
+  const seconds = Math.max(0, Math.round((Date.now() - time) / 1e3));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  return `${hours}h ago`;
+}
+function renderTimeoutOptions(state2) {
+  const timeoutMs = state2.settings.sidecarGenerationTimeoutMs ?? 18e4;
+  return [
+    `<option value="60000"${timeoutMs === 6e4 ? " selected" : ""}>60 seconds</option>`,
+    `<option value="120000"${timeoutMs === 12e4 ? " selected" : ""}>120 seconds</option>`,
+    `<option value="180000"${timeoutMs === 18e4 ? " selected" : ""}>180 seconds (default)</option>`,
+    `<option value="300000"${timeoutMs === 3e5 ? " selected" : ""}>300 seconds</option>`,
+    `<option value="0"${timeoutMs === 0 ? " selected" : ""}>No timeout (manual cancel only)</option>`
+  ].join("");
+}
+function renderHistoryLimitOptions(state2) {
+  const limit = state2.settings.trackerHistoryLimit ?? 5;
+  return [
+    `<option value="1"${limit === 1 ? " selected" : ""}>Last 1 tracker</option>`,
+    `<option value="3"${limit === 3 ? " selected" : ""}>Last 3 trackers</option>`,
+    `<option value="5"${limit === 5 ? " selected" : ""}>Last 5 trackers (default)</option>`,
+    `<option value="10"${limit === 10 ? " selected" : ""}>Last 10 trackers</option>`,
+    `<option value="20"${limit === 20 ? " selected" : ""}>Last 20 trackers</option>`,
+    `<option value="0"${limit === 0 ? " selected" : ""}>Unlimited (manual cleanup)</option>`
+  ].join("");
+}
+function renderInjectionBudgetOptions(state2) {
+  const budget = state2.settings.promptInjectionTokenBudget ?? 700;
+  return [300, 500, 700, 1e3, 1500, 2e3].map((value) => `<option value="${value}"${budget === value ? " selected" : ""}>~${value} tokens</option>`).join("");
+}
+function renderInjectionLimitOptions(state2) {
+  const limit = state2.settings.promptInjectionTrackerLimit ?? 5;
+  return [1, 3, 5, 10].map((value) => `<option value="${value}"${limit === value ? " selected" : ""}>Last ${value} tracker${value === 1 ? "" : "s"}</option>`).join("");
 }
 function renderLatestTracker(state2) {
   if (!state2.latestTracker) {
@@ -3169,6 +3348,262 @@ function renderInjectionReport(state2) {
     "</div>"
   ].filter(Boolean).join("");
 }
+function renderActiveTemplatePreview(state2) {
+  return renderSettingsSection(
+    "active-template-preview",
+    "Active Template Preview",
+    state2.activePreset.name,
+    [
+      '<div class="sotl-fields">',
+      `  <p class="sotl-note sotl-strong-note">Template: ${escapeHtml2(state2.activePreset.name)}</p>`,
+      `  <p class="sotl-note">${escapeHtml2(state2.activePreset.description || "No description.")}</p>`,
+      '  <div class="sotl-preview sotl-preview--short">',
+      (() => {
+        try {
+          const mockTracker = {
+            version: state2.activePreset.version || "1.0.0",
+            schemaVersion: "1",
+            presetId: state2.activePreset.id,
+            chatId: "preview-chat",
+            generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            source: "manual_edit",
+            placement: state2.activePreset.defaultPlacement,
+            data: state2.activePreset.sampleData || {},
+            compactSummary: "Sample preview for " + state2.activePreset.name,
+            validation: { ok: true, issues: [] }
+          };
+          return renderTrackerHtml(mockTracker, state2.activePreset, effectiveTemplateMode(state2));
+        } catch (err) {
+          return `<p class="sotl-note sotl-warning">Preview render failed: ${escapeHtml2(err instanceof Error ? err.message : String(err))}</p>`;
+        }
+      })(),
+      "  </div>",
+      "</div>"
+    ].join("")
+  );
+}
+function renderGenerationBanner(state2, disabledReason) {
+  if (state2.generation.running) {
+    return [
+      '<div class="sotl-status-banner sotl-status-banner--info">',
+      '  <span class="sotl-spin sotl-status-dot"></span>',
+      `  <div>${escapeHtml2(state2.generation.message || "Generating tracker...")}</div>`,
+      "</div>"
+    ].join("");
+  }
+  if (disabledReason) {
+    return [
+      '<div class="sotl-status-banner sotl-status-banner--warning">',
+      '  <span class="sotl-status-dot">!</span>',
+      `  <div>Blocked: ${escapeHtml2(disabledReason)}</div>`,
+      "</div>"
+    ].join("");
+  }
+  return [
+    '<div class="sotl-status-banner sotl-status-banner--success">',
+    '  <span class="sotl-status-dot"></span>',
+    "  <div>Ready to track the latest assistant message.</div>",
+    "</div>"
+  ].join("");
+}
+function renderToast(status) {
+  if (!status.lastToast) return "";
+  return [
+    `<div class="sotl-toast sotl-toast--${escapeHtml2(status.lastToast.level)}">`,
+    `  <strong>${escapeHtml2(status.lastToast.level)}</strong>`,
+    `  <span>${escapeHtml2(status.lastToast.message)}</span>`,
+    "</div>"
+  ].join("");
+}
+function renderControlsPanel(state2, status, selectedConnection, disabledReason) {
+  const report = state2.diagnostics.injectionReport;
+  const tokenMeta = report ? `~${report.estimatedTokens}/${report.tokenBudget} tokens` : "no estimate";
+  const latestAge = formatTrackerAge(state2.latestTracker?.generatedAt);
+  return [
+    '<section class="sotl-panel sotl-control-panel">',
+    '<div class="sotl-panel-head">',
+    "  <div>",
+    "    <h3>Quick Status</h3>",
+    `    <p class="sotl-note">Active chat: ${escapeHtml2(state2.activeChat.name || state2.activeChat.id || "Unavailable")}</p>`,
+    "  </div>",
+    renderSavePulse(status),
+    "</div>",
+    '<div class="sotl-quick-grid">',
+    `  <article><span>Preset</span><strong>${escapeHtml2(state2.activePreset.name)}</strong><em>${escapeHtml2(state2.activePreset.origin || "built-in")}</em></article>`,
+    `  <article><span>Generation</span><strong>${state2.generation.running ? "Running" : disabledReason ? "Blocked" : "Ready"}</strong><em>${escapeHtml2(disabledReason || state2.generation.message || "manual or auto")}</em></article>`,
+    `  <article><span>Injection</span><strong>${state2.settings.promptInjectionEnabled ? "Enabled" : "Disabled"}</strong><em>${escapeHtml2(tokenMeta)}</em></article>`,
+    `  <article><span>Latest Tracker</span><strong>${escapeHtml2(latestAge)}</strong><em>${state2.messageTrackers.length} retained cards</em></article>`,
+    "</div>",
+    '<div class="sotl-status">',
+    badge("Backend ready", state2.backendReady),
+    badge("Chats", state2.permissions.chats),
+    badge("Chat mutation", state2.permissions.chat_mutation),
+    badge("Generation", state2.permissions.generation),
+    badge("Prompt injection", Boolean(state2.permissions.interceptor || state2.diagnostics.injectionReport?.registered)),
+    badge("Settings UI", Boolean(state2.permissions.app_manipulation)),
+    "</div>",
+    renderSettingsSection(
+      "tracking",
+      "Tracking",
+      state2.generation.running ? "generating" : selectedConnection?.name || "default connection",
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-label">Preset',
+        `<select class="sotl-select" data-sotl-field="preset">${renderPresetOptions(state2)}</select>`,
+        "</label>",
+        renderActiveTemplatePreview(state2),
+        '<label class="sotl-label">Sidecar connection',
+        `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state2)}</select>`,
+        "</label>",
+        `<p class="sotl-note">Connection: ${escapeHtml2(selectedConnection?.name || (state2.settings.useDefaultConnectionFallback ? "default/current fallback" : "none selected"))}</p>`,
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="fallback" ' + (state2.settings.useDefaultConnectionFallback ? "checked" : "") + "> Use default/current connection when none is selected</label>",
+        !state2.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : "",
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state2.settings.autoGenerate ? "checked" : "") + "> Auto-generate after assistant messages</label>",
+        '<label class="sotl-label">Generation timeout',
+        `<select class="sotl-select" data-sotl-field="sidecarGenerationTimeoutMs">${renderTimeoutOptions(state2)}</select>`,
+        "</label>",
+        '<div class="sotl-actions">',
+        button("Generate tracker", "generate", { primary: true, disabled: Boolean(disabledReason) && !state2.generation.running, title: disabledReason }),
+        state2.generation.running ? button("Cancel Generation", "cancel-generation", { style: "background: rgba(220,53,69,0.1); color: var(--lv-error-text,#bd2130); border-color: rgba(220,53,69,0.2);" }) : "",
+        button("Refresh", "refresh"),
+        "</div>",
+        renderGenerationBanner(state2, disabledReason),
+        renderToast(status),
+        "</div>"
+      ].filter(Boolean).join(""),
+      true
+    ),
+    renderSettingsSection(
+      "injection",
+      "Context Injection",
+      state2.settings.promptInjectionEnabled ? tokenMeta : "off",
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionEnabled" ' + (state2.settings.promptInjectionEnabled ? "checked" : "") + "> Inject compact continuity into roleplay prompts</label>",
+        '<label class="sotl-label">Injection mode',
+        `<select class="sotl-select" data-sotl-field="promptInjectionMode">`,
+        `  <option value="latest_plus_history"${state2.settings.promptInjectionMode !== "latest_brief" ? " selected" : ""}>Latest tracker + recent summaries</option>`,
+        `  <option value="latest_brief"${state2.settings.promptInjectionMode === "latest_brief" ? " selected" : ""}>Latest tracker only</option>`,
+        "</select>",
+        "</label>",
+        '<div class="sotl-mini-grid">',
+        '<label class="sotl-label">Token budget',
+        `<select class="sotl-select" data-sotl-field="promptInjectionTokenBudget">${renderInjectionBudgetOptions(state2)}</select>`,
+        "</label>",
+        '<label class="sotl-label">Trackers considered',
+        `<select class="sotl-select" data-sotl-field="promptInjectionTrackerLimit">${renderInjectionLimitOptions(state2)}</select>`,
+        "</label>",
+        "</div>",
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeAppearance" ' + (state2.settings.promptInjectionIncludeAppearance !== false ? "checked" : "") + "> Include character appearance anchors</label>",
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeRules" ' + (state2.settings.promptInjectionIncludeRules !== false ? "checked" : "") + "> Include continuity rules and warnings</label>",
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeNextTurn" ' + (state2.settings.promptInjectionIncludeNextTurn !== false ? "checked" : "") + "> Include next-turn guidance</label>",
+        '<p class="sotl-note">Best setup: latest detailed tracker plus a few compact summaries. The full tracker stays stored and visible without flooding context.</p>',
+        renderInjectionReport(state2),
+        "</div>"
+      ].join(""),
+      Boolean(state2.settings.promptInjectionEnabled)
+    ),
+    renderSettingsSection(
+      "hud-display",
+      "HUD & Display",
+      `${state2.settings.hudDefaultView} HUD`,
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatHudLauncher" ' + (state2.settings.showChatHudLauncher ? "checked" : "") + "> Show paw HUD launcher</label>",
+        '<label class="sotl-label">HUD default view',
+        `<select class="sotl-select" data-sotl-field="hudDefaultView">`,
+        `  <option value="compact"${state2.settings.hudDefaultView === "compact" ? " selected" : ""}>Compact summary</option>`,
+        `  <option value="full"${state2.settings.hudDefaultView === "full" ? " selected" : ""}>Full tracker</option>`,
+        `</select>`,
+        "</label>",
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderInMessages" ' + (state2.settings.renderInMessages ? "checked" : "") + "> Attach tracker cards to messages</label>",
+        '<label class="sotl-label">New tracker card position',
+        `<select class="sotl-select" data-sotl-field="messageCardPlacement">${renderPlacementOptions(state2)}</select>`,
+        "</label>",
+        state2.settings.renderInMessages ? '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="messageButtons" ' + (state2.settings.showMessageButtons ? "checked" : "") + "> Show message-card action buttons</label>" : "",
+        '<p class="sotl-note">Message-card placement applies when trackers are created or regenerated.</p>',
+        "</div>"
+      ].join("")
+    ),
+    renderSettingsSection(
+      "templates-rendering",
+      "Templates & Rendering",
+      effectiveTemplateMode(state2).replace("_", " "),
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="useSafeRenderer" ' + (state2.settings.useSafeRenderer ? "checked" : "") + "> Force safe generic renderer for custom presets</label>",
+        '<label class="sotl-label">Custom template mode',
+        `<select class="sotl-select" data-sotl-field="customTemplateMode" ${state2.settings.useSafeRenderer ? "disabled" : ""}>`,
+        `  <option value="trusted_layout"${effectiveTemplateMode(state2) === "trusted_layout" ? " selected" : ""}>Trusted layout (preserve custom HTML/CSS)</option>`,
+        `  <option value="strict_sanitized"${effectiveTemplateMode(state2) === "strict_sanitized" ? " selected" : ""}>Strict sanitized</option>`,
+        `  <option value="safe_generic"${effectiveTemplateMode(state2) === "safe_generic" ? " selected" : ""}>Safe generic renderer only</option>`,
+        "</select>",
+        "</label>",
+        '<p class="sotl-note">Trusted layout keeps your custom styling but still removes executable hazards like scripts, event handlers, and javascript URLs.</p>',
+        "</div>"
+      ].join("")
+    ),
+    renderSettingsSection(
+      "storage-cleanup",
+      "Storage & Cleanup",
+      `${state2.settings.trackerHistoryLimit === 0 ? "unlimited" : `last ${state2.settings.trackerHistoryLimit}`} trackers`,
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-label">Tracker history limit',
+        `<select class="sotl-select" data-sotl-field="trackerHistoryLimit">${renderHistoryLimitOptions(state2)}</select>`,
+        "</label>",
+        '<p class="sotl-note">Controls how many tracker snapshots are kept per chat. Latest tracker is always preserved.</p>',
+        '<div class="sotl-actions">',
+        button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
+        "</div>",
+        "</div>"
+      ].join("")
+    ),
+    renderSettingsSection(
+      "advanced-diagnostics",
+      "Advanced & Diagnostics",
+      "power-user controls",
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state2.settings.stripTrackerBlocksFromMessages ? "checked" : "") + "> Strip passive tracker blocks when allowed</label>",
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="floating" ' + (state2.settings.showFloatingButton ? "checked" : "") + "> Legacy desktop floating button</label>",
+        '<label class="sotl-label">Legacy density setting',
+        `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state2)}</select>`,
+        "</label>",
+        '<p class="sotl-note">Density is stored for compatibility; current cards use each preset renderer density.</p>',
+        state2.diagnostics.storageWarning ? `<p class="sotl-note sotl-warning">${escapeHtml2(state2.diagnostics.storageWarning)}</p>` : "",
+        state2.diagnostics.renderLimitation ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.renderLimitation)}</p>` : "",
+        state2.diagnostics.lastError ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastError)}</p>` : "",
+        state2.diagnostics.lastGenerationError ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastGenerationError)}</p>` : "",
+        status.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(status.lastRenderStatus)}</p>` : "",
+        state2.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastRenderStatus)}</p>` : "",
+        renderSettingsSection("pipeline-report", "Tracker Pipeline Report", state2.diagnostics.pipelineReport ? "available" : "empty", renderPipelineReport(state2)),
+        renderSettingsSection("injection-report", "Context Injection Report", report ? tokenMeta : "empty", renderInjectionReport(state2)),
+        (() => {
+          const doc = typeof document !== "undefined" ? document : null;
+          const isMounted = doc ? Boolean(doc.querySelector('[data-sotl-chat-panel="true"]')) : false;
+          const visibleDrawer = doc ? Boolean(doc.querySelector(".lumiverse-drawer, .drawer, [data-drawer], #drawer, .sotl-drawer")) : false;
+          const visibleSettings = doc ? Boolean(doc.querySelector(".lumiverse-settings, .settings-modal, [data-settings], #settings, .sotl-settings")) : false;
+          let reason = "Active";
+          if (!state2.settings.showChatHudLauncher) reason = "Disabled by user settings";
+          else if (visibleDrawer) reason = "Soft-hidden: Loom Drawer is open";
+          else if (visibleSettings) reason = "Soft-hidden: Extension Settings are open";
+          else if (!isMounted) reason = "Not mounted (waiting for DOM render)";
+          return [
+            '<div class="sotl-diagnostic-grid">',
+            `  <div><strong>HUD Launcher:</strong> ${state2.settings.showChatHudLauncher ? "Enabled" : "Disabled"}</div>`,
+            `  <div><strong>HUD DOM Status:</strong> ${isMounted ? "Mounted" : "Not mounted"}</div>`,
+            `  <div><strong>HUD Placement State:</strong> ${escapeHtml2(reason)}</div>`,
+            `  <div><strong>Message Cards:</strong> ${state2.settings.renderInMessages ? "Enabled" : "Disabled"}</div>`,
+            "</div>"
+          ].join("");
+        })(),
+        "</div>"
+      ].filter(Boolean).join("")
+    ),
+    "</section>"
+  ].join("");
+}
 function renderDrawer(state2, status = {}) {
   if (!state2) {
     const offlineText = status.backendTimedOut ? "Backend is not responding. Try Reset Loom Storage, then Refresh after the extension reloads." : "Frontend loaded. Waiting for backend state...";
@@ -3191,174 +3626,9 @@ function renderDrawer(state2, status = {}) {
   const selectedConnection = state2.connections.find((connection) => connection.id === state2.settings.sidecarConnectionId);
   return [
     '<div class="sotl-root" data-sotl-root="true">',
+    renderControlsPanel(state2, status, selectedConnection, disabledReason),
     '<section class="sotl-panel">',
-    "<h2>State of the Loom</h2>",
-    `<p class="sotl-note">Active chat: ${escapeHtml2(state2.activeChat.name || state2.activeChat.id || "Unavailable")}</p>`,
-    '<div class="sotl-status">',
-    badge("Backend ready", state2.backendReady),
-    badge("Chats", state2.permissions.chats),
-    badge("Chat mutation", state2.permissions.chat_mutation),
-    badge("Generation", state2.permissions.generation),
-    badge("Prompt injection", Boolean(state2.permissions.interceptor || state2.diagnostics.injectionReport?.registered)),
-    badge("Settings UI", Boolean(state2.permissions.app_manipulation)),
-    "</div>",
-    "</section>",
-    '<section class="sotl-panel">',
-    "<h3>Controls</h3>",
-    '<div class="sotl-fields">',
-    '<label class="sotl-label">Preset',
-    `<select class="sotl-select" data-sotl-field="preset">${renderPresetOptions(state2)}</select>`,
-    "</label>",
-    // Collapsible Active Preset Preview & Render (QoL #1)
-    '<details class="sotl-details" style="margin-top: 4px; margin-bottom: 8px;"><summary>\u2139\uFE0F Active Template Preview & Sample Render</summary>',
-    '<div style="margin-top: 8px;">',
-    `  <p class="sotl-note" style="margin-bottom: 8px; color: var(--lv-accent, #3864d9); font-weight: 600;">Template: ${escapeHtml2(state2.activePreset.name)}</p>`,
-    `  <p class="sotl-note" style="margin-bottom: 8px; font-style: italic;">${escapeHtml2(state2.activePreset.description || "No description.")}</p>`,
-    '  <div class="sotl-preview" style="border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.18)); border-radius: 6px; padding: 4px; max-height: 200px; background: rgba(0,0,0,0.05); overflow-y: auto;">',
-    (() => {
-      try {
-        const mockTracker = {
-          version: state2.activePreset.version || "1.0.0",
-          schemaVersion: "1",
-          presetId: state2.activePreset.id,
-          chatId: "preview-chat",
-          generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-          source: "manual_edit",
-          placement: state2.activePreset.defaultPlacement,
-          data: state2.activePreset.sampleData || {},
-          compactSummary: "Sample preview for " + state2.activePreset.name,
-          validation: { ok: true, issues: [] }
-        };
-        return renderTrackerHtml(mockTracker, state2.activePreset, effectiveTemplateMode(state2));
-      } catch (err) {
-        return `<p class="sotl-note sotl-warning" style="color: var(--lv-error-text,#bd2130);">\u26A0\uFE0F Preview Render Failed: ${escapeHtml2(err instanceof Error ? err.message : String(err))}</p>`;
-      }
-    })(),
-    "  </div>",
-    "</div>",
-    "</details>",
-    '<label class="sotl-label">Sidecar connection',
-    `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state2)}</select>`,
-    "</label>",
-    `<p class="sotl-note">Connection: ${escapeHtml2(selectedConnection?.name || (state2.settings.useDefaultConnectionFallback ? "default/current fallback" : "none selected"))}</p>`,
-    !state2.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : "",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state2.settings.autoGenerate ? "checked" : "") + "> Auto-generate after assistant messages</label>",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionEnabled" ' + (state2.settings.promptInjectionEnabled ? "checked" : "") + "> Inject compact continuity into roleplay prompts</label>",
-    '<details class="sotl-details"><summary>Context Injection Lite</summary>',
-    '<div class="sotl-fields">',
-    '<label class="sotl-label">Injection mode',
-    `<select class="sotl-select" data-sotl-field="promptInjectionMode">`,
-    `  <option value="latest_plus_history"${state2.settings.promptInjectionMode !== "latest_brief" ? " selected" : ""}>Latest tracker + recent summaries</option>`,
-    `  <option value="latest_brief"${state2.settings.promptInjectionMode === "latest_brief" ? " selected" : ""}>Latest tracker only</option>`,
-    "</select>",
-    "</label>",
-    '<label class="sotl-label">Injection token budget',
-    (() => {
-      const budget = state2.settings.promptInjectionTokenBudget ?? 700;
-      const options = [300, 500, 700, 1e3, 1500, 2e3].map((value) => `<option value="${value}"${budget === value ? " selected" : ""}>~${value} tokens</option>`);
-      return `<select class="sotl-select" data-sotl-field="promptInjectionTokenBudget">${options.join("")}</select>`;
-    })(),
-    "</label>",
-    '<label class="sotl-label">Trackers considered for injection',
-    (() => {
-      const limit = state2.settings.promptInjectionTrackerLimit ?? 5;
-      const options = [1, 3, 5, 10].map((value) => `<option value="${value}"${limit === value ? " selected" : ""}>Last ${value} tracker${value === 1 ? "" : "s"}</option>`);
-      return `<select class="sotl-select" data-sotl-field="promptInjectionTrackerLimit">${options.join("")}</select>`;
-    })(),
-    "</label>",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeAppearance" ' + (state2.settings.promptInjectionIncludeAppearance !== false ? "checked" : "") + "> Include character appearance anchors</label>",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeRules" ' + (state2.settings.promptInjectionIncludeRules !== false ? "checked" : "") + "> Include continuity rules and warnings</label>",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeNextTurn" ' + (state2.settings.promptInjectionIncludeNextTurn !== false ? "checked" : "") + "> Include next-turn guidance</label>",
-    '<p class="sotl-note">Best setup: inject the latest detailed tracker as a compact brief, plus a few old compact summaries. The full tracker stays stored and visible without flooding context.</p>',
-    renderInjectionReport(state2),
-    "</div>",
-    "</details>",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatHudLauncher" ' + (state2.settings.showChatHudLauncher ? "checked" : "") + "> Show chat HUD button</label>",
-    '<label class="sotl-label">HUD detail level',
-    `<select class="sotl-select" data-sotl-field="hudDefaultView">`,
-    `  <option value="compact"${state2.settings.hudDefaultView === "compact" ? " selected" : ""}>Compact summary</option>`,
-    `  <option value="full"${state2.settings.hudDefaultView === "full" ? " selected" : ""}>Full tracker</option>`,
-    `</select>`,
-    "</label>",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderInMessages" ' + (state2.settings.renderInMessages ? "checked" : "") + "> Attach tracker cards to messages (Experimental)</label>",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="useSafeRenderer" ' + (state2.settings.useSafeRenderer ? "checked" : "") + "> Use safe generic renderer for custom presets</label>",
-    '<label class="sotl-label">Custom template rendering',
-    `<select class="sotl-select" data-sotl-field="customTemplateMode" ${state2.settings.useSafeRenderer ? "disabled" : ""}>`,
-    `  <option value="trusted_layout"${effectiveTemplateMode(state2) === "trusted_layout" ? " selected" : ""}>Trusted layout (preserve custom HTML/CSS)</option>`,
-    `  <option value="strict_sanitized"${effectiveTemplateMode(state2) === "strict_sanitized" ? " selected" : ""}>Strict sanitized</option>`,
-    `  <option value="safe_generic"${effectiveTemplateMode(state2) === "safe_generic" ? " selected" : ""}>Safe generic renderer only</option>`,
-    "</select>",
-    "</label>",
-    '<label class="sotl-label">Message card position',
-    `<select class="sotl-select" data-sotl-field="messageCardPlacement">${renderPlacementOptions(state2)}</select>`,
-    "</label>",
-    '<label class="sotl-label">Card density',
-    `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state2)}</select>`,
-    "</label>",
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state2.settings.stripTrackerBlocksFromMessages ? "checked" : "") + "> Strip passive tracker blocks when allowed</label>",
-    // Configurable Generation Timeout Dropdown (Issue 7)
-    '<label class="sotl-label">Generation timeout',
-    (() => {
-      const timeoutMs = state2.settings.sidecarGenerationTimeoutMs ?? 18e4;
-      const options = [
-        `<option value="60000"${timeoutMs === 6e4 ? " selected" : ""}>60 seconds</option>`,
-        `<option value="120000"${timeoutMs === 12e4 ? " selected" : ""}>120 seconds</option>`,
-        `<option value="180000"${timeoutMs === 18e4 ? " selected" : ""}>180 seconds (default)</option>`,
-        `<option value="300000"${timeoutMs === 3e5 ? " selected" : ""}>300 seconds</option>`,
-        `<option value="0"${timeoutMs === 0 ? " selected" : ""}>No timeout (manual cancel only)</option>`
-      ];
-      return `<select class="sotl-select" data-sotl-field="sidecarGenerationTimeoutMs">${options.join("")}</select>`;
-    })(),
-    "</label>",
-    '<label class="sotl-label">Tracker history limit',
-    (() => {
-      const limit = state2.settings.trackerHistoryLimit ?? 5;
-      const options = [
-        `<option value="1"${limit === 1 ? " selected" : ""}>Last 1 tracker</option>`,
-        `<option value="3"${limit === 3 ? " selected" : ""}>Last 3 trackers</option>`,
-        `<option value="5"${limit === 5 ? " selected" : ""}>Last 5 trackers (default)</option>`,
-        `<option value="10"${limit === 10 ? " selected" : ""}>Last 10 trackers</option>`,
-        `<option value="20"${limit === 20 ? " selected" : ""}>Last 20 trackers</option>`,
-        `<option value="0"${limit === 0 ? " selected" : ""}>Unlimited (keep all)</option>`
-      ];
-      return `<select class="sotl-select" data-sotl-field="trackerHistoryLimit">${options.join("")}</select>`;
-    })(),
-    `<p class="sotl-note">Controls how many tracker snapshots are kept per chat. Generation context always uses a safe compact subset. Latest tracker is always preserved.</p>`,
-    "</label>",
-    "</div>",
-    '<div class="sotl-actions">',
-    button("Generate tracker", "generate", { primary: true, disabled: Boolean(disabledReason) && !state2.generation.running, title: disabledReason }),
-    state2.generation.running ? button("Cancel Generation", "cancel-generation", { primary: false, style: "background: rgba(220,53,69,0.1); color: var(--lv-error-text,#bd2130); border-color: rgba(220,53,69,0.2);" }) : "",
-    button("Refresh", "refresh"),
-    button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
-    "</div>",
-    // Refined Generate Status Banner (Issue 7 & QoL #3)
-    (() => {
-      if (state2.generation.running) {
-        return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-accent, #3864d9); background: rgba(56, 100, 217, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-accent, #3864d9);">
-          <span class="sotl-spin" style="display: inline-block;">\u23F3</span>
-          <div style="flex: 1;">${escapeHtml2(state2.generation.message || "Generating tracker...")}</div>
-        </div>`;
-      }
-      if (disabledReason) {
-        return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-warning-border, #b06800); background: rgba(255, 193, 7, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-warning-text, #8a4f00);">
-          <span>\u{1F6AB}</span>
-          <div style="flex: 1;">Blocked: ${escapeHtml2(disabledReason)}</div>
-        </div>`;
-      }
-      return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-success-border, #176b43); background: rgba(27, 126, 80, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-success-text, #176b43);">
-        <span>\u{1F7E2}</span>
-        <div style="flex: 1;">Ready to track the latest assistant message.</div>
-      </div>`;
-    })(),
-    // Refined premium banner toasts (QoL #3)
-    status.lastToast ? `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid ${status.lastToast.level === "success" ? "#176b43" : status.lastToast.level === "error" ? "#bd2130" : "#b06800"}; background: ${status.lastToast.level === "success" ? "rgba(27,126,80,0.07)" : status.lastToast.level === "error" ? "rgba(220,53,69,0.08)" : "rgba(255,193,7,0.08)"}; display: flex; align-items: center; gap: 8px; font-size: 12px;">
-          <span>${status.lastToast.level === "success" ? "\u2705" : status.lastToast.level === "error" ? "\u274C" : "\u26A0\uFE0F"}</span>
-          <div style="flex: 1; line-height: 1.4; color: ${status.lastToast.level === "success" ? "var(--lv-success-text,#176b43)" : status.lastToast.level === "error" ? "var(--lv-error-text,#bd2130)" : "var(--lv-warning-text,#8a4f00)"}; font-weight: 500;">${escapeHtml2(status.lastToast.message)}</div>
-        </div>` : "",
-    "</section>",
-    '<section class="sotl-panel">',
-    "<h3>Current Loom" + (state2.diagnostics.lastRenderStatus?.includes("Stale") ? ' <span style="display: inline-block; background: rgba(255, 193, 7, 0.12); border: 1px solid #ffc107; color: #b58900; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-left: 8px; vertical-align: middle;">\u26A0\uFE0F Stale: New messages sent</span>' : "") + "</h3>",
+    "<h3>Current Loom" + (state2.diagnostics.lastRenderStatus?.includes("Stale") ? ' <span class="sotl-inline-warning">Stale: New messages sent</span>' : "") + "</h3>",
     renderLatestTracker(state2),
     "</section>",
     '<section class="sotl-panel">',
@@ -3367,45 +3637,12 @@ function renderDrawer(state2, status = {}) {
     "</section>",
     renderFeatureBreakdown(true),
     '<section class="sotl-panel">',
-    '<details class="sotl-details"><summary>Custom Template Editor</summary>',
-    '<div style="margin-top: 10px;">',
+    `<details class="sotl-details sotl-settings-section" data-sotl-section="template-editor"${detailOpenAttr("template-editor")}>`,
+    '<summary><span class="sotl-summary-title">Custom Template Editor</span><span class="sotl-summary-meta">import, edit, preview</span></summary>',
+    '<div class="sotl-section-pad">',
     renderPresetEditor(state2),
     "</div>",
     "</details>",
-    "</section>",
-    '<section class="sotl-panel">',
-    "<h3>Diagnostics</h3>",
-    state2.diagnostics.storageWarning ? `<p class="sotl-note sotl-warning">${escapeHtml2(state2.diagnostics.storageWarning)}</p>` : "",
-    `<p class="sotl-note">${escapeHtml2(state2.diagnostics.renderLimitation || "")}</p>`,
-    state2.diagnostics.lastError ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastError)}</p>` : "",
-    state2.diagnostics.lastGenerationError ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastGenerationError)}</p>` : "",
-    status.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(status.lastRenderStatus)}</p>` : "",
-    state2.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastRenderStatus)}</p>` : "",
-    '<details class="sotl-details" open style="margin-top: 8px;"><summary>\u{1F50D} Tracker Pipeline Report</summary>',
-    renderPipelineReport(state2),
-    "</details>",
-    '<details class="sotl-details" open style="margin-top: 8px;"><summary>Context Injection Report</summary>',
-    renderInjectionReport(state2),
-    "</details>",
-    (() => {
-      const doc = typeof document !== "undefined" ? document : null;
-      const isMounted = doc ? Boolean(doc.querySelector('[data-sotl-chat-panel="true"]')) : false;
-      const visibleDrawer = doc ? Boolean(doc.querySelector(".lumiverse-drawer, .drawer, [data-drawer], #drawer, .sotl-drawer")) : false;
-      const visibleSettings = doc ? Boolean(doc.querySelector(".lumiverse-settings, .settings-modal, [data-settings], #settings, .sotl-settings")) : false;
-      let reason = "Active";
-      if (!state2.settings.showChatHudLauncher) reason = "Disabled by user settings";
-      else if (visibleDrawer) reason = "Soft-hidden: Loom Drawer is open";
-      else if (visibleSettings) reason = "Soft-hidden: Extension Settings are open";
-      else if (!isMounted) reason = "Not mounted (waiting for DOM render)";
-      return [
-        '<div style="font-size: 11px; margin-top: 8px; border-top: 1px solid var(--lumiverse-border, rgba(80,88,100,0.15)); padding-top: 8px; display: grid; gap: 4px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));">',
-        `  <div><strong>HUD Launcher:</strong> ${state2.settings.showChatHudLauncher ? '<span style="color: var(--lv-success-text, #176b43); font-weight: 600;">Enabled</span>' : "Disabled"}</div>`,
-        `  <div><strong>HUD DOM Status:</strong> ${isMounted ? '<span style="color: var(--lv-success-text, #176b43); font-weight: 600;">Mounted</span>' : "Not Mounted"}</div>`,
-        `  <div><strong>HUD Placement State:</strong> <em>${escapeHtml2(reason)}</em></div>`,
-        `  <div><strong>Message Cards:</strong> ${state2.settings.renderInMessages ? '<span style="color: var(--lv-accent, #3864d9); font-weight: 600;">Enabled (Experimental)</span>' : "Disabled"}</div>`,
-        "</div>"
-      ].join("");
-    })(),
     "</section>",
     "</div>"
   ].join("");
@@ -3421,7 +3658,7 @@ var openDrawerCallback = null;
 function registerOpenDrawerCallback(cb) {
   openDrawerCallback = cb;
 }
-function documentRef() {
+function documentRef2() {
   return typeof document === "undefined" ? null : document;
 }
 function escapeHtml3(value) {
@@ -3470,7 +3707,7 @@ function cleanupMessageCards(ctx) {
   injectedWrappers.clear();
 }
 function mountMessageCards(ctx, state2) {
-  const doc = documentRef();
+  const doc = documentRef2();
   if (!doc) return { status: "Message-card renderer unavailable: no document." };
   if (!state2) return { status: "Message-card renderer waiting for backend state." };
   const showCards = state2.settings.renderInMessages;
@@ -3644,7 +3881,7 @@ function renderCompactPanel(tracker, state2) {
   ].join("\n");
 }
 function ensureChatLoomPanel(ctx, state2) {
-  const doc = documentRef();
+  const doc = documentRef2();
   if (!doc) return;
   doc.querySelector(".sotl-chat-panel-container")?.remove();
   if (!state2) return;
@@ -3763,7 +4000,7 @@ function attachContainerClickHandler(container, ctx, state2, doc) {
   });
 }
 function ensureFloatingButton(ctx, state2) {
-  const doc = documentRef();
+  const doc = documentRef2();
   if (!doc) return;
   doc.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
   if (!state2?.settings.showFloatingButton) return;
@@ -3803,6 +4040,16 @@ var loomStyles = `
   background: var(--lumiverse-fill-subtle, var(--lv-surface, rgba(255, 255, 255, 0.78)));
   padding: 12px;
 }
+.sotl-control-panel {
+  display: grid;
+  gap: 10px;
+}
+.sotl-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
 .sotl-panel h2, .sotl-panel h3, .sotl-card h3, .sotl-card h4 {
   margin: 0;
   line-height: 1.2;
@@ -3834,6 +4081,66 @@ var loomStyles = `
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+}
+.sotl-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.sotl-quick-grid article {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.16)));
+  border-radius: 7px;
+  padding: 8px;
+  background: var(--lumiverse-fill, rgba(255, 255, 255, 0.46));
+}
+.sotl-quick-grid span,
+.sotl-quick-grid em {
+  color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+  font-size: 11px;
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+.sotl-quick-grid strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.sotl-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.sotl-save-pulse {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(27, 126, 80, 0.28);
+  background: rgba(27, 126, 80, 0.08);
+  color: var(--lv-success-text, #176b43);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sotl-inline-warning {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(176, 104, 0, 0.28);
+  background: rgba(176, 104, 0, 0.1);
+  color: var(--lv-warning-text, #8a4f00);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.sotl-strong-note {
+  color: var(--lv-accent, #3864d9);
+  font-weight: 700;
 }
 .sotl-chip, .sotl-pill {
   display: inline-flex;
@@ -4012,6 +4319,8 @@ var loomStyles = `
   margin-bottom: 4px;
 }
 .sotl-icon-button {
+  display: inline-grid;
+  place-items: center;
   width: 28px;
   height: 28px;
   border-radius: 6px;
@@ -4020,6 +4329,17 @@ var loomStyles = `
   color: inherit;
   cursor: pointer;
   line-height: 1;
+  padding: 0;
+}
+.sotl-icon-button svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.sotl-icon-button:hover {
+  color: var(--lv-accent, #3864d9);
+  border-color: var(--lv-accent, #3864d9);
+  background: var(--lumiverse-fill-subtle, var(--lv-surface-subtle, rgba(56, 100, 217, 0.08)));
 }
 .sotl-code {
   white-space: pre-wrap;
@@ -4051,6 +4371,10 @@ var loomStyles = `
   padding: 8px 10px;
   margin-top: 8px;
 }
+.sotl-settings-section {
+  padding: 0;
+  overflow: hidden;
+}
 .sotl-details summary {
   font-size: 13px;
   font-weight: 600;
@@ -4059,10 +4383,112 @@ var loomStyles = `
   user-select: none;
   outline: none;
 }
+.sotl-settings-section > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+}
+.sotl-settings-section[open] > summary {
+  margin-bottom: 0;
+  padding-bottom: 9px;
+}
+.sotl-summary-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sotl-summary-meta {
+  color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+}
+.sotl-settings-section > .sotl-fields,
+.sotl-settings-section > .sotl-section-pad,
+.sotl-settings-section > .sotl-injection-report,
+.sotl-settings-section > div:not(.sotl-toast) {
+  padding: 10px;
+}
 .sotl-details[open] summary {
   border-bottom: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.15)));
   padding-bottom: 6px;
   margin-bottom: 8px;
+}
+.sotl-preview--short {
+  max-height: 220px;
+  border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.18));
+  border-radius: 6px;
+  padding: 4px;
+  background: rgba(0,0,0,0.05);
+}
+.sotl-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border-left: 4px solid var(--lv-accent, #3864d9);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sotl-status-banner--info {
+  color: var(--lv-accent, #3864d9);
+  background: rgba(56, 100, 217, 0.08);
+}
+.sotl-status-banner--warning {
+  color: var(--lv-warning-text, #8a4f00);
+  border-left-color: var(--lv-warning-border, #b06800);
+  background: rgba(255, 193, 7, 0.08);
+}
+.sotl-status-banner--success {
+  color: var(--lv-success-text, #176b43);
+  border-left-color: var(--lv-success-border, #176b43);
+  background: rgba(27, 126, 80, 0.08);
+}
+.sotl-status-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+.sotl-status-banner--warning .sotl-status-dot {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  background: transparent;
+  border: 1px solid currentColor;
+  font-size: 11px;
+}
+.sotl-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border-left: 4px solid #b06800;
+  background: rgba(255, 193, 7, 0.08);
+  font-size: 12px;
+}
+.sotl-toast--success {
+  border-left-color: #176b43;
+  background: rgba(27,126,80,0.07);
+}
+.sotl-toast--error {
+  border-left-color: #bd2130;
+  background: rgba(220,53,69,0.08);
+}
+.sotl-diagnostic-grid {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--lumiverse-border, rgba(80,88,100,0.15));
+  color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+  font-size: 11px;
 }
 .sotl-feature-grid {
   display: grid;
@@ -4363,8 +4789,17 @@ var loomStyles = `
   .sotl-root {
     padding: 10px;
   }
-  .sotl-grid, .sotl-row, .sotl-feature-grid {
+  .sotl-grid, .sotl-row, .sotl-feature-grid, .sotl-quick-grid, .sotl-mini-grid {
     grid-template-columns: 1fr;
+  }
+  .sotl-panel {
+    padding: 10px;
+  }
+  .sotl-settings-section > summary {
+    align-items: flex-start;
+  }
+  .sotl-summary-meta {
+    max-width: 44%;
   }
   .sotl-card__head {
     flex-direction: column;
@@ -4416,9 +4851,11 @@ var messageCardRetryTimer;
 var lastFrontendError;
 var lastRenderStatus;
 var lastToast;
+var lastSettingsSavedAt;
+var settingsSavedTimer;
 var cleanupFns = [];
 var rootListenerCleanups = /* @__PURE__ */ new Map();
-function documentRef2() {
+function documentRef3() {
   return typeof document === "undefined" ? null : document;
 }
 function isRecord2(value) {
@@ -4449,7 +4886,8 @@ function uiStatus() {
     backendTimedOut,
     lastFrontendError,
     lastRenderStatus,
-    lastToast
+    lastToast,
+    lastSettingsSavedAt
   };
 }
 function clearBackendTimer() {
@@ -4482,7 +4920,7 @@ function installStyle(ctx) {
     if (typeof cleanup === "function") cleanupFns.push(cleanup);
     return;
   }
-  const doc = documentRef2();
+  const doc = documentRef3();
   if (!doc || doc.getElementById("state-of-the-loom-styles")) return;
   const style = doc.createElement("style");
   style.id = "state-of-the-loom-styles";
@@ -4497,11 +4935,14 @@ function bindRootEvents(root) {
   if (rootListenerCleanups.has(root)) return;
   const click = (event) => handleDrawerEvent(event);
   const change = (event) => handleDrawerEvent(event);
+  const toggle = (event) => handleDrawerEvent(event);
   root.addEventListener("click", click);
   root.addEventListener("change", change);
+  root.addEventListener("toggle", toggle, true);
   const cleanup = () => {
     root.removeEventListener("click", click);
     root.removeEventListener("change", change);
+    root.removeEventListener("toggle", toggle, true);
     rootListenerCleanups.delete(root);
   };
   rootListenerCleanups.set(root, cleanup);
@@ -4536,7 +4977,7 @@ function registerDrawer(ctx) {
       console.warn?.(`State of the Loom drawer registration failed: ${text}`);
     }
   }
-  const doc = documentRef2();
+  const doc = documentRef3();
   if (!doc) return;
   fallbackRoot = doc.createElement("div");
   fallbackRoot.dataset.sotlDrawerFallback = "true";
@@ -4595,7 +5036,7 @@ function activateDrawer() {
   if (drawerHandle?.activate) {
     drawerHandle.activate();
   }
-  const doc = documentRef2();
+  const doc = documentRef3();
   if (doc) {
     setTimeout(() => {
       const currentLoom = doc.querySelector(".sotl-card") ?? doc.querySelector('[data-sotl-card="true"]') ?? drawerRoot?.querySelector(".sotl-card");
@@ -4626,11 +5067,18 @@ function paint(status) {
     } catch {
     }
   }
-  renderInto(drawerRoot, renderDrawer(state, status));
-  renderInto(settingsRoot, renderSettingsPanel(state, status));
-  if (drawerHandle?.update) drawerHandle.update(renderDrawer(state, status));
-  if (settingsHandle?.update) settingsHandle.update(renderSettingsPanel(state, status));
-  if (fallbackRoot) fallbackRoot.innerHTML = renderDrawer(state, status);
+  const doc = documentRef3();
+  const restoreRoot = drawerRoot ?? settingsRoot ?? fallbackRoot ?? doc;
+  const snapshot = captureUiState(restoreRoot);
+  const drawerHtml = renderDrawer(state, status);
+  const settingsHtml = renderSettingsPanel(state, status);
+  renderInto(drawerRoot, drawerHtml);
+  renderInto(settingsRoot, settingsHtml);
+  if (drawerHandle?.update) drawerHandle.update(drawerHtml);
+  if (settingsHandle?.update) settingsHandle.update(settingsHtml);
+  if (fallbackRoot) fallbackRoot.innerHTML = drawerHtml;
+  restoreUiState(drawerRoot ?? fallbackRoot ?? doc, snapshot);
+  restoreUiState(settingsRoot ?? doc, snapshot);
 }
 function updateMessageCardStatus() {
   if (contextRef) {
@@ -4657,14 +5105,38 @@ function scheduleMessageCardRetry() {
     paint(uiStatus());
   }, 400);
 }
+function pulseSettingsSaved() {
+  lastSettingsSavedAt = Date.now();
+  if (settingsSavedTimer !== void 0 && typeof globalThis.clearTimeout === "function") {
+    globalThis.clearTimeout(settingsSavedTimer);
+  }
+  if (typeof globalThis.setTimeout !== "function") return;
+  settingsSavedTimer = globalThis.setTimeout(() => {
+    settingsSavedTimer = void 0;
+    lastSettingsSavedAt = void 0;
+    paint(uiStatus());
+  }, 1600);
+}
 function saveSettings(patch) {
   if (!contextRef) return;
+  if (state) {
+    state = { ...state, settings: { ...state.settings, ...patch } };
+    pulseSettingsSaved();
+    paint(uiStatus());
+  }
   postToBackend(contextRef, { type: "save_settings", settings: patch });
 }
 function handleDrawerEvent(event) {
   const markedEvent = event;
   if (markedEvent.__sotlHandled) return;
   const target = event.target;
+  if (event.type === "toggle") {
+    const section = target?.closest?.("details[data-sotl-section]");
+    if (section?.dataset.sotlSection) {
+      setUiSectionOpen(section.dataset.sotlSection, section.open);
+    }
+    return;
+  }
   if (!target || !contextRef) return;
   const actionButton = target.closest("[data-sotl-action]");
   if (actionButton) {
@@ -4691,7 +5163,7 @@ function handleDrawerEvent(event) {
     if (action === "card-hide" && state?.activeChat.id) postToBackend(contextRef, { type: "hide_tracker", chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, hidden: true });
     if (action === "card-delete" && state?.activeChat.id) postToBackend(contextRef, { type: "delete_tracker", chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId });
     if (action === "save-json" && state?.latestTracker) {
-      const doc = documentRef2();
+      const doc = documentRef3();
       const textarea = doc?.querySelector('[data-sotl-field="latestJson"]');
       if (!textarea) return;
       try {
@@ -4869,7 +5341,7 @@ function handleDrawerEvent(event) {
       return;
     }
     if (action === "editor-upload-single") {
-      const doc = documentRef2();
+      const doc = documentRef3();
       const fileInput = doc?.getElementById("sotl-upload-single");
       if (fileInput) {
         fileInput.value = "";
@@ -4881,7 +5353,7 @@ function handleDrawerEvent(event) {
       return;
     }
     if (action === "editor-upload-pack") {
-      const doc = documentRef2();
+      const doc = documentRef3();
       const fileInput = doc?.getElementById("sotl-upload-pack");
       if (fileInput) {
         fileInput.value = "";
@@ -4893,7 +5365,7 @@ function handleDrawerEvent(event) {
       return;
     }
     if (action === "editor-import") {
-      const doc = documentRef2();
+      const doc = documentRef3();
       const textarea = doc?.getElementById("sotl-import-paste");
       const rawText = textarea?.value?.trim() ?? "";
       if (!rawText) {
@@ -5122,7 +5594,10 @@ function handleBackendMessage(message) {
     state = message.state;
   }
   if (message.type === "storage_reset") clearImportStatus();
-  if (message.type === "settings_saved" && state) state = { ...state, settings: message.settings };
+  if (message.type === "settings_saved" && state) {
+    state = { ...state, settings: message.settings };
+    pulseSettingsSaved();
+  }
   if (message.type === "error") lastFrontendError = message.message;
   if (message.type === "toast") lastToast = { level: message.level, message: message.message };
   if (state) {
@@ -5188,23 +5663,26 @@ function setup(ctx) {
     } catch {
     }
   }
-  documentRef2()?.addEventListener("click", handleDrawerEvent);
-  documentRef2()?.addEventListener("change", handleDrawerEvent);
+  documentRef3()?.addEventListener("click", handleDrawerEvent);
+  documentRef3()?.addEventListener("change", handleDrawerEvent);
+  documentRef3()?.addEventListener("toggle", handleDrawerEvent, true);
   postToBackend(ctx, { type: "ready" });
   startBackendTimer();
   rerender();
   return () => {
-    documentRef2()?.removeEventListener("click", handleDrawerEvent);
-    documentRef2()?.removeEventListener("change", handleDrawerEvent);
+    documentRef3()?.removeEventListener("click", handleDrawerEvent);
+    documentRef3()?.removeEventListener("change", handleDrawerEvent);
+    documentRef3()?.removeEventListener("toggle", handleDrawerEvent, true);
     while (cleanupFns.length > 0) cleanupFns.pop()?.();
     drawerHandle?.destroy?.();
     settingsHandle?.destroy?.();
     clearBackendTimer();
     if (messageCardRetryTimer !== void 0 && typeof globalThis.clearTimeout === "function") globalThis.clearTimeout(messageCardRetryTimer);
+    if (settingsSavedTimer !== void 0 && typeof globalThis.clearTimeout === "function") globalThis.clearTimeout(settingsSavedTimer);
     fallbackRoot?.remove();
-    documentRef2()?.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
-    documentRef2()?.querySelector(".sotl-chat-panel-container")?.remove();
-    documentRef2()?.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
+    documentRef3()?.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
+    documentRef3()?.querySelector(".sotl-chat-panel-container")?.remove();
+    documentRef3()?.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
     rootListenerCleanups.clear();
   };
 }

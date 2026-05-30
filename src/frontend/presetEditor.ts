@@ -3,6 +3,7 @@ import { escapeHtml, button } from './ui.js';
 import { validateTemplateSafety, checkPresetReadiness } from '../shared/validation.js';
 import { buildTemplateCompatibilityReport, renderTrackerHtmlDetailed } from '../shared/renderer.js';
 import { builtInPresets } from '../shared/defaults.js';
+import { isUiSectionOpen } from './uiState.js';
 
 export let editingPreset: LoomPreset | null = null;
 export let lastPreviewHtml: string = '';
@@ -98,6 +99,15 @@ export function isPresetValid(value: unknown): value is LoomPreset {
     && typeof (value as LoomPreset).htmlTemplate === 'string';
 }
 
+function editorDetails(id: string, title: string, body: string, defaultOpen = false): string {
+  return [
+    `<details class="sotl-details" data-sotl-section="${escapeHtml(id)}"${isUiSectionOpen(id, defaultOpen) ? ' open' : ''}>`,
+    `<summary>${escapeHtml(title)}</summary>`,
+    body,
+    '</details>',
+  ].join('');
+}
+
 export function renderPresetEditor(state: LoomFrontendState): string {
   if (!editingPreset || !state.presets.some((p) => p.id === editingPreset!.id)) {
     const active = state.presets.find((p) => p.id === state.settings.activePresetId);
@@ -123,8 +133,8 @@ export function renderPresetEditor(state: LoomFrontendState): string {
     `  <select class="sotl-select" data-sotl-editor-field="selectedPresetId">${presetsOptions}</select>`,
     '</label>',
     isBuiltIn
-      ? '<p class="sotl-note" style="color: var(--lv-accent, #3864d9);">ℹ️ Built-in templates are read-only. Click "Duplicate to Edit" to customize.</p>'
-      : '<p class="sotl-note" style="color: var(--lv-success-text, #176b43);">✏️ You are editing a custom template.</p>',
+      ? '<p class="sotl-note" style="color: var(--lv-accent, #3864d9);">Built-in templates are read-only. Click "Duplicate to Edit" to customize.</p>'
+      : '<p class="sotl-note" style="color: var(--lv-success-text, #176b43);">Editing a custom template.</p>',
     
     (() => {
       const readiness = checkPresetReadiness(editingPreset!);
@@ -135,14 +145,14 @@ export function renderPresetEditor(state: LoomFrontendState): string {
         '<div class="sotl-panel" style="margin-top: 6px; padding: 10px; background: var(--lumiverse-fill-subtle, rgba(255, 255, 255, 0.45)); display: grid; gap: 4px; border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.2));">',
         '  <strong style="font-size: 11px; display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">',
         readiness.ready 
-          ? '🟢 <span style="color: var(--lv-success-text, #176b43);">Ready to Generate</span>' 
-          : '🔴 <span style="color: var(--lv-error-text, #bd2130);">Not Ready to Generate</span>',
+          ? '<span style="color: var(--lv-success-text, #176b43);">Ready to Generate</span>'
+          : '<span style="color: var(--lv-error-text, #bd2130);">Not Ready to Generate</span>',
         '  </strong>',
         '  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; font-size: 11px;">',
-        `    <div>${readiness.schemaValid ? '✅' : '❌'} <strong>Schema:</strong> ${readiness.schemaValid ? 'Valid' : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml(readiness.schemaError || 'Invalid')}</span>`}</div>`,
-        `    <div>${readiness.sampleDataValid ? '✅' : '❌'} <strong>Sample Data:</strong> ${readiness.sampleDataValid ? 'Valid' : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml(readiness.sampleDataError || 'Invalid')}</span>`}</div>`,
-        `    <div>${readiness.templateSafe ? '✅' : '⚠️'} <strong>Template:</strong> ${readiness.templateSafe ? 'Clean' : 'Cleanup warnings'}</div>`,
-        `    <div>${readiness.promptPresent ? '✅' : '❌'} <strong>Instructions:</strong> ${readiness.promptPresent ? 'Present' : 'Missing'}</div>`,
+        `    <div><strong>Schema:</strong> ${readiness.schemaValid ? 'Valid' : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml(readiness.schemaError || 'Invalid')}</span>`}</div>`,
+        `    <div><strong>Sample Data:</strong> ${readiness.sampleDataValid ? 'Valid' : `<span style="color:var(--lv-error-text,#bd2130);">${escapeHtml(readiness.sampleDataError || 'Invalid')}</span>`}</div>`,
+        `    <div><strong>Template:</strong> ${readiness.templateSafe ? 'Clean' : 'Cleanup warnings'}</div>`,
+        `    <div><strong>Instructions:</strong> ${readiness.promptPresent ? 'Present' : 'Missing'}</div>`,
         '  </div>',
         warningsList,
         readiness.reasons.length > 0
@@ -160,8 +170,8 @@ export function renderPresetEditor(state: LoomFrontendState): string {
     button('Reset Custom Templates', 'editor-reset', { title: 'Delete all custom templates' }),
     '</div>',
 
-    // Collapsible Details Sections (All collapsed by default)
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Metadata (Name, Description, Mode)</summary>',
+    // Collapsible details sections preserve their open state during autosaves.
+    editorDetails('editor-metadata', 'Metadata', [
     '<div class="sotl-fields" style="margin-top: 8px;">',
     `  <p class="sotl-note">Origin: <code>${escapeHtml(editingPreset.origin || (isBuiltIn ? 'built-in' : 'custom'))}</code> - Engine: <code>${escapeHtml(editingPreset.templateEngine || 'loom')}</code> - Source: <code>${escapeHtml(editingPreset.sourceFormat || 'loom')}</code></p>`,
     '  <label class="sotl-label">Template Name',
@@ -183,43 +193,46 @@ export function renderPresetEditor(state: LoomFrontendState): string {
     `      <option value="bottom"${editingPreset.defaultPlacement === 'bottom' ? ' selected' : ''}>Bottom of message</option>`,
     '    </select>',
     '  </label>',
-    '  <label class="sotl-label">Max Injection Tokens',
-    `    <input class="sotl-input" type="number" data-sotl-editor-field="maxInjectionTokens" value="${editingPreset.maxInjectionTokens}" ${isBuiltIn ? 'disabled' : ''}>`,
-    '  </label>',
     '</div>',
-    '</details>',
+    ].join('')),
 
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>HTML Template</summary>',
+    editorDetails('editor-html-template', 'HTML Template', [
     '<div class="sotl-fields" style="margin-top: 8px;">',
     `  <textarea class="sotl-textarea" data-sotl-editor-field="htmlTemplate" ${isBuiltIn ? 'disabled' : ''}>${escapeHtml(editingPreset.htmlTemplate)}</textarea>`,
     '</div>',
-    '</details>',
+    ].join('')),
 
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Prompt Instructions</summary>',
+    editorDetails('editor-prompt', 'Prompt Instructions', [
     '<div class="sotl-fields" style="margin-top: 8px;">',
     `  <textarea class="sotl-textarea" data-sotl-editor-field="promptInstructions" ${isBuiltIn ? 'disabled' : ''}>${escapeHtml(editingPreset.promptInstructions)}</textarea>`,
     '</div>',
-    '</details>',
+    ].join('')),
 
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Schema JSON</summary>',
+    editorDetails('editor-schema', 'Schema JSON', [
     '<div class="sotl-fields" style="margin-top: 8px;">',
     `  <textarea class="sotl-textarea" data-sotl-editor-field="schemaJson" ${isBuiltIn ? 'disabled' : ''}>${escapeHtml(JSON.stringify(editingPreset.schemaJson, null, 2))}</textarea>`,
     '</div>',
-    '</details>',
+    ].join('')),
 
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Sample Data JSON</summary>',
+    editorDetails('editor-sample-data', 'Sample Data JSON', [
     '<div class="sotl-fields" style="margin-top: 8px;">',
     `  <textarea class="sotl-textarea" data-sotl-editor-field="sampleData" ${isBuiltIn ? 'disabled' : ''}>${escapeHtml(JSON.stringify(editingPreset.sampleData, null, 2))}</textarea>`,
     '</div>',
-    '</details>',
+    ].join('')),
 
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Injection Template</summary>',
+    editorDetails('editor-legacy-injection', 'Legacy Preset Injection Fields', [
     '<div class="sotl-fields" style="margin-top: 8px;">',
+    '  <p class="sotl-note">Legacy per-preset fields. Context Injection Lite uses the global Context Injection settings in the drawer.</p>',
+    '  <label class="sotl-label">Max Injection Tokens',
+    `    <input class="sotl-input" type="number" data-sotl-editor-field="maxInjectionTokens" value="${editingPreset.maxInjectionTokens}" ${isBuiltIn ? 'disabled' : ''}>`,
+    '  </label>',
+    '  <label class="sotl-label">Injection Template',
     `  <textarea class="sotl-textarea" data-sotl-editor-field="injectionTemplate" ${isBuiltIn ? 'disabled' : ''}>${escapeHtml(editingPreset.injectionTemplate)}</textarea>`,
+    '  </label>',
     '</div>',
-    '</details>',
+    ].join('')),
 
-    '<details class="sotl-details" style="margin-top: 8px;"><summary>Import / Export</summary>',
+    editorDetails('editor-import-export', 'Import / Export', [
     '<div class="sotl-fields" style="margin-top: 8px;">',
     '  <div class="sotl-actions" style="margin-bottom: 8px; flex-wrap: wrap;">',
     button('Copy Template JSON', 'editor-export'),
@@ -242,7 +255,7 @@ export function renderPresetEditor(state: LoomFrontendState): string {
       ? [
           `<div style="margin-top: 10px; padding: 8px 10px; border-radius: 6px; border-left: 3px solid ${lastImportStatus.ok ? 'var(--lv-success-text,#176b43)' : '#dc3545'}; background: ${lastImportStatus.ok ? 'rgba(27,126,80,0.07)' : 'rgba(220,53,69,0.08)'};">`,
           `  <strong style="font-size: 11px; color: ${lastImportStatus.ok ? 'var(--lv-success-text,#176b43)' : 'var(--lv-error-text,#bd2130)'};">`,
-          lastImportStatus.ok ? '✅ Import succeeded' : '❌ Import failed',
+          lastImportStatus.ok ? 'Import succeeded' : 'Import failed',
           '</strong>',
           `  <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.4;">${escapeHtml(lastImportStatus.message)}</p>`,
           lastImportStatus.presetName ? `  <p style="margin: 4px 0 0; font-size: 11px; color: var(--lumiverse-text-muted,#64707d);">Template: <strong>${escapeHtml(lastImportStatus.presetName)}</strong></p>` : '',
@@ -251,10 +264,10 @@ export function renderPresetEditor(state: LoomFrontendState): string {
         ].join('')
       : '',
     '</div>',
-    '</details>',
+    ].join('')),
 
     // Preview / Validation Section
-    '<details class="sotl-details" style="margin-top: 8px;" open><summary>Preview & Validation</summary>',
+    editorDetails('editor-preview-validation', 'Preview & Validation', [
     '<div style="margin-top: 8px;">',
     '  <div class="sotl-actions" style="margin-bottom: 8px;">',
     button('Run Template Preview', 'editor-preview', { primary: true }),
@@ -295,7 +308,7 @@ export function renderPresetEditor(state: LoomFrontendState): string {
         ].join('\n')
       : '<p class="sotl-note">Click "Run Template Preview" to check how this template renders with the sample data.</p>',
     '</div>',
-    '</details>',
+    ].join(''), true),
 
     '</div>',
   ].join('');

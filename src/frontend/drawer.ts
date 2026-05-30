@@ -4,6 +4,7 @@ import { renderTrackerForState } from './rendering.js';
 import { renderPresetEditor } from './presetEditor.js';
 import { renderFeatureBreakdown } from './settingsPanel.js';
 import { badge, button, escapeHtml, type LoomUiStatus } from './ui.js';
+import { isUiSectionOpen } from './uiState.js';
 
 function renderConnectionOptions(state: LoomFrontendState): string {
   const selected = state.settings.sidecarConnectionId || '';
@@ -53,6 +54,73 @@ function renderCardDensityOptions(state: LoomFrontendState): string {
     const selected = state.settings.cardDensity === density ? ' selected' : '';
     return `<option value="${density}"${selected}>${label}</option>`;
   }).join('');
+}
+
+function detailOpenAttr(id: string, defaultOpen = false): string {
+  return isUiSectionOpen(id, defaultOpen) ? ' open' : '';
+}
+
+function renderSettingsSection(id: string, title: string, meta: string, body: string, defaultOpen = false): string {
+  return [
+    `<details class="sotl-details sotl-settings-section" data-sotl-section="${escapeHtml(id)}"${detailOpenAttr(id, defaultOpen)}>`,
+    `<summary><span class="sotl-summary-title">${escapeHtml(title)}</span>${meta ? `<span class="sotl-summary-meta">${escapeHtml(meta)}</span>` : ''}</summary>`,
+    body,
+    '</details>',
+  ].join('');
+}
+
+function renderSavePulse(status: LoomUiStatus): string {
+  if (!status.lastSettingsSavedAt) return '';
+  return '<span class="sotl-save-pulse">Saved</span>';
+}
+
+function formatTrackerAge(generatedAt?: string): string {
+  if (!generatedAt) return 'none yet';
+  const time = Date.parse(generatedAt);
+  if (Number.isNaN(time)) return generatedAt;
+  const seconds = Math.max(0, Math.round((Date.now() - time) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  return `${hours}h ago`;
+}
+
+function renderTimeoutOptions(state: LoomFrontendState): string {
+  const timeoutMs = state.settings.sidecarGenerationTimeoutMs ?? 180000;
+  return [
+    `<option value="60000"${timeoutMs === 60000 ? ' selected' : ''}>60 seconds</option>`,
+    `<option value="120000"${timeoutMs === 120000 ? ' selected' : ''}>120 seconds</option>`,
+    `<option value="180000"${timeoutMs === 180000 ? ' selected' : ''}>180 seconds (default)</option>`,
+    `<option value="300000"${timeoutMs === 300000 ? ' selected' : ''}>300 seconds</option>`,
+    `<option value="0"${timeoutMs === 0 ? ' selected' : ''}>No timeout (manual cancel only)</option>`,
+  ].join('');
+}
+
+function renderHistoryLimitOptions(state: LoomFrontendState): string {
+  const limit = state.settings.trackerHistoryLimit ?? 5;
+  return [
+    `<option value="1"${limit === 1 ? ' selected' : ''}>Last 1 tracker</option>`,
+    `<option value="3"${limit === 3 ? ' selected' : ''}>Last 3 trackers</option>`,
+    `<option value="5"${limit === 5 ? ' selected' : ''}>Last 5 trackers (default)</option>`,
+    `<option value="10"${limit === 10 ? ' selected' : ''}>Last 10 trackers</option>`,
+    `<option value="20"${limit === 20 ? ' selected' : ''}>Last 20 trackers</option>`,
+    `<option value="0"${limit === 0 ? ' selected' : ''}>Unlimited (manual cleanup)</option>`,
+  ].join('');
+}
+
+function renderInjectionBudgetOptions(state: LoomFrontendState): string {
+  const budget = state.settings.promptInjectionTokenBudget ?? 700;
+  return [300, 500, 700, 1000, 1500, 2000].map((value) => (
+    `<option value="${value}"${budget === value ? ' selected' : ''}>~${value} tokens</option>`
+  )).join('');
+}
+
+function renderInjectionLimitOptions(state: LoomFrontendState): string {
+  const limit = state.settings.promptInjectionTrackerLimit ?? 5;
+  return [1, 3, 5, 10].map((value) => (
+    `<option value="${value}"${limit === value ? ' selected' : ''}>Last ${value} tracker${value === 1 ? '' : 's'}</option>`
+  )).join('');
 }
 
 function renderLatestTracker(state: LoomFrontendState): string {
@@ -190,6 +258,273 @@ function renderInjectionReport(state: LoomFrontendState): string {
   ].filter(Boolean).join('');
 }
 
+function renderActiveTemplatePreview(state: LoomFrontendState): string {
+  return renderSettingsSection(
+    'active-template-preview',
+    'Active Template Preview',
+    state.activePreset.name,
+    [
+      '<div class="sotl-fields">',
+      `  <p class="sotl-note sotl-strong-note">Template: ${escapeHtml(state.activePreset.name)}</p>`,
+      `  <p class="sotl-note">${escapeHtml(state.activePreset.description || 'No description.')}</p>`,
+      '  <div class="sotl-preview sotl-preview--short">',
+      (() => {
+        try {
+          const mockTracker = {
+            version: state.activePreset.version || '1.0.0',
+            schemaVersion: '1',
+            presetId: state.activePreset.id,
+            chatId: 'preview-chat',
+            generatedAt: new Date().toISOString(),
+            source: 'manual_edit' as const,
+            placement: state.activePreset.defaultPlacement,
+            data: state.activePreset.sampleData || {},
+            compactSummary: 'Sample preview for ' + state.activePreset.name,
+            validation: { ok: true, issues: [] },
+          };
+          return renderTrackerHtml(mockTracker, state.activePreset, effectiveTemplateMode(state));
+        } catch (err) {
+          return `<p class="sotl-note sotl-warning">Preview render failed: ${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`;
+        }
+      })(),
+      '  </div>',
+      '</div>',
+    ].join(''),
+  );
+}
+
+function renderGenerationBanner(state: LoomFrontendState, disabledReason: string): string {
+  if (state.generation.running) {
+    return [
+      '<div class="sotl-status-banner sotl-status-banner--info">',
+      '  <span class="sotl-spin sotl-status-dot"></span>',
+      `  <div>${escapeHtml(state.generation.message || 'Generating tracker...')}</div>`,
+      '</div>',
+    ].join('');
+  }
+  if (disabledReason) {
+    return [
+      '<div class="sotl-status-banner sotl-status-banner--warning">',
+      '  <span class="sotl-status-dot">!</span>',
+      `  <div>Blocked: ${escapeHtml(disabledReason)}</div>`,
+      '</div>',
+    ].join('');
+  }
+  return [
+    '<div class="sotl-status-banner sotl-status-banner--success">',
+    '  <span class="sotl-status-dot"></span>',
+    '  <div>Ready to track the latest assistant message.</div>',
+    '</div>',
+  ].join('');
+}
+
+function renderToast(status: LoomUiStatus): string {
+  if (!status.lastToast) return '';
+  return [
+    `<div class="sotl-toast sotl-toast--${escapeHtml(status.lastToast.level)}">`,
+    `  <strong>${escapeHtml(status.lastToast.level)}</strong>`,
+    `  <span>${escapeHtml(status.lastToast.message)}</span>`,
+    '</div>',
+  ].join('');
+}
+
+function renderControlsPanel(
+  state: LoomFrontendState,
+  status: LoomUiStatus,
+  selectedConnection: LoomFrontendState['connections'][number] | undefined,
+  disabledReason: string,
+): string {
+  const report = state.diagnostics.injectionReport;
+  const tokenMeta = report ? `~${report.estimatedTokens}/${report.tokenBudget} tokens` : 'no estimate';
+  const latestAge = formatTrackerAge(state.latestTracker?.generatedAt);
+  return [
+    '<section class="sotl-panel sotl-control-panel">',
+    '<div class="sotl-panel-head">',
+    '  <div>',
+    '    <h3>Quick Status</h3>',
+    `    <p class="sotl-note">Active chat: ${escapeHtml(state.activeChat.name || state.activeChat.id || 'Unavailable')}</p>`,
+    '  </div>',
+    renderSavePulse(status),
+    '</div>',
+    '<div class="sotl-quick-grid">',
+    `  <article><span>Preset</span><strong>${escapeHtml(state.activePreset.name)}</strong><em>${escapeHtml(state.activePreset.origin || 'built-in')}</em></article>`,
+    `  <article><span>Generation</span><strong>${state.generation.running ? 'Running' : disabledReason ? 'Blocked' : 'Ready'}</strong><em>${escapeHtml(disabledReason || state.generation.message || 'manual or auto')}</em></article>`,
+    `  <article><span>Injection</span><strong>${state.settings.promptInjectionEnabled ? 'Enabled' : 'Disabled'}</strong><em>${escapeHtml(tokenMeta)}</em></article>`,
+    `  <article><span>Latest Tracker</span><strong>${escapeHtml(latestAge)}</strong><em>${state.messageTrackers.length} retained cards</em></article>`,
+    '</div>',
+    '<div class="sotl-status">',
+    badge('Backend ready', state.backendReady),
+    badge('Chats', state.permissions.chats),
+    badge('Chat mutation', state.permissions.chat_mutation),
+    badge('Generation', state.permissions.generation),
+    badge('Prompt injection', Boolean(state.permissions.interceptor || state.diagnostics.injectionReport?.registered)),
+    badge('Settings UI', Boolean(state.permissions.app_manipulation)),
+    '</div>',
+    renderSettingsSection(
+      'tracking',
+      'Tracking',
+      state.generation.running ? 'generating' : selectedConnection?.name || 'default connection',
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-label">Preset',
+        `<select class="sotl-select" data-sotl-field="preset">${renderPresetOptions(state)}</select>`,
+        '</label>',
+        renderActiveTemplatePreview(state),
+        '<label class="sotl-label">Sidecar connection',
+        `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state)}</select>`,
+        '</label>',
+        `<p class="sotl-note">Connection: ${escapeHtml(selectedConnection?.name || (state.settings.useDefaultConnectionFallback ? 'default/current fallback' : 'none selected'))}</p>`,
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="fallback" ' + (state.settings.useDefaultConnectionFallback ? 'checked' : '') + '> Use default/current connection when none is selected</label>',
+        !state.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : '',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state.settings.autoGenerate ? 'checked' : '') + '> Auto-generate after assistant messages</label>',
+        '<label class="sotl-label">Generation timeout',
+        `<select class="sotl-select" data-sotl-field="sidecarGenerationTimeoutMs">${renderTimeoutOptions(state)}</select>`,
+        '</label>',
+        '<div class="sotl-actions">',
+        button('Generate tracker', 'generate', { primary: true, disabled: Boolean(disabledReason) && !state.generation.running, title: disabledReason }),
+        state.generation.running ? button('Cancel Generation', 'cancel-generation', { style: 'background: rgba(220,53,69,0.1); color: var(--lv-error-text,#bd2130); border-color: rgba(220,53,69,0.2);' }) : '',
+        button('Refresh', 'refresh'),
+        '</div>',
+        renderGenerationBanner(state, disabledReason),
+        renderToast(status),
+        '</div>',
+      ].filter(Boolean).join(''),
+      true,
+    ),
+    renderSettingsSection(
+      'injection',
+      'Context Injection',
+      state.settings.promptInjectionEnabled ? tokenMeta : 'off',
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionEnabled" ' + (state.settings.promptInjectionEnabled ? 'checked' : '') + '> Inject compact continuity into roleplay prompts</label>',
+        '<label class="sotl-label">Injection mode',
+        `<select class="sotl-select" data-sotl-field="promptInjectionMode">`,
+        `  <option value="latest_plus_history"${state.settings.promptInjectionMode !== 'latest_brief' ? ' selected' : ''}>Latest tracker + recent summaries</option>`,
+        `  <option value="latest_brief"${state.settings.promptInjectionMode === 'latest_brief' ? ' selected' : ''}>Latest tracker only</option>`,
+        '</select>',
+        '</label>',
+        '<div class="sotl-mini-grid">',
+        '<label class="sotl-label">Token budget',
+        `<select class="sotl-select" data-sotl-field="promptInjectionTokenBudget">${renderInjectionBudgetOptions(state)}</select>`,
+        '</label>',
+        '<label class="sotl-label">Trackers considered',
+        `<select class="sotl-select" data-sotl-field="promptInjectionTrackerLimit">${renderInjectionLimitOptions(state)}</select>`,
+        '</label>',
+        '</div>',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeAppearance" ' + (state.settings.promptInjectionIncludeAppearance !== false ? 'checked' : '') + '> Include character appearance anchors</label>',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeRules" ' + (state.settings.promptInjectionIncludeRules !== false ? 'checked' : '') + '> Include continuity rules and warnings</label>',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeNextTurn" ' + (state.settings.promptInjectionIncludeNextTurn !== false ? 'checked' : '') + '> Include next-turn guidance</label>',
+        '<p class="sotl-note">Best setup: latest detailed tracker plus a few compact summaries. The full tracker stays stored and visible without flooding context.</p>',
+        renderInjectionReport(state),
+        '</div>',
+      ].join(''),
+      Boolean(state.settings.promptInjectionEnabled),
+    ),
+    renderSettingsSection(
+      'hud-display',
+      'HUD & Display',
+      `${state.settings.hudDefaultView} HUD`,
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatHudLauncher" ' + (state.settings.showChatHudLauncher ? 'checked' : '') + '> Show paw HUD launcher</label>',
+        '<label class="sotl-label">HUD default view',
+        `<select class="sotl-select" data-sotl-field="hudDefaultView">`,
+        `  <option value="compact"${state.settings.hudDefaultView === 'compact' ? ' selected' : ''}>Compact summary</option>`,
+        `  <option value="full"${state.settings.hudDefaultView === 'full' ? ' selected' : ''}>Full tracker</option>`,
+        `</select>`,
+        '</label>',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderInMessages" ' + (state.settings.renderInMessages ? 'checked' : '') + '> Attach tracker cards to messages</label>',
+        '<label class="sotl-label">New tracker card position',
+        `<select class="sotl-select" data-sotl-field="messageCardPlacement">${renderPlacementOptions(state)}</select>`,
+        '</label>',
+        state.settings.renderInMessages
+          ? '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="messageButtons" ' + (state.settings.showMessageButtons ? 'checked' : '') + '> Show message-card action buttons</label>'
+          : '',
+        '<p class="sotl-note">Message-card placement applies when trackers are created or regenerated.</p>',
+        '</div>',
+      ].join(''),
+    ),
+    renderSettingsSection(
+      'templates-rendering',
+      'Templates & Rendering',
+      effectiveTemplateMode(state).replace('_', ' '),
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="useSafeRenderer" ' + (state.settings.useSafeRenderer ? 'checked' : '') + '> Force safe generic renderer for custom presets</label>',
+        '<label class="sotl-label">Custom template mode',
+        `<select class="sotl-select" data-sotl-field="customTemplateMode" ${state.settings.useSafeRenderer ? 'disabled' : ''}>`,
+        `  <option value="trusted_layout"${effectiveTemplateMode(state) === 'trusted_layout' ? ' selected' : ''}>Trusted layout (preserve custom HTML/CSS)</option>`,
+        `  <option value="strict_sanitized"${effectiveTemplateMode(state) === 'strict_sanitized' ? ' selected' : ''}>Strict sanitized</option>`,
+        `  <option value="safe_generic"${effectiveTemplateMode(state) === 'safe_generic' ? ' selected' : ''}>Safe generic renderer only</option>`,
+        '</select>',
+        '</label>',
+        '<p class="sotl-note">Trusted layout keeps your custom styling but still removes executable hazards like scripts, event handlers, and javascript URLs.</p>',
+        '</div>',
+      ].join(''),
+    ),
+    renderSettingsSection(
+      'storage-cleanup',
+      'Storage & Cleanup',
+      `${state.settings.trackerHistoryLimit === 0 ? 'unlimited' : `last ${state.settings.trackerHistoryLimit}`} trackers`,
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-label">Tracker history limit',
+        `<select class="sotl-select" data-sotl-field="trackerHistoryLimit">${renderHistoryLimitOptions(state)}</select>`,
+        '</label>',
+        '<p class="sotl-note">Controls how many tracker snapshots are kept per chat. Latest tracker is always preserved.</p>',
+        '<div class="sotl-actions">',
+        button('Reset Loom Storage', 'reset-storage', { title: 'Resets State of the Loom settings, presets, and trackers for this user.' }),
+        '</div>',
+        '</div>',
+      ].join(''),
+    ),
+    renderSettingsSection(
+      'advanced-diagnostics',
+      'Advanced & Diagnostics',
+      'power-user controls',
+      [
+        '<div class="sotl-fields">',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state.settings.stripTrackerBlocksFromMessages ? 'checked' : '') + '> Strip passive tracker blocks when allowed</label>',
+        '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="floating" ' + (state.settings.showFloatingButton ? 'checked' : '') + '> Legacy desktop floating button</label>',
+        '<label class="sotl-label">Legacy density setting',
+        `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state)}</select>`,
+        '</label>',
+        '<p class="sotl-note">Density is stored for compatibility; current cards use each preset renderer density.</p>',
+        state.diagnostics.storageWarning ? `<p class="sotl-note sotl-warning">${escapeHtml(state.diagnostics.storageWarning)}</p>` : '',
+        state.diagnostics.renderLimitation ? `<p class="sotl-note">${escapeHtml(state.diagnostics.renderLimitation)}</p>` : '',
+        state.diagnostics.lastError ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastError)}</p>` : '',
+        state.diagnostics.lastGenerationError ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastGenerationError)}</p>` : '',
+        status.lastRenderStatus ? `<p class="sotl-note">${escapeHtml(status.lastRenderStatus)}</p>` : '',
+        state.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastRenderStatus)}</p>` : '',
+        renderSettingsSection('pipeline-report', 'Tracker Pipeline Report', state.diagnostics.pipelineReport ? 'available' : 'empty', renderPipelineReport(state)),
+        renderSettingsSection('injection-report', 'Context Injection Report', report ? tokenMeta : 'empty', renderInjectionReport(state)),
+        (() => {
+          const doc = typeof document !== 'undefined' ? document : null;
+          const isMounted = doc ? Boolean(doc.querySelector('[data-sotl-chat-panel="true"]')) : false;
+          const visibleDrawer = doc ? Boolean(doc.querySelector('.lumiverse-drawer, .drawer, [data-drawer], #drawer, .sotl-drawer')) : false;
+          const visibleSettings = doc ? Boolean(doc.querySelector('.lumiverse-settings, .settings-modal, [data-settings], #settings, .sotl-settings')) : false;
+          let reason = 'Active';
+          if (!state.settings.showChatHudLauncher) reason = 'Disabled by user settings';
+          else if (visibleDrawer) reason = 'Soft-hidden: Loom Drawer is open';
+          else if (visibleSettings) reason = 'Soft-hidden: Extension Settings are open';
+          else if (!isMounted) reason = 'Not mounted (waiting for DOM render)';
+          return [
+            '<div class="sotl-diagnostic-grid">',
+            `  <div><strong>HUD Launcher:</strong> ${state.settings.showChatHudLauncher ? 'Enabled' : 'Disabled'}</div>`,
+            `  <div><strong>HUD DOM Status:</strong> ${isMounted ? 'Mounted' : 'Not mounted'}</div>`,
+            `  <div><strong>HUD Placement State:</strong> ${escapeHtml(reason)}</div>`,
+            `  <div><strong>Message Cards:</strong> ${state.settings.renderInMessages ? 'Enabled' : 'Disabled'}</div>`,
+            '</div>',
+          ].join('');
+        })(),
+        '</div>',
+      ].filter(Boolean).join(''),
+    ),
+    '</section>',
+  ].join('');
+}
+
 export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStatus = {}): string {
   if (!state) {
     const offlineText = status.backendTimedOut
@@ -214,198 +549,9 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
   const selectedConnection = state.connections.find((connection) => connection.id === state.settings.sidecarConnectionId);
   return [
     '<div class="sotl-root" data-sotl-root="true">',
+    renderControlsPanel(state, status, selectedConnection, disabledReason),
     '<section class="sotl-panel">',
-    '<h2>State of the Loom</h2>',
-    `<p class="sotl-note">Active chat: ${escapeHtml(state.activeChat.name || state.activeChat.id || 'Unavailable')}</p>`,
-    '<div class="sotl-status">',
-    badge('Backend ready', state.backendReady),
-    badge('Chats', state.permissions.chats),
-    badge('Chat mutation', state.permissions.chat_mutation),
-    badge('Generation', state.permissions.generation),
-    badge('Prompt injection', Boolean(state.permissions.interceptor || state.diagnostics.injectionReport?.registered)),
-    badge('Settings UI', Boolean(state.permissions.app_manipulation)),
-    '</div>',
-    '</section>',
-    '<section class="sotl-panel">',
-    '<h3>Controls</h3>',
-    '<div class="sotl-fields">',
-    '<label class="sotl-label">Preset',
-    `<select class="sotl-select" data-sotl-field="preset">${renderPresetOptions(state)}</select>`,
-    '</label>',
-    
-    // Collapsible Active Preset Preview & Render (QoL #1)
-    '<details class="sotl-details" style="margin-top: 4px; margin-bottom: 8px;"><summary>ℹ️ Active Template Preview & Sample Render</summary>',
-    '<div style="margin-top: 8px;">',
-    `  <p class="sotl-note" style="margin-bottom: 8px; color: var(--lv-accent, #3864d9); font-weight: 600;">Template: ${escapeHtml(state.activePreset.name)}</p>`,
-    `  <p class="sotl-note" style="margin-bottom: 8px; font-style: italic;">${escapeHtml(state.activePreset.description || 'No description.')}</p>`,
-    '  <div class="sotl-preview" style="border: 1px dashed var(--lumiverse-border, rgba(80,88,100,0.18)); border-radius: 6px; padding: 4px; max-height: 200px; background: rgba(0,0,0,0.05); overflow-y: auto;">',
-    (() => {
-      try {
-        const mockTracker = {
-          version: state.activePreset.version || '1.0.0',
-          schemaVersion: '1',
-          presetId: state.activePreset.id,
-          chatId: 'preview-chat',
-          generatedAt: new Date().toISOString(),
-          source: 'manual_edit' as const,
-          placement: state.activePreset.defaultPlacement,
-          data: state.activePreset.sampleData || {},
-          compactSummary: 'Sample preview for ' + state.activePreset.name,
-          validation: { ok: true, issues: [] },
-        };
-        return renderTrackerHtml(mockTracker, state.activePreset, effectiveTemplateMode(state));
-      } catch (err) {
-        return `<p class="sotl-note sotl-warning" style="color: var(--lv-error-text,#bd2130);">⚠️ Preview Render Failed: ${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`;
-      }
-    })(),
-    '  </div>',
-    '</div>',
-    '</details>',
-
-    '<label class="sotl-label">Sidecar connection',
-    `<select class="sotl-select" data-sotl-field="connection">${renderConnectionOptions(state)}</select>`,
-    '</label>',
-    `<p class="sotl-note">Connection: ${escapeHtml(selectedConnection?.name || (state.settings.useDefaultConnectionFallback ? 'default/current fallback' : 'none selected'))}</p>`,
-    !state.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : '',
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state.settings.autoGenerate ? 'checked' : '') + '> Auto-generate after assistant messages</label>',
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionEnabled" ' + (state.settings.promptInjectionEnabled ? 'checked' : '') + '> Inject compact continuity into roleplay prompts</label>',
-    '<details class="sotl-details"><summary>Context Injection Lite</summary>',
-    '<div class="sotl-fields">',
-    '<label class="sotl-label">Injection mode',
-    `<select class="sotl-select" data-sotl-field="promptInjectionMode">`,
-    `  <option value="latest_plus_history"${state.settings.promptInjectionMode !== 'latest_brief' ? ' selected' : ''}>Latest tracker + recent summaries</option>`,
-    `  <option value="latest_brief"${state.settings.promptInjectionMode === 'latest_brief' ? ' selected' : ''}>Latest tracker only</option>`,
-    '</select>',
-    '</label>',
-    '<label class="sotl-label">Injection token budget',
-    (() => {
-      const budget = state.settings.promptInjectionTokenBudget ?? 700;
-      const options = [300, 500, 700, 1000, 1500, 2000].map((value) => (
-        `<option value="${value}"${budget === value ? ' selected' : ''}>~${value} tokens</option>`
-      ));
-      return `<select class="sotl-select" data-sotl-field="promptInjectionTokenBudget">${options.join('')}</select>`;
-    })(),
-    '</label>',
-    '<label class="sotl-label">Trackers considered for injection',
-    (() => {
-      const limit = state.settings.promptInjectionTrackerLimit ?? 5;
-      const options = [1, 3, 5, 10].map((value) => (
-        `<option value="${value}"${limit === value ? ' selected' : ''}>Last ${value} tracker${value === 1 ? '' : 's'}</option>`
-      ));
-      return `<select class="sotl-select" data-sotl-field="promptInjectionTrackerLimit">${options.join('')}</select>`;
-    })(),
-    '</label>',
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeAppearance" ' + (state.settings.promptInjectionIncludeAppearance !== false ? 'checked' : '') + '> Include character appearance anchors</label>',
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeRules" ' + (state.settings.promptInjectionIncludeRules !== false ? 'checked' : '') + '> Include continuity rules and warnings</label>',
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeNextTurn" ' + (state.settings.promptInjectionIncludeNextTurn !== false ? 'checked' : '') + '> Include next-turn guidance</label>',
-    '<p class="sotl-note">Best setup: inject the latest detailed tracker as a compact brief, plus a few old compact summaries. The full tracker stays stored and visible without flooding context.</p>',
-    renderInjectionReport(state),
-    '</div>',
-    '</details>',
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatHudLauncher" ' + (state.settings.showChatHudLauncher ? 'checked' : '') + '> Show chat HUD button</label>',
-    
-    '<label class="sotl-label">HUD detail level',
-    `<select class="sotl-select" data-sotl-field="hudDefaultView">`,
-    `  <option value="compact"${state.settings.hudDefaultView === 'compact' ? ' selected' : ''}>Compact summary</option>`,
-    `  <option value="full"${state.settings.hudDefaultView === 'full' ? ' selected' : ''}>Full tracker</option>`,
-    `</select>`,
-    '</label>',
- 
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="renderInMessages" ' + (state.settings.renderInMessages ? 'checked' : '') + '> Attach tracker cards to messages (Experimental)</label>',
- 
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="useSafeRenderer" ' + (state.settings.useSafeRenderer ? 'checked' : '') + '> Use safe generic renderer for custom presets</label>',
-    '<label class="sotl-label">Custom template rendering',
-    `<select class="sotl-select" data-sotl-field="customTemplateMode" ${state.settings.useSafeRenderer ? 'disabled' : ''}>`,
-    `  <option value="trusted_layout"${effectiveTemplateMode(state) === 'trusted_layout' ? ' selected' : ''}>Trusted layout (preserve custom HTML/CSS)</option>`,
-    `  <option value="strict_sanitized"${effectiveTemplateMode(state) === 'strict_sanitized' ? ' selected' : ''}>Strict sanitized</option>`,
-    `  <option value="safe_generic"${effectiveTemplateMode(state) === 'safe_generic' ? ' selected' : ''}>Safe generic renderer only</option>`,
-    '</select>',
-    '</label>',
- 
-    '<label class="sotl-label">Message card position',
-    `<select class="sotl-select" data-sotl-field="messageCardPlacement">${renderPlacementOptions(state)}</select>`,
-    '</label>',
- 
-    '<label class="sotl-label">Card density',
-    `<select class="sotl-select" data-sotl-field="cardDensity">${renderCardDensityOptions(state)}</select>`,
-    '</label>',
- 
-    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="stripBlocks" ' + (state.settings.stripTrackerBlocksFromMessages ? 'checked' : '') + '> Strip passive tracker blocks when allowed</label>',
-
-    // Configurable Generation Timeout Dropdown (Issue 7)
-    '<label class="sotl-label">Generation timeout',
-    (() => {
-      const timeoutMs = state.settings.sidecarGenerationTimeoutMs ?? 180000;
-      const options = [
-        `<option value="60000"${timeoutMs === 60000 ? ' selected' : ''}>60 seconds</option>`,
-        `<option value="120000"${timeoutMs === 120000 ? ' selected' : ''}>120 seconds</option>`,
-        `<option value="180000"${timeoutMs === 180000 ? ' selected' : ''}>180 seconds (default)</option>`,
-        `<option value="300000"${timeoutMs === 300000 ? ' selected' : ''}>300 seconds</option>`,
-        `<option value="0"${timeoutMs === 0 ? ' selected' : ''}>No timeout (manual cancel only)</option>`,
-      ];
-      return `<select class="sotl-select" data-sotl-field="sidecarGenerationTimeoutMs">${options.join('')}</select>`;
-    })(),
-    '</label>',
-
-    '<label class="sotl-label">Tracker history limit',
-    (() => {
-      const limit = state.settings.trackerHistoryLimit ?? 5;
-      const options = [
-        `<option value="1"${limit === 1 ? ' selected' : ''}>Last 1 tracker</option>`,
-        `<option value="3"${limit === 3 ? ' selected' : ''}>Last 3 trackers</option>`,
-        `<option value="5"${limit === 5 ? ' selected' : ''}>Last 5 trackers (default)</option>`,
-        `<option value="10"${limit === 10 ? ' selected' : ''}>Last 10 trackers</option>`,
-        `<option value="20"${limit === 20 ? ' selected' : ''}>Last 20 trackers</option>`,
-        `<option value="0"${limit === 0 ? ' selected' : ''}>Unlimited (keep all)</option>`,
-      ];
-      return `<select class="sotl-select" data-sotl-field="trackerHistoryLimit">${options.join('')}</select>`;
-    })(),
-    `<p class="sotl-note">Controls how many tracker snapshots are kept per chat. Generation context always uses a safe compact subset. Latest tracker is always preserved.</p>`,
-    '</label>',
-    '</div>',
-    '<div class="sotl-actions">',
-    button('Generate tracker', 'generate', { primary: true, disabled: Boolean(disabledReason) && !state.generation.running, title: disabledReason }),
-    state.generation.running ? button('Cancel Generation', 'cancel-generation', { primary: false, style: 'background: rgba(220,53,69,0.1); color: var(--lv-error-text,#bd2130); border-color: rgba(220,53,69,0.2);' }) : '',
-    button('Refresh', 'refresh'),
-    button('Reset Loom Storage', 'reset-storage', { title: 'Resets State of the Loom settings, presets, and trackers for this user.' }),
-    '</div>',
-
-    // Refined Generate Status Banner (Issue 7 & QoL #3)
-    (() => {
-      if (state.generation.running) {
-        return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-accent, #3864d9); background: rgba(56, 100, 217, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-accent, #3864d9);">
-          <span class="sotl-spin" style="display: inline-block;">⏳</span>
-          <div style="flex: 1;">${escapeHtml(state.generation.message || 'Generating tracker...')}</div>
-        </div>`;
-      }
-      if (disabledReason) {
-        return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-warning-border, #b06800); background: rgba(255, 193, 7, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-warning-text, #8a4f00);">
-          <span>🚫</span>
-          <div style="flex: 1;">Blocked: ${escapeHtml(disabledReason)}</div>
-        </div>`;
-      }
-      return `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--lv-success-border, #176b43); background: rgba(27, 126, 80, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--lv-success-text, #176b43);">
-        <span>🟢</span>
-        <div style="flex: 1;">Ready to track the latest assistant message.</div>
-      </div>`;
-    })(),
-
-    // Refined premium banner toasts (QoL #3)
-    status.lastToast 
-      ? `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid ${
-          status.lastToast.level === 'success' ? '#176b43' : status.lastToast.level === 'error' ? '#bd2130' : '#b06800'
-        }; background: ${
-          status.lastToast.level === 'success' ? 'rgba(27,126,80,0.07)' : status.lastToast.level === 'error' ? 'rgba(220,53,69,0.08)' : 'rgba(255,193,7,0.08)'
-        }; display: flex; align-items: center; gap: 8px; font-size: 12px;">
-          <span>${status.lastToast.level === 'success' ? '✅' : status.lastToast.level === 'error' ? '❌' : '⚠️'}</span>
-          <div style="flex: 1; line-height: 1.4; color: ${
-            status.lastToast.level === 'success' ? 'var(--lv-success-text,#176b43)' : status.lastToast.level === 'error' ? 'var(--lv-error-text,#bd2130)' : 'var(--lv-warning-text,#8a4f00)'
-          }; font-weight: 500;">${escapeHtml(status.lastToast.message)}</div>
-        </div>`
-      : '',
-    '</section>',
-    '<section class="sotl-panel">',
-    '<h3>Current Loom' + (state.diagnostics.lastRenderStatus?.includes('Stale') ? ' <span style="display: inline-block; background: rgba(255, 193, 7, 0.12); border: 1px solid #ffc107; color: #b58900; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-left: 8px; vertical-align: middle;">⚠️ Stale: New messages sent</span>' : '') + '</h3>',
+    '<h3>Current Loom' + (state.diagnostics.lastRenderStatus?.includes('Stale') ? ' <span class="sotl-inline-warning">Stale: New messages sent</span>' : '') + '</h3>',
     renderLatestTracker(state),
     '</section>',
     '<section class="sotl-panel">',
@@ -414,48 +560,14 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     '</section>',
     renderFeatureBreakdown(true),
     '<section class="sotl-panel">',
-    '<details class="sotl-details"><summary>Custom Template Editor</summary>',
-    '<div style="margin-top: 10px;">',
+    `<details class="sotl-details sotl-settings-section" data-sotl-section="template-editor"${detailOpenAttr('template-editor')}>`,
+    '<summary><span class="sotl-summary-title">Custom Template Editor</span><span class="sotl-summary-meta">import, edit, preview</span></summary>',
+    '<div class="sotl-section-pad">',
     renderPresetEditor(state),
     '</div>',
     '</details>',
     '</section>',
-    '<section class="sotl-panel">',
-    '<h3>Diagnostics</h3>',
-    state.diagnostics.storageWarning ? `<p class="sotl-note sotl-warning">${escapeHtml(state.diagnostics.storageWarning)}</p>` : '',
-    `<p class="sotl-note">${escapeHtml(state.diagnostics.renderLimitation || '')}</p>`,
-    state.diagnostics.lastError ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastError)}</p>` : '',
-    state.diagnostics.lastGenerationError ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastGenerationError)}</p>` : '',
-    status.lastRenderStatus ? `<p class="sotl-note">${escapeHtml(status.lastRenderStatus)}</p>` : '',
-    state.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastRenderStatus)}</p>` : '',
-    '<details class="sotl-details" open style="margin-top: 8px;"><summary>🔍 Tracker Pipeline Report</summary>',
-    renderPipelineReport(state),
-    '</details>',
-    '<details class="sotl-details" open style="margin-top: 8px;"><summary>Context Injection Report</summary>',
-    renderInjectionReport(state),
-    '</details>',
-    (() => {
-      const doc = typeof document !== 'undefined' ? document : null;
-      const isMounted = doc ? Boolean(doc.querySelector('[data-sotl-chat-panel="true"]')) : false;
-      const visibleDrawer = doc ? Boolean(doc.querySelector('.lumiverse-drawer, .drawer, [data-drawer], #drawer, .sotl-drawer')) : false;
-      const visibleSettings = doc ? Boolean(doc.querySelector('.lumiverse-settings, .settings-modal, [data-settings], #settings, .sotl-settings')) : false;
-      
-      let reason = 'Active';
-      if (!state.settings.showChatHudLauncher) reason = 'Disabled by user settings';
-      else if (visibleDrawer) reason = 'Soft-hidden: Loom Drawer is open';
-      else if (visibleSettings) reason = 'Soft-hidden: Extension Settings are open';
-      else if (!isMounted) reason = 'Not mounted (waiting for DOM render)';
-
-      return [
-        '<div style="font-size: 11px; margin-top: 8px; border-top: 1px solid var(--lumiverse-border, rgba(80,88,100,0.15)); padding-top: 8px; display: grid; gap: 4px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));">',
-        `  <div><strong>HUD Launcher:</strong> ${state.settings.showChatHudLauncher ? '<span style="color: var(--lv-success-text, #176b43); font-weight: 600;">Enabled</span>' : 'Disabled'}</div>`,
-        `  <div><strong>HUD DOM Status:</strong> ${isMounted ? '<span style="color: var(--lv-success-text, #176b43); font-weight: 600;">Mounted</span>' : 'Not Mounted'}</div>`,
-        `  <div><strong>HUD Placement State:</strong> <em>${escapeHtml(reason)}</em></div>`,
-        `  <div><strong>Message Cards:</strong> ${state.settings.renderInMessages ? '<span style="color: var(--lv-accent, #3864d9); font-weight: 600;">Enabled (Experimental)</span>' : 'Disabled'}</div>`,
-        '</div>'
-      ].join('');
-    })(),
-    '</section>',
     '</div>',
   ].join('');
+
 }

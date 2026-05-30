@@ -1,8 +1,8 @@
 {
   "id": "occult_ledger_hud_1_4_calibrated_safe_azure",
   "name": "Occult Ledger HUD 1.4 - Calibrated Safe Azure",
-  "version": "1.0.14",
-  "description": "A dense azure occult continuity HUD adapted for State of the Loom v1.0.14 trusted-layout rendering. Tracks scene pressure, cast visuals, clothing, relationships, world state, story hooks, continuity anchors, tools, intimacy state, image prompt hints, and tracker audit logs.",
+  "version": "1.0.15",
+  "description": "A dense azure occult continuity HUD adapted for State of the Loom v1.0.15 trusted-layout rendering. Tracks scene pressure, cast visuals, clothing, relationships, world state, story hooks, continuity anchors, tools, intimacy state, image prompt hints, and tracker audit logs.",
   "origin": "imported",
   "templateEngine": "handlebars_compat",
   "sourceFormat": "loom",

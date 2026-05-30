@@ -5,6 +5,7 @@ import { renderTrackerForState } from './rendering.js';
 import { renderSettingsPanel } from './settingsPanel.js';
 import { loomStyles } from './styles.js';
 import type { LoomUiStatus } from './ui.js';
+import { captureUiState, restoreUiState, setUiSectionOpen } from './uiState.js';
 import {
   editingPreset,
   selectPresetForEditing,
@@ -39,6 +40,8 @@ let messageCardRetryTimer: number | undefined;
 let lastFrontendError: string | undefined;
 let lastRenderStatus: string | undefined;
 let lastToast: LoomUiStatus['lastToast'];
+let lastSettingsSavedAt: number | undefined;
+let settingsSavedTimer: number | undefined;
 const cleanupFns: Array<() => void> = [];
 const rootListenerCleanups = new Map<HTMLElement, () => void>();
 
@@ -79,6 +82,7 @@ function uiStatus(): LoomUiStatus {
     lastFrontendError,
     lastRenderStatus,
     lastToast,
+    lastSettingsSavedAt,
   };
 }
 
@@ -132,11 +136,14 @@ function bindRootEvents(root: HTMLElement): void {
   if (rootListenerCleanups.has(root)) return;
   const click = (event: Event) => handleDrawerEvent(event);
   const change = (event: Event) => handleDrawerEvent(event);
+  const toggle = (event: Event) => handleDrawerEvent(event);
   root.addEventListener('click', click);
   root.addEventListener('change', change);
+  root.addEventListener('toggle', toggle, true);
   const cleanup = () => {
     root.removeEventListener('click', click);
     root.removeEventListener('change', change);
+    root.removeEventListener('toggle', toggle, true);
     rootListenerCleanups.delete(root);
   };
   rootListenerCleanups.set(root, cleanup);
@@ -272,11 +279,20 @@ function paint(status: LoomUiStatus): void {
     }
   }
 
-  renderInto(drawerRoot, renderDrawer(state, status));
-  renderInto(settingsRoot, renderSettingsPanel(state, status));
-  if (drawerHandle?.update) drawerHandle.update(renderDrawer(state, status));
-  if (settingsHandle?.update) settingsHandle.update(renderSettingsPanel(state, status));
-  if (fallbackRoot) fallbackRoot.innerHTML = renderDrawer(state, status);
+  const doc = documentRef();
+  const restoreRoot = drawerRoot ?? settingsRoot ?? fallbackRoot ?? doc;
+  const snapshot = captureUiState(restoreRoot);
+  const drawerHtml = renderDrawer(state, status);
+  const settingsHtml = renderSettingsPanel(state, status);
+
+  renderInto(drawerRoot, drawerHtml);
+  renderInto(settingsRoot, settingsHtml);
+  if (drawerHandle?.update) drawerHandle.update(drawerHtml);
+  if (settingsHandle?.update) settingsHandle.update(settingsHtml);
+  if (fallbackRoot) fallbackRoot.innerHTML = drawerHtml;
+
+  restoreUiState(drawerRoot ?? fallbackRoot ?? doc, snapshot);
+  restoreUiState(settingsRoot ?? doc, snapshot);
 }
 
 function updateMessageCardStatus(): void {
@@ -307,8 +323,26 @@ function scheduleMessageCardRetry(): void {
   }, 400);
 }
 
+function pulseSettingsSaved(): void {
+  lastSettingsSavedAt = Date.now();
+  if (settingsSavedTimer !== undefined && typeof globalThis.clearTimeout === 'function') {
+    globalThis.clearTimeout(settingsSavedTimer);
+  }
+  if (typeof globalThis.setTimeout !== 'function') return;
+  settingsSavedTimer = globalThis.setTimeout(() => {
+    settingsSavedTimer = undefined;
+    lastSettingsSavedAt = undefined;
+    paint(uiStatus());
+  }, 1600);
+}
+
 function saveSettings(patch: Partial<LoomSettings>): void {
   if (!contextRef) return;
+  if (state) {
+    state = { ...state, settings: { ...state.settings, ...patch } };
+    pulseSettingsSaved();
+    paint(uiStatus());
+  }
   postToBackend(contextRef, { type: 'save_settings', settings: patch });
 }
 
@@ -316,6 +350,13 @@ function handleDrawerEvent(event: Event): void {
   const markedEvent = event as Event & { __sotlHandled?: boolean };
   if (markedEvent.__sotlHandled) return;
   const target = event.target as HTMLElement | null;
+  if (event.type === 'toggle') {
+    const section = target?.closest?.('details[data-sotl-section]') as HTMLDetailsElement | null;
+    if (section?.dataset.sotlSection) {
+      setUiSectionOpen(section.dataset.sotlSection, section.open);
+    }
+    return;
+  }
   if (!target || !contextRef) return;
   const actionButton = target.closest<HTMLElement>('[data-sotl-action]');
   if (actionButton) {
@@ -798,7 +839,10 @@ function handleBackendMessage(message: LoomBackendMessage): void {
     state = message.state;
   }
   if (message.type === 'storage_reset') clearImportStatus();
-  if (message.type === 'settings_saved' && state) state = { ...state, settings: message.settings };
+  if (message.type === 'settings_saved' && state) {
+    state = { ...state, settings: message.settings };
+    pulseSettingsSaved();
+  }
   if (message.type === 'error') lastFrontendError = message.message;
   if (message.type === 'toast') lastToast = { level: message.level, message: message.message };
   if (state) {
@@ -876,17 +920,20 @@ export function setup(ctx: FrontendContext): () => void {
 
   documentRef()?.addEventListener('click', handleDrawerEvent);
   documentRef()?.addEventListener('change', handleDrawerEvent);
+  documentRef()?.addEventListener('toggle', handleDrawerEvent, true);
   postToBackend(ctx, { type: 'ready' });
   startBackendTimer();
   rerender();
   return () => {
     documentRef()?.removeEventListener('click', handleDrawerEvent);
     documentRef()?.removeEventListener('change', handleDrawerEvent);
+    documentRef()?.removeEventListener('toggle', handleDrawerEvent, true);
     while (cleanupFns.length > 0) cleanupFns.pop()?.();
     drawerHandle?.destroy?.();
     settingsHandle?.destroy?.();
     clearBackendTimer();
     if (messageCardRetryTimer !== undefined && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(messageCardRetryTimer);
+    if (settingsSavedTimer !== undefined && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(settingsSavedTimer);
     fallbackRoot?.remove();
     documentRef()?.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
     documentRef()?.querySelector('.sotl-chat-panel-container')?.remove();

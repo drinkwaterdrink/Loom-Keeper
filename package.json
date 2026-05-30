@@ -1,6 +1,6 @@
 {
   "name": "state-of-the-loom",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "type": "module",
   "private": true,
   "scripts": {
@@ -15,7 +15,9 @@
     "smoke:import-compat": "node ./scripts/import-compat-smoke.mjs",
     "smoke:default-preset": "node ./scripts/default-preset-smoke.mjs",
     "smoke:hud-css": "node ./scripts/hud-css-smoke.mjs",
-    "smoke:injection": "node ./scripts/injection-smoke.mjs"
+    "smoke:injection": "node ./scripts/injection-smoke.mjs",
+    "smoke:ui-state": "node ./scripts/ui-state-smoke.mjs",
+    "smoke:ui-settings": "node ./scripts/ui-settings-smoke.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.0",

@@ -21,7 +21,7 @@ export function renderFeatureBreakdown(collapsible = false): string {
   if (collapsible) {
     return [
       '<section class="sotl-panel">',
-      '<details class="sotl-details"><summary>What this version does (Features)</summary>',
+      '<details class="sotl-details" data-sotl-section="features"><summary>What this version does (Features)</summary>',
       content,
       '</details>',
       '</section>',
@@ -78,7 +78,7 @@ export function renderSettingsPanel(state: LoomFrontendState | null, status: Loo
         }; background: ${
           status.lastToast.level === 'success' ? 'rgba(27,126,80,0.07)' : status.lastToast.level === 'error' ? 'rgba(220,53,69,0.08)' : 'rgba(255,193,7,0.08)'
         }; display: flex; align-items: center; gap: 8px; font-size: 12px;">
-          <span>${status.lastToast.level === 'success' ? '✅' : status.lastToast.level === 'error' ? '❌' : '⚠️'}</span>
+          <strong>${escapeHtml(status.lastToast.level)}</strong>
           <div style="flex: 1; line-height: 1.4; color: ${
             status.lastToast.level === 'success' ? 'var(--lv-success-text,#176b43)' : status.lastToast.level === 'error' ? 'var(--lv-error-text,#bd2130)' : 'var(--lv-warning-text,#8a4f00)'
           }; font-weight: 500;">${escapeHtml(status.lastToast.message)}</div>

@@ -1,6 +1,6 @@
 import type { LoomPreset, LoomSettings } from './types.js';
 
-export const LOOM_VERSION = '1.0.14';
+export const LOOM_VERSION = '1.0.15';
 export const LOOM_SCHEMA_VERSION = '1';
 export const GRAND_CONTINUITY_ATLAS_PRESET_ID = 'grand_continuity_atlas';
 export const SLIM_SCENE_PRESET_ID = 'slim_scene_loom';
@@ -43,7 +43,7 @@ export const defaultSettings: LoomSettings = {
 export const grandContinuityAtlasPreset: LoomPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: 'Grand Continuity Atlas',
-  version: '1.0.14',
+  version: '1.0.15',
   description: 'A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.',
   origin: 'built-in',
   templateEngine: 'handlebars_compat',
@@ -1060,7 +1060,7 @@ export const fullContinuityLedgerPreset: LoomPreset = {
 export const chronoscopeOccultLedgerPreset: LoomPreset = {
   id: 'chronoscope_occult_ledger',
   name: 'Chronoscope Occult Ledger',
-  version: '1.0.14',
+  version: '1.0.15',
   description: 'A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.',
   mode: 'hybrid',
   schemaJson: {
