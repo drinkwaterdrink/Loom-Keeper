@@ -141,6 +141,12 @@ function trackerActionButton(label: string, action: string, tracker: LoomTracker
 
 function renderLatestTracker(state: LoomFrontendState): string {
   if (!state.latestTracker) {
+    const activeMessageId = state.diagnostics.swipeReport?.activeMessageId;
+    const activeSwipeId = state.diagnostics.swipeReport?.activeSwipeId;
+    const hasOtherSwipeTracker = Boolean(activeMessageId && state.messageTrackers.some((tracker) => tracker.messageId === activeMessageId));
+    if (hasOtherSwipeTracker && typeof activeSwipeId === 'number') {
+      return `<p class="sotl-note">No tracker has been stored for the selected ${escapeHtml(formatSwipeLabel(activeSwipeId))} yet. Generate a tracker while this swipe is visible to attach the right state.</p>`;
+    }
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
   }
   const render = renderTrackerForState(state.latestTracker, state);

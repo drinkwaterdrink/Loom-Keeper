@@ -93,9 +93,15 @@ assert.match(html, /data-sotl-swipe-id="0"/, 'alternative row actions should car
 assert.match(html, /Swipe Tracker Report/, 'diagnostics should expose swipe report');
 
 const styles = readFileSync('src/frontend/styles.ts', 'utf8');
+const frontend = readFileSync('src/frontend/frontend.ts', 'utf8');
 assert.match(styles, /\.sotl-root[\s\S]*overflow-x:\s*hidden/, 'drawer root should prevent horizontal overflow');
 assert.match(styles, /\.sotl-select[\s\S]*text-overflow:\s*ellipsis/, 'selects should truncate long preset names');
 assert.match(styles, /\.sotl-preview[\s\S]*contain:\s*inline-size/, 'custom previews should be width-contained');
 assert.match(styles, /\.sotl-message-row,\s*\.sotl-swipe-row/, 'message rows should share constrained mobile layout');
+assert.match(frontend, /shortName:\s*'Track'/, 'drawer tab should be labeled Track');
+assert.match(frontend, /title:\s*'Track'/, 'drawer title should be Track');
+assert.match(frontend, /viewBox="0 0 512 512"/, 'drawer tab should use the paw icon');
+assert.match(frontend, /SWIPE_CHANGED/, 'frontend should listen for swipe change events');
+assert.match(frontend, /scheduleSwipeStateRefresh/, 'frontend should refresh backend state after swipe changes');
 
 console.log('OK: swipe UI smoke passed');

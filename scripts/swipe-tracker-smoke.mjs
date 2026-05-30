@@ -61,6 +61,8 @@ assert.equal(list.filter((item) => item.messageId === 'm1').length, 3, 'same-mes
 
 const activeSwipe = await service.getLatestForActive('user-swipe', 'chat-swipe', 'm1', 1);
 assert.equal(activeSwipe?.swipeId, 1, 'active swipe lookup should return exact messageId + swipeId tracker');
+const missingSwipe = await service.getLatestForActive('user-swipe', 'chat-swipe', 'm1', 9);
+assert.equal(missingSwipe, null, 'active swipe lookup should not show a sibling swipe when the selected swipe has no tracker');
 
 await service.save('user-swipe', tracker('m2', 0, 0), 0);
 await service.save('user-swipe', tracker('m2', 1, 0), 0);

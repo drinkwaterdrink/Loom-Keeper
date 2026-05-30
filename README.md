@@ -1,8 +1,8 @@
-# State of the Loom (v1.0.16)
+# State of the Loom (v1.0.17)
 
 State of the Loom is a Lumiverse-native State of the Loom continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.16 makes tracker storage swipe-aware, so each assistant swipe can have its own tracker while the HUD, Current Loom, message cards, and diagnostics follow the currently selected swipe. It also tightens mobile drawer overflow handling for long preset names and custom HTML previews. Version 1.0.15 overhauled the drawer and settings UX with persistent mobile-first sections, clearer advanced settings, icon-only message-card actions, and smoother autosave feedback.
+Version 1.0.17 refreshes the active tracker when Lumiverse swipe controls change the selected assistant response, keeps missing-swipe trackers from showing the wrong sibling swipe, and renames the drawer tab to **Track** with the same paw icon as the floating HUD launcher. Version 1.0.16 made tracker storage swipe-aware and tightened mobile drawer overflow handling for long preset names and custom HTML previews.
 
 ---
 
@@ -122,7 +122,7 @@ npm run smoke:swipe-ui
 
 ## Diagnostics & Troubleshooting
 
-State of the Loom (v1.0.16) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, wrong-swipe tracker display, stuck generation states, settings-section collapse, confusing message-card action initials, mobile drawer overflow, and overlarge prompt injection.
+State of the Loom (v1.0.17) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, wrong-swipe tracker display, stuck generation states, settings-section collapse, confusing message-card action initials, mobile drawer overflow, and overlarge prompt injection.
 
 ### 1. What to do when a Custom Preset renders blank
 * **Root Cause**: If a custom preset uses template variables that are missing from the generated JSON, those individual fields render empty. This is now a warning instead of a fatal blank-card condition.

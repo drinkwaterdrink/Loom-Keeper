@@ -275,7 +275,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.16";
+var LOOM_VERSION = "1.0.17";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -314,7 +314,7 @@ var defaultSettings = {
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.16",
+  version: "1.0.17",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -1318,7 +1318,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.16",
+  version: "1.0.17",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -2634,6 +2634,9 @@ var LoomTrackerStateService = class {
       if (typeof swipeId === "number") {
         const exact = chat.messages[makeMessageKey(messageId, swipeId)];
         if (exact?.version === LOOM_VERSION) return exact;
+        const sameMessageTrackers = Object.values(chat.messages).filter((tracker) => sameMessage(tracker, messageId));
+        const hasSwipeAwareTracker = sameMessageTrackers.some((tracker) => typeof tracker.swipeId === "number");
+        if (hasSwipeAwareTracker) return null;
       }
       const matching = newestTracker(Object.values(chat.messages).filter((tracker) => sameMessage(tracker, messageId)));
       if (matching) return matching;

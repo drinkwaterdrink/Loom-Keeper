@@ -22,7 +22,7 @@ const injection = await importBundled('src/backend/injectionService.ts');
 const { defaultSettings } = await importBundled('src/shared/defaults.ts');
 
 const latestTracker = {
-  version: '1.0.16',
+  version: '1.0.17',
   schemaVersion: '1',
   presetId: 'grand_continuity_atlas',
   chatId: 'chat-1',

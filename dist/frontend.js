@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.16";
+var LOOM_VERSION = "1.0.17";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -7,7 +7,7 @@ var now = "2026-01-01T00:00:00.000Z";
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.16",
+  version: "1.0.17",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -1011,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.16",
+  version: "1.0.17",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -3255,6 +3255,12 @@ function trackerActionButton(label, action, tracker, options = {}) {
 }
 function renderLatestTracker(state2) {
   if (!state2.latestTracker) {
+    const activeMessageId = state2.diagnostics.swipeReport?.activeMessageId;
+    const activeSwipeId = state2.diagnostics.swipeReport?.activeSwipeId;
+    const hasOtherSwipeTracker = Boolean(activeMessageId && state2.messageTrackers.some((tracker) => tracker.messageId === activeMessageId));
+    if (hasOtherSwipeTracker && typeof activeSwipeId === "number") {
+      return `<p class="sotl-note">No tracker has been stored for the selected ${escapeHtml2(formatSwipeLabel(activeSwipeId))} yet. Generate a tracker while this swipe is visible to attach the right state.</p>`;
+    }
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
   }
   const render = renderTrackerForState(state2.latestTracker, state2);
@@ -3786,6 +3792,9 @@ function selectVisibleMessageTrackers(trackers, state2) {
   for (const [id, list] of grouped) {
     const activeSwipe = state2.activeSwipeByMessageId[id];
     const active = typeof activeSwipe === "number" ? list.find((tracker) => tracker.swipeId === activeSwipe) : void 0;
+    if (typeof activeSwipe === "number" && !active && list.some((tracker) => typeof tracker.swipeId === "number")) {
+      continue;
+    }
     const newest = list.slice().sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))[0];
     const chosen = active ?? newest;
     if (chosen) selected.push(chosen);
@@ -5076,6 +5085,8 @@ var lastSettingsSavedAt;
 var settingsSavedTimer;
 var cleanupFns = [];
 var rootListenerCleanups = /* @__PURE__ */ new Map();
+var pawIconSvg = '<svg viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/></svg>';
+var swipeStateRefreshTimer;
 function documentRef3() {
   return typeof document === "undefined" ? null : document;
 }
@@ -5133,6 +5144,33 @@ function requestBackendState(message = { type: "refresh_state" }) {
   postToBackend(contextRef, message);
   startBackendTimer();
 }
+function scheduleSwipeStateRefresh(delayMs = 160) {
+  if (swipeStateRefreshTimer !== void 0 && typeof globalThis.clearTimeout === "function") {
+    globalThis.clearTimeout(swipeStateRefreshTimer);
+  }
+  if (typeof globalThis.setTimeout !== "function") {
+    requestBackendState({ type: "refresh_state" });
+    return;
+  }
+  swipeStateRefreshTimer = globalThis.setTimeout(() => {
+    swipeStateRefreshTimer = void 0;
+    requestBackendState({ type: "refresh_state" });
+    scheduleMessageCardRetry();
+  }, delayMs);
+}
+function looksLikeSwipeControl(target) {
+  const control = target.closest('button, [role="button"], [data-action], [data-lv-action], [aria-label], [title]');
+  if (!control) return false;
+  const text = [
+    control.getAttribute("aria-label"),
+    control.getAttribute("title"),
+    control.dataset.action,
+    control.dataset.lvAction,
+    control.dataset.swipeAction,
+    control.textContent
+  ].filter(Boolean).join(" ");
+  return /\b(swipe|variant|alternate|previous response|next response|prev response|regenerate)\b/i.test(text);
+}
 function datasetSwipeId(element) {
   const value = element.dataset.sotlSwipeId;
   if (value === void 0 || value === "") return void 0;
@@ -5183,12 +5221,12 @@ function registerDrawer(ctx) {
     try {
       const result = register({
         id: "state_of_the_loom",
-        title: "State of the Loom",
-        shortName: "Loom",
-        headerTitle: "Loom",
-        description: "Open the State of the Loom continuity tracker HUD",
+        title: "Track",
+        shortName: "Track",
+        headerTitle: "Track",
+        description: "Open the State of the Loom tracker HUD",
         keywords: ["state", "loom", "tracker", "continuity", "roleplay"],
-        iconSvg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h2v18H5V3Zm12 0h2v18h-2V3ZM9 5h6v2H9V5Zm0 4h6v2H9V9Zm0 4h6v2H9v-2Zm0 4h6v2H9v-2Z"/></svg>'
+        iconSvg: pawIconSvg
       });
       drawerHandle = result ?? null;
       if (isRecord2(result) && isElement(result.root)) {
@@ -5853,6 +5891,18 @@ function registerFrontendEvents(ctx) {
     try {
       const unsubscribe = on(eventName, () => {
         scheduleMessageCardRetry();
+        if (eventName === "MESSAGE_RENDERED" || eventName === "CHAT_CHANGED" || eventName === "CHAT_SWITCHED") {
+          scheduleSwipeStateRefresh(220);
+        }
+      });
+      if (typeof unsubscribe === "function") cleanupFns.push(unsubscribe);
+    } catch {
+    }
+  }
+  for (const eventName of ["SWIPE_CHANGED", "MESSAGE_SWIPE_CHANGED", "CHAT_SWIPE_CHANGED", "SWIPE_SELECTED", "MESSAGE_VARIANT_CHANGED"]) {
+    try {
+      const unsubscribe = on(eventName, () => {
+        scheduleSwipeStateRefresh(80);
       });
       if (typeof unsubscribe === "function") cleanupFns.push(unsubscribe);
     } catch {
@@ -5894,6 +5944,12 @@ function setup(ctx) {
   documentRef3()?.addEventListener("click", handleDrawerEvent);
   documentRef3()?.addEventListener("change", handleDrawerEvent);
   documentRef3()?.addEventListener("toggle", handleDrawerEvent, true);
+  const swipeClickHandler = (event) => {
+    const target = event.target;
+    if (target && looksLikeSwipeControl(target)) scheduleSwipeStateRefresh(220);
+  };
+  documentRef3()?.addEventListener("click", swipeClickHandler, true);
+  cleanupFns.push(() => documentRef3()?.removeEventListener("click", swipeClickHandler, true));
   postToBackend(ctx, { type: "ready" });
   startBackendTimer();
   rerender();
@@ -5911,6 +5967,7 @@ function setup(ctx) {
     documentRef3()?.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
     documentRef3()?.querySelector(".sotl-chat-panel-container")?.remove();
     documentRef3()?.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
+    if (swipeStateRefreshTimer !== void 0 && typeof globalThis.clearTimeout === "function") globalThis.clearTimeout(swipeStateRefreshTimer);
     rootListenerCleanups.clear();
   };
 }

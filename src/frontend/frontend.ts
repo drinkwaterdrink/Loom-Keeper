@@ -44,6 +44,8 @@ let lastSettingsSavedAt: number | undefined;
 let settingsSavedTimer: number | undefined;
 const cleanupFns: Array<() => void> = [];
 const rootListenerCleanups = new Map<HTMLElement, () => void>();
+const pawIconSvg = '<svg viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/></svg>';
+let swipeStateRefreshTimer: number | undefined;
 
 function documentRef(): Document | null {
   return typeof document === 'undefined' ? null : document;
@@ -111,6 +113,35 @@ function requestBackendState(message: LoomFrontendMessage = { type: 'refresh_sta
   startBackendTimer();
 }
 
+function scheduleSwipeStateRefresh(delayMs = 160): void {
+  if (swipeStateRefreshTimer !== undefined && typeof globalThis.clearTimeout === 'function') {
+    globalThis.clearTimeout(swipeStateRefreshTimer);
+  }
+  if (typeof globalThis.setTimeout !== 'function') {
+    requestBackendState({ type: 'refresh_state' });
+    return;
+  }
+  swipeStateRefreshTimer = globalThis.setTimeout(() => {
+    swipeStateRefreshTimer = undefined;
+    requestBackendState({ type: 'refresh_state' });
+    scheduleMessageCardRetry();
+  }, delayMs);
+}
+
+function looksLikeSwipeControl(target: HTMLElement): boolean {
+  const control = target.closest<HTMLElement>('button, [role="button"], [data-action], [data-lv-action], [aria-label], [title]');
+  if (!control) return false;
+  const text = [
+    control.getAttribute('aria-label'),
+    control.getAttribute('title'),
+    control.dataset.action,
+    control.dataset.lvAction,
+    control.dataset.swipeAction,
+    control.textContent,
+  ].filter(Boolean).join(' ');
+  return /\b(swipe|variant|alternate|previous response|next response|prev response|regenerate)\b/i.test(text);
+}
+
 function datasetSwipeId(element: HTMLElement): number | undefined {
   const value = element.dataset.sotlSwipeId;
   if (value === undefined || value === '') return undefined;
@@ -165,12 +196,12 @@ function registerDrawer(ctx: FrontendContext): void {
     try {
     const result = (register as (definition: Record<string, unknown>) => PlacementHandle | void)({
       id: 'state_of_the_loom',
-      title: 'State of the Loom',
-      shortName: 'Loom',
-      headerTitle: 'Loom',
-      description: 'Open the State of the Loom continuity tracker HUD',
+      title: 'Track',
+      shortName: 'Track',
+      headerTitle: 'Track',
+      description: 'Open the State of the Loom tracker HUD',
       keywords: ['state', 'loom', 'tracker', 'continuity', 'roleplay'],
-      iconSvg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h2v18H5V3Zm12 0h2v18h-2V3ZM9 5h6v2H9V5Zm0 4h6v2H9V9Zm0 4h6v2H9v-2Zm0 4h6v2H9v-2Z"/></svg>',
+      iconSvg: pawIconSvg,
     });
     drawerHandle = result ?? null;
     if (isRecord(result) && isElement(result.root)) {
@@ -880,6 +911,19 @@ function registerFrontendEvents(ctx: FrontendContext): void {
     try {
       const unsubscribe = (on as (name: string, handler: (payload?: unknown) => void) => void | (() => void))(eventName, () => {
         scheduleMessageCardRetry();
+        if (eventName === 'MESSAGE_RENDERED' || eventName === 'CHAT_CHANGED' || eventName === 'CHAT_SWITCHED') {
+          scheduleSwipeStateRefresh(220);
+        }
+      });
+      if (typeof unsubscribe === 'function') cleanupFns.push(unsubscribe);
+    } catch {
+      // Frontend event names vary by Lumiverse build; unsupported hooks are optional.
+    }
+  }
+  for (const eventName of ['SWIPE_CHANGED', 'MESSAGE_SWIPE_CHANGED', 'CHAT_SWIPE_CHANGED', 'SWIPE_SELECTED', 'MESSAGE_VARIANT_CHANGED']) {
+    try {
+      const unsubscribe = (on as (name: string, handler: (payload?: unknown) => void) => void | (() => void))(eventName, () => {
+        scheduleSwipeStateRefresh(80);
       });
       if (typeof unsubscribe === 'function') cleanupFns.push(unsubscribe);
     } catch {
@@ -929,6 +973,12 @@ export function setup(ctx: FrontendContext): () => void {
   documentRef()?.addEventListener('click', handleDrawerEvent);
   documentRef()?.addEventListener('change', handleDrawerEvent);
   documentRef()?.addEventListener('toggle', handleDrawerEvent, true);
+  const swipeClickHandler = (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (target && looksLikeSwipeControl(target)) scheduleSwipeStateRefresh(220);
+  };
+  documentRef()?.addEventListener('click', swipeClickHandler, true);
+  cleanupFns.push(() => documentRef()?.removeEventListener('click', swipeClickHandler, true));
   postToBackend(ctx, { type: 'ready' });
   startBackendTimer();
   rerender();
@@ -946,6 +996,7 @@ export function setup(ctx: FrontendContext): () => void {
     documentRef()?.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
     documentRef()?.querySelector('.sotl-chat-panel-container')?.remove();
     documentRef()?.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
+    if (swipeStateRefreshTimer !== undefined && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(swipeStateRefreshTimer);
     rootListenerCleanups.clear();
   };
 }

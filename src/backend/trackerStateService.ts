@@ -85,6 +85,9 @@ export class LoomTrackerStateService {
       if (typeof swipeId === 'number') {
         const exact = chat.messages[makeMessageKey(messageId, swipeId)];
         if (exact?.version === LOOM_VERSION) return exact;
+        const sameMessageTrackers = Object.values(chat.messages).filter((tracker) => sameMessage(tracker, messageId));
+        const hasSwipeAwareTracker = sameMessageTrackers.some((tracker) => typeof tracker.swipeId === 'number');
+        if (hasSwipeAwareTracker) return null;
       }
       const matching = newestTracker(Object.values(chat.messages).filter((tracker) => sameMessage(tracker, messageId)));
       if (matching) return matching;

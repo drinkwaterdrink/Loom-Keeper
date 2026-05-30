@@ -103,6 +103,9 @@ function selectVisibleMessageTrackers(trackers: LoomTrackerState[], state: LoomF
     const active = typeof activeSwipe === 'number'
       ? list.find((tracker) => tracker.swipeId === activeSwipe)
       : undefined;
+    if (typeof activeSwipe === 'number' && !active && list.some((tracker) => typeof tracker.swipeId === 'number')) {
+      continue;
+    }
     const newest = list.slice().sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))[0];
     const chosen = active ?? newest;
     if (chosen) selected.push(chosen);
