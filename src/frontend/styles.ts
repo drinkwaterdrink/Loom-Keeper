@@ -712,6 +712,14 @@ export const loomStyles = `
   top: var(--sotl-launcher-top);
   transform: none; /* Precise absolute coordinates matching star icon gap */
 }
+.sotl-chat-panel-container[data-sotl-native-mounted="true"]:not(.sotl-chat-panel-container--expanded) {
+  position: static;
+  right: auto;
+  top: auto;
+  display: block;
+  margin-top: 8px;
+  z-index: auto;
+}
 .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
   position: fixed;
   top: 48px;
@@ -725,19 +733,55 @@ export const loomStyles = `
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: var(--lumiverse-fill, var(--lv-surface-raised, rgba(255, 255, 255, 0.85)));
+  width: var(--sotl-native-size, 36px);
+  height: var(--sotl-native-size, 36px);
+  border-radius: var(--sotl-native-radius, 8px);
+  background: var(--sotl-native-bg, var(--lumiverse-fill, var(--lv-surface-raised, rgba(255, 255, 255, 0.85))));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.25)));
+  border: 1px solid var(--sotl-native-border, var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.25))));
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(20, 24, 32, 0.12);
+  box-shadow: var(--sotl-native-shadow, 0 4px 16px rgba(20, 24, 32, 0.12));
   user-select: none;
   transition: all 0.2s ease;
   padding: 0;
-  color: var(--lumiverse-text, var(--lv-text, #1e2329));
+  color: var(--sotl-native-color, var(--lumiverse-text, var(--lv-text, #1e2329)));
+  position: relative;
+  overflow: visible;
+}
+.sotl-paw-svg,
+.sotl-message-paw-svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+}
+.sotl-paw-pad,
+.sotl-paw-main {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.sotl-chat-pill--generating::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 1px solid var(--lv-accent, #3864d9);
+  opacity: 0.5;
+  animation: sotl-paw-ring 1.35s ease-out infinite;
+  pointer-events: none;
+}
+.sotl-chat-pill--generating .sotl-paw-pad {
+  animation: sotl-paw-pad-bounce 1.1s ease-in-out infinite;
+}
+.sotl-chat-pill--generating .sotl-paw-pad--2 {
+  animation-delay: 0.08s;
+}
+.sotl-chat-pill--generating .sotl-paw-pad--3 {
+  animation-delay: 0.16s;
+}
+.sotl-chat-pill--generating .sotl-paw-pad--4 {
+  animation-delay: 0.24s;
 }
 .sotl-chat-pill:hover {
   transform: scale(1.05);
@@ -865,6 +909,67 @@ export const loomStyles = `
 }
 .sotl-spin {
   animation: sotl-spin 1.2s linear infinite;
+}
+@keyframes sotl-paw-pad-bounce {
+  0%, 65%, 100% { transform: translateY(0); }
+  28% { transform: translateY(-18px); }
+}
+@keyframes sotl-paw-ring {
+  0% { transform: scale(0.9); opacity: 0.45; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.sotl-message-paw-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sotl-native-size, 28px);
+  height: var(--sotl-native-size, 28px);
+  min-width: var(--sotl-native-size, 28px);
+  min-height: var(--sotl-native-size, 28px);
+  border-radius: var(--sotl-native-radius, 6px);
+  border: 1px solid var(--sotl-native-border, var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.2))));
+  background: var(--sotl-native-bg, transparent);
+  color: var(--sotl-native-color, currentColor);
+  box-shadow: var(--sotl-native-shadow, none);
+  padding: 0;
+  margin-left: 4px;
+  cursor: pointer;
+  line-height: 1;
+  vertical-align: middle;
+}
+.sotl-message-paw-action:hover,
+.sotl-message-paw-action:focus-visible {
+  color: var(--lv-accent, #3864d9);
+  border-color: var(--lv-accent, #3864d9);
+  outline: none;
+}
+.sotl-message-paw-action .sotl-message-paw-svg {
+  width: 14px;
+  height: 14px;
+}
+.sotl-focused-tracker {
+  border-color: var(--lv-accent, #3864d9);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lv-accent, #3864d9) 18%, transparent);
+}
+.sotl-message-row--focused {
+  border-color: var(--lv-accent, #3864d9);
+  background: color-mix(in srgb, var(--lv-accent, #3864d9) 8%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sotl-chat-pill--generating::after,
+  .sotl-chat-pill--generating .sotl-paw-pad {
+    animation: none;
+  }
+  .sotl-chat-pill--generating::before {
+    content: "";
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    right: 4px;
+    top: 4px;
+    border-radius: 999px;
+    background: var(--lv-accent, #3864d9);
+  }
 }
 @media (max-width: 520px) {
   .sotl-root {

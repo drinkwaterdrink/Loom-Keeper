@@ -1,14 +1,14 @@
-# State of the Loom (v1.0.17)
+# State of the Loom (v1.0.18)
 
 State of the Loom is a Lumiverse-native State of the Loom continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.17 refreshes the active tracker when Lumiverse swipe controls change the selected assistant response, keeps missing-swipe trackers from showing the wrong sibling swipe, and renames the drawer tab to **Track** with the same paw icon as the floating HUD launcher. Version 1.0.16 made tracker storage swipe-aware and tightened mobile drawer overflow handling for long preset names and custom HTML previews.
+Version 1.0.18 makes the paw launcher more native-feeling, adds a subtle active-generation paw animation, and adds best-effort per-message paw actions that open the exact message/swipe tracker in the drawer without rendering the full tracker inline. Version 1.0.17 refreshed the active tracker when Lumiverse swipe controls changed the selected assistant response and prevented missing-swipe trackers from showing the wrong sibling swipe.
 
 ---
 
 ## Key Features
 
-1. **Native-Style Paw Launcher**: A rounded-square button (`border-radius: 8px; width: 36px; height: 36px;`) positioned just below the star/spark icon on the right side. CSS variable `--sotl-launcher-top: 21%` controls placement.
+1. **Native-Style Paw Launcher**: A right-side paw button that first tries Lumiverse-style side-rail placement, then falls back to a flush-right compatibility overlay. During active tracker generation, the paw pads animate subtly and respect reduced-motion settings.
 2. **Floating HUD Panel**: An overlay panel showing the current chat's continuity status.
    - **View Toggle**: Switch between **Compact Summary** (generic custom-schema summary) and **Full Tracker** (HTML rendering based on the tracker preset) directly in the HUD header. Changes save immediately without a full page refresh.
 3. **Custom Template Editor**: An interactive dashboard in the viewport drawer under **Custom Template Editor**:
@@ -26,9 +26,10 @@ Version 1.0.17 refreshes the active tracker when Lumiverse swipe controls change
    - Full Continuity Ledger $\rightarrow$ `[~450t - Full]`
    - Grand Continuity Atlas $\rightarrow$ `[~2500t - Grand]`
 5. **Swipe-Aware Trackers**: Stores trackers by `messageId + swipeId`, shows the selected swipe in Current Loom and message cards, keeps all swipe alternatives while you are choosing, and auto-cleans non-chosen alternatives once a later assistant response exists.
-6. **Stale Tracker Detection**: Flags the Current Loom status with a yellow badge `Stale: New messages sent` if new user or assistant messages are added to the chat history after the latest tracker was saved, and marks active-swipe changes as stale.
-7. **Quick Copy JSON**: Copy the entire Current Loom state to your clipboard with a single click.
-8. **Context Injection Lite**: Optionally injects a compact continuity brief into live roleplay prompts.
+6. **Per-Message Paw Access**: When Lumiverse exposes a visible native message action toolbar, State of the Loom adds a small matching paw action beside the normal message controls. Clicking it opens/focuses the tracker for that exact message and selected swipe in the drawer; if that swipe has no tracker, the drawer shows a missing/pruned state instead of guessing.
+7. **Stale Tracker Detection**: Flags the Current Loom status with a yellow badge `Stale: New messages sent` if new user or assistant messages are added to the chat history after the latest tracker was saved, and marks active-swipe changes as stale.
+8. **Quick Copy JSON**: Copy the entire Current Loom state to your clipboard with a single click.
+9. **Context Injection Lite**: Optionally injects a compact continuity brief into live roleplay prompts.
    - Uses the latest detailed tracker as the main source of truth.
    - Adds recent tracker history as compact summaries only.
    - Provides configurable budgets of ~300, 500, 700, 1000, 1500, or 2000 tokens.
@@ -44,7 +45,7 @@ Version 1.0.17 refreshes the active tracker when Lumiverse swipe controls change
 3. Grant permissions in the installation manifest. State of the Loom keeps all basic UI features available if you restrict or deny generation.
 4. Open the interface from three locations:
    - **Extensions Panel** $\rightarrow$ **State of the Loom** $\rightarrow$ **Settings** (consolidated status panel).
-   - **Drawer sidebar** $\rightarrow$ **Loom** (main dashboard with template editors and history).
+   - **Drawer sidebar** $\rightarrow$ **Track** (main dashboard with template editors and history).
    - **Chat Input Bar Extras Menu** $\rightarrow$ **Generate Loom** or **Open Loom**.
 
 ---
@@ -122,7 +123,7 @@ npm run smoke:swipe-ui
 
 ## Diagnostics & Troubleshooting
 
-State of the Loom (v1.0.17) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, wrong-swipe tracker display, stuck generation states, settings-section collapse, confusing message-card action initials, mobile drawer overflow, and overlarge prompt injection.
+State of the Loom (v1.0.18) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, wrong-swipe tracker display, stuck generation states, settings-section collapse, confusing message-card action initials, mobile drawer overflow, native-toolbar paw duplication, and overlarge prompt injection.
 
 ### 1. What to do when a Custom Preset renders blank
 * **Root Cause**: If a custom preset uses template variables that are missing from the generated JSON, those individual fields render empty. This is now a warning instead of a fatal blank-card condition.

@@ -4,7 +4,7 @@ import { renderTrackerForState } from './rendering.js';
 import { renderPresetEditor } from './presetEditor.js';
 import { renderFeatureBreakdown } from './settingsPanel.js';
 import { badge, button, escapeHtml, type LoomUiStatus } from './ui.js';
-import { isUiSectionOpen } from './uiState.js';
+import { getFocusedTrackerRef, isUiSectionOpen, type FocusedTrackerRef } from './uiState.js';
 
 function renderConnectionOptions(state: LoomFrontendState): string {
   const selected = state.settings.sidecarConnectionId || '';
@@ -139,6 +139,75 @@ function trackerActionButton(label: string, action: string, tracker: LoomTracker
   return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml(action)}" data-sotl-message-id="${escapeHtml(id)}"${swipe}${primary}>${escapeHtml(label)}</button>`;
 }
 
+function resolveFocusedTracker(state: LoomFrontendState, ref: FocusedTrackerRef): { tracker?: LoomTrackerState | undefined; swipeId?: number | undefined; notice?: string | undefined } {
+  const trackers = state.messageTrackers.filter((tracker) => tracker.messageId === ref.messageId);
+  const activeSwipe = typeof ref.swipeId === 'number' ? ref.swipeId : state.activeSwipeByMessageId[ref.messageId];
+  if (typeof activeSwipe === 'number') {
+    const exact = trackers.find((tracker) => tracker.swipeId === activeSwipe);
+    if (exact) return { tracker: exact, swipeId: activeSwipe, notice: ref.notice };
+    if (trackers.some((tracker) => typeof tracker.swipeId === 'number')) {
+      return {
+        swipeId: activeSwipe,
+        notice: ref.notice || `No tracker is stored for ${formatSwipeLabel(activeSwipe)} on this message. It may not have generated yet or may have been pruned by the tracker history limit.`,
+      };
+    }
+  }
+  if (trackers.length === 1 && trackers[0] && typeof trackers[0].swipeId !== 'number') {
+    return { tracker: trackers[0], swipeId: trackers[0].swipeId, notice: ref.notice };
+  }
+  if (trackers.length === 0) {
+    return { swipeId: activeSwipe, notice: ref.notice || 'No tracker is stored for this message.' };
+  }
+  return {
+    swipeId: activeSwipe,
+    notice: ref.notice || 'State of the Loom did not guess between multiple stored swipe trackers because the active swipe is unclear.',
+  };
+}
+
+function renderFocusedTracker(state: LoomFrontendState): string {
+  const ref = getFocusedTrackerRef();
+  if (!ref) return '';
+  const resolved = resolveFocusedTracker(state, ref);
+  const swipeLabel = typeof resolved.swipeId === 'number' ? formatSwipeLabel(resolved.swipeId) : 'active swipe';
+  const headerMeta = [
+    `Message ${ref.messageId}`,
+    swipeLabel,
+  ].filter(Boolean).join(' - ');
+  const backButton = button('Back to Current Loom', 'clear-focused-tracker', { title: 'Return the drawer to the normal current tracker view.' });
+
+  if (!resolved.tracker) {
+    return [
+      '<section class="sotl-panel sotl-focused-tracker" data-sotl-focused-tracker="true">',
+      '<h3>Focused Tracker</h3>',
+      `<p class="sotl-note">${escapeHtml(headerMeta)}</p>`,
+      `<p class="sotl-note sotl-warning">${escapeHtml(resolved.notice || 'No tracker is available for this exact message and swipe.')}</p>`,
+      '<div class="sotl-actions">',
+      backButton,
+      '</div>',
+      '</section>',
+    ].join('');
+  }
+
+  const render = renderTrackerForState(resolved.tracker, state);
+  const warning = render.warning
+    ? `<p class="sotl-note sotl-warning" style="margin-top: 8px;">${escapeHtml(render.warning)}</p>`
+    : '';
+  return [
+    '<section class="sotl-panel sotl-focused-tracker" data-sotl-focused-tracker="true">',
+    '<h3>Focused Tracker</h3>',
+    `<p class="sotl-note">${escapeHtml(headerMeta)} ${renderSwipeChip(resolved.tracker.swipeId, true)}</p>`,
+    resolved.notice ? `<p class="sotl-note sotl-warning">${escapeHtml(resolved.notice)}</p>` : '',
+    `<p class="sotl-note">${escapeHtml(resolved.tracker.compactSummary)}</p>`,
+    `<div class="sotl-preview">${render.html}</div>`,
+    warning,
+    '<div class="sotl-actions">',
+    backButton,
+    trackerActionButton('Regenerate', `regenerate:${resolved.tracker.messageId || 'latest'}`, resolved.tracker, { primary: true }),
+    '</div>',
+    '</section>',
+  ].join('');
+}
+
 function renderLatestTracker(state: LoomFrontendState): string {
   if (!state.latestTracker) {
     const activeMessageId = state.diagnostics.swipeReport?.activeMessageId;
@@ -183,6 +252,7 @@ function renderLatestTracker(state: LoomFrontendState): string {
 
 function renderMessageList(state: LoomFrontendState): string {
   if (state.messageTrackers.length === 0) return '<p class="sotl-note">No per-message trackers yet.</p>';
+  const focused = getFocusedTrackerRef();
   const groups = new Map<string, LoomTrackerState[]>();
   for (const tracker of state.messageTrackers) {
     const id = tracker.messageId || 'latest';
@@ -194,8 +264,10 @@ function renderMessageList(state: LoomFrontendState): string {
   const renderTrackerRow = (tracker: LoomTrackerState, activeSwipe?: number | undefined, compact = false): string => {
     const id = tracker.messageId || 'latest';
     const active = typeof activeSwipe === 'number' && tracker.swipeId === activeSwipe;
+    const isFocused = Boolean(focused && focused.messageId === id && (typeof focused.swipeId !== 'number' || focused.swipeId === tracker.swipeId));
+    const rowClass = `${compact ? 'sotl-swipe-row' : 'sotl-message-row'}${isFocused ? ' sotl-message-row--focused' : ''}`;
     return [
-      `<div class="${compact ? 'sotl-swipe-row' : 'sotl-message-row'}">`,
+      `<div class="${rowClass}">`,
       '  <div class="sotl-message-row__main">',
       `    <h3>${escapeHtml(tracker.compactSummary || id)}</h3>`,
       `    <p class="sotl-note">${renderSwipeChip(tracker.swipeId, active)} ${escapeHtml(tracker.source)} - ${escapeHtml(tracker.generatedAt)}</p>`,
@@ -641,6 +713,7 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
   return [
     '<div class="sotl-root" data-sotl-root="true">',
     renderControlsPanel(state, status, selectedConnection, disabledReason),
+    renderFocusedTracker(state),
     '<section class="sotl-panel">',
     '<h3>Current Loom' + (state.diagnostics.lastRenderStatus?.includes('Stale') ? ' <span class="sotl-inline-warning">Stale: New messages sent</span>' : '') + '</h3>',
     renderLatestTracker(state),

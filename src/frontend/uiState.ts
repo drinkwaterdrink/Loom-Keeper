@@ -9,7 +9,14 @@ export interface UiStateSnapshot {
   } | undefined;
 }
 
+export interface FocusedTrackerRef {
+  messageId: string;
+  swipeId?: number | undefined;
+  notice?: string | undefined;
+}
+
 const sectionState = new Map<string, boolean>();
+let focusedTrackerRef: FocusedTrackerRef | null = null;
 
 function documentRef(): Document | null {
   return typeof document === 'undefined' ? null : document;
@@ -66,6 +73,19 @@ export function getOpenSectionIds(): string[] {
 
 export function resetUiStateForTests(): void {
   sectionState.clear();
+  focusedTrackerRef = null;
+}
+
+export function setFocusedTrackerRef(ref: FocusedTrackerRef | null): void {
+  focusedTrackerRef = ref;
+}
+
+export function getFocusedTrackerRef(): FocusedTrackerRef | null {
+  return focusedTrackerRef;
+}
+
+export function clearFocusedTrackerRef(): void {
+  focusedTrackerRef = null;
 }
 
 export function captureUiState(root: HTMLElement | Document | null): UiStateSnapshot {
