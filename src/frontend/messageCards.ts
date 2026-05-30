@@ -1,6 +1,6 @@
 import type { LoomFrontendState, LoomTrackerState } from '../shared/types.js';
 import { getFallbackField } from '../shared/renderer.js';
-import { renderCompactTrackerForState, renderTrackerForState } from './rendering.js';
+import { renderCompactTrackerForState, renderTrackerForState, resolveActiveTrackerForState } from './rendering.js';
 import { iconButton } from './ui.js';
 
 type FrontendContext = Record<string, unknown>;
@@ -12,6 +12,8 @@ export interface MessageCardMountStatus {
 
 const injectedWrappers = new Map<string, HTMLElement>();
 const injectedMessagePaws = new Map<string, HTMLElement>();
+const injectedContextMenuItems = new Set<HTMLElement>();
+let lastMessageActionTarget: { messageId: string; swipeId?: number | undefined } | null = null;
 let isChatLoomPanelExpanded = false;
 let isDrawerOpen = false;
 let isSettingsOpen = false;
@@ -81,6 +83,66 @@ function findMessageHostById(doc: Document, messageId: string): Element | null {
     ?? doc.getElementById(`message-${messageId}`);
 }
 
+function messageIdFromElement(element: Element | null): string | undefined {
+  const host = element?.closest?.('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid]');
+  if (host instanceof HTMLElement) {
+    return host.dataset.messageId
+      ?? host.dataset.lumiverseMessageId
+      ?? host.dataset.lvMessageId
+      ?? host.dataset.chatMessageId
+      ?? host.dataset.message_id
+      ?? host.dataset.messageid
+      ?? undefined;
+  }
+  const id = element instanceof HTMLElement ? element.id : '';
+  const match = id.match(/^message-(.+)$/);
+  return match?.[1];
+}
+
+function findNearestTrackedMessageIdForElement(element: HTMLElement, state: LoomFrontendState): string | undefined {
+  const doc = element.ownerDocument || documentRef();
+  if (!doc) return undefined;
+  const rect = element.getBoundingClientRect();
+  const ids = new Set<string>();
+  for (const tracker of state.messageTrackers) {
+    if (tracker.messageId) ids.add(tracker.messageId);
+  }
+  if (state.latestTracker?.messageId) ids.add(state.latestTracker.messageId);
+
+  let best: { id: string; score: number } | undefined;
+  for (const id of ids) {
+    const host = findMessageHostById(doc, id);
+    if (!(host instanceof HTMLElement) || !isVisibleElement(host)) continue;
+    const hostRect = host.getBoundingClientRect();
+    const verticalGap = rect.top > hostRect.bottom
+      ? rect.top - hostRect.bottom
+      : hostRect.top > rect.bottom
+        ? hostRect.top - rect.bottom
+        : 0;
+    const horizontalGap = rect.left > hostRect.right
+      ? rect.left - hostRect.right
+      : hostRect.left > rect.right
+        ? hostRect.left - rect.right
+        : 0;
+    const score = verticalGap + horizontalGap;
+    if (score <= 96 && (!best || score < best.score)) {
+      best = { id, score };
+    }
+  }
+  return best?.id;
+}
+
+export function rememberMessageActionTarget(target: HTMLElement | null, state: LoomFrontendState | null): void {
+  if (!target || !state) return;
+  const messageId = messageIdFromElement(target) ?? findNearestTrackedMessageIdForElement(target, state);
+  if (!messageId) return;
+  if (!state.messageTrackers.some((tracker) => tracker.messageId === messageId) && state.latestTracker?.messageId !== messageId) return;
+  lastMessageActionTarget = {
+    messageId,
+    swipeId: state.activeSwipeByMessageId[messageId],
+  };
+}
+
 function findMessageHost(doc: Document, tracker: LoomTrackerState): Element | null {
   if (!tracker.messageId) return null;
   return findMessageHostById(doc, tracker.messageId);
@@ -99,6 +161,17 @@ function visibleToolbarCandidate(element: Element): element is HTMLElement {
   if (element.querySelector('[data-sotl-message-paw="true"]')) return true;
   const controls = element.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]');
   return controls.length > 0;
+}
+
+function visibleToolbarClusterCandidate(element: Element, hostElement: Element): element is HTMLElement {
+  if (!isVisibleElement(element) || !isNearMessageHost(element, hostElement)) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.height > 72 || rect.width > 420) return false;
+  const controls = Array.from(element.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action], svg'))
+    .filter((control) => isVisibleElement(control));
+  if (controls.length < 3) return false;
+  const text = element.textContent?.trim() || '';
+  return text.length < 160;
 }
 
 function isNearMessageHost(candidate: Element, hostElement: Element): boolean {
@@ -143,6 +216,27 @@ function findVisibleMessageToolbar(hostElement: Element): HTMLElement | null {
   return null;
 }
 
+function findDocumentMessageToolbar(doc: Document, hostElement: Element): HTMLElement | null {
+  const selectors = [
+    '[data-message-actions]',
+    '[data-lv-message-actions]',
+    '[data-message-action-bar]',
+    '[data-lumiverse-message-actions]',
+    '[role="toolbar"]',
+    '.message-actions',
+    '.message-action-buttons',
+    '.chat-message-actions',
+    '.lv-message-actions',
+    '.lv-message-action-bar',
+    '.message-controls',
+  ].join(',');
+  return Array.from(doc.querySelectorAll(selectors))
+    .find((candidate) => visibleToolbarCandidate(candidate) && isNearMessageHost(candidate, hostElement)) as HTMLElement | undefined
+    ?? Array.from(doc.querySelectorAll('div, nav, section, menu'))
+      .find((candidate) => visibleToolbarClusterCandidate(candidate, hostElement)) as HTMLElement | undefined
+    ?? null;
+}
+
 function cleanupDisconnectedMessagePaws(): void {
   for (const [key, button] of injectedMessagePaws.entries()) {
     if (!button.isConnected) injectedMessagePaws.delete(key);
@@ -158,6 +252,14 @@ export function cleanupMessageTrackerActions(): void {
     }
   }
   injectedMessagePaws.clear();
+  for (const item of injectedContextMenuItems) {
+    try {
+      item.remove();
+    } catch {
+      // Ignored
+    }
+  }
+  injectedContextMenuItems.clear();
 }
 
 function messageActionKey(messageId: string, swipeId?: number): string {
@@ -168,12 +270,25 @@ function syncNativeLikeButtonVariables(target: HTMLElement, reference: HTMLEleme
   try {
     const rect = reference.getBoundingClientRect();
     const style = getComputedStyle(reference);
-    if (rect.width > 0) target.style.setProperty('--sotl-native-size', `${Math.round(rect.width)}px`);
+    if (rect.width > 0) {
+      target.style.setProperty('--sotl-native-size', `${Math.round(Math.max(rect.width, rect.height))}px`);
+      target.style.setProperty('--sotl-native-width', `${Math.round(rect.width)}px`);
+    }
+    if (rect.height > 0) target.style.setProperty('--sotl-native-height', `${Math.round(rect.height)}px`);
     target.style.setProperty('--sotl-native-radius', style.borderRadius);
-    target.style.setProperty('--sotl-native-bg', style.backgroundColor);
+    target.style.setProperty('--sotl-native-bg', style.background || style.backgroundColor);
     target.style.setProperty('--sotl-native-color', style.color);
-    target.style.setProperty('--sotl-native-border', style.borderColor);
+    target.style.setProperty('--sotl-native-border', style.border);
     target.style.setProperty('--sotl-native-shadow', style.boxShadow);
+    target.style.setProperty('--sotl-native-opacity', style.opacity);
+    target.style.setProperty('--sotl-native-backdrop', style.backdropFilter && style.backdropFilter !== 'none' ? style.backdropFilter : 'blur(12px)');
+    target.style.setProperty('--sotl-native-padding', style.padding);
+    const inner = reference.querySelector<HTMLElement>('svg, img, [class*="icon" i], [data-icon]');
+    const innerRect = inner?.getBoundingClientRect();
+    if (innerRect && innerRect.width > 0 && innerRect.height > 0) {
+      const glyphSize = Math.round(Math.max(innerRect.width, innerRect.height) * 1.12);
+      target.style.setProperty('--sotl-native-glyph-size', `${glyphSize}px`);
+    }
   } catch {
     // Computed-style matching is best-effort only.
   }
@@ -203,15 +318,141 @@ function mountLauncherInNativeRail(doc: Document, container: HTMLElement): boole
   const rail = findNativeSideRail(doc);
   if (!rail) return false;
   const pill = container.querySelector<HTMLElement>('.sotl-chat-pill');
-  const reference = Array.from(rail.querySelectorAll<HTMLElement>('button, [role="button"], a'))
+  const stockReference = findStockSideIcon(doc);
+  const reference = stockReference && rail.contains(stockReference)
+    ? stockReference
+    : Array.from(rail.querySelectorAll<HTMLElement>('button, [role="button"], a, [tabindex]'))
     .find((entry) => isVisibleElement(entry));
   if (pill && reference) syncNativeLikeButtonVariables(pill, reference);
   container.dataset.sotlNativeMounted = 'true';
   container.style.removeProperty('position');
   container.style.removeProperty('right');
   container.style.removeProperty('top');
-  rail.append(container);
+  if (reference?.parentElement === rail) {
+    reference.insertAdjacentElement('afterend', container);
+  } else {
+    rail.append(container);
+  }
   return true;
+}
+
+function isStockSideIconCandidate(doc: Document, candidate: HTMLElement): boolean {
+  if (!isVisibleElement(candidate) || candidate.closest('.sotl-chat-panel-container')) return false;
+  const rect = candidate.getBoundingClientRect();
+  const viewportWidth = doc.defaultView?.innerWidth ?? 0;
+  return rect.width >= 24
+    && rect.width <= 72
+    && rect.height >= 24
+    && rect.height <= 72
+    && rect.right >= viewportWidth - 112
+    && rect.top >= 56
+    && rect.bottom <= (doc.defaultView?.innerHeight ?? 1000) - 72;
+}
+
+function findStockSideIcon(doc: Document): HTMLElement | null {
+  const textMatches = [
+    '[aria-label*="spark" i]',
+    '[title*="spark" i]',
+    '[aria-label*="star" i]',
+    '[title*="star" i]',
+    '[aria-label*="magic" i]',
+    '[title*="magic" i]',
+    '[data-action*="spark" i]',
+    '[data-lv-action*="spark" i]',
+    '[data-testid*="spark" i]',
+    '[class*="spark" i]',
+  ];
+  for (const selector of textMatches) {
+    const found = Array.from(doc.querySelectorAll<HTMLElement>(selector))
+      .find((candidate) => candidate.dataset.sotlChatPanel !== 'true' && isStockSideIconCandidate(doc, candidate));
+    if (found) return found;
+  }
+
+  const candidates = Array.from(doc.querySelectorAll<HTMLElement>('button, [role="button"], a, [tabindex]'))
+    .filter((candidate) => {
+      return isStockSideIconCandidate(doc, candidate) && Boolean(candidate.querySelector('svg'));
+    })
+    .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+  return candidates[0] ?? null;
+}
+
+function syncFixedLauncherToStockIcon(doc: Document, container: HTMLElement): void {
+  const reference = findStockSideIcon(doc);
+  const pill = container.querySelector<HTMLElement>('.sotl-chat-pill');
+  if (!reference || !pill) return;
+  syncNativeLikeButtonVariables(pill, reference);
+  const rect = reference.getBoundingClientRect();
+  const gap = Math.max(6, Math.min(10, rect.height * 0.22));
+  container.style.position = 'fixed';
+  container.style.left = `${Math.round(rect.left)}px`;
+  container.style.right = 'auto';
+  container.style.top = `${Math.round(rect.bottom + gap)}px`;
+  container.style.width = `${Math.round(rect.width)}px`;
+}
+
+function createMessagePawButton(doc: Document, messageId: string, swipeId?: number): HTMLButtonElement {
+  const button = doc.createElement('button');
+  button.className = 'sotl-message-paw-action';
+  button.type = 'button';
+  button.dataset.sotlMessagePaw = 'true';
+  button.dataset.sotlAction = 'message-paw';
+  button.dataset.sotlMessageId = messageId;
+  if (typeof swipeId === 'number') button.dataset.sotlSwipeId = String(swipeId);
+  button.title = typeof swipeId === 'number'
+    ? `Open Loom tracker for Swipe ${swipeId + 1}`
+    : 'Open Loom tracker for this message';
+  button.setAttribute('aria-label', button.title);
+  button.innerHTML = pawSvg('sotl-message-paw-svg');
+  return button;
+}
+
+function mountAnchoredMessagePaw(doc: Document, hostElement: HTMLElement, messageId: string, swipeId?: number): HTMLElement {
+  const button = createMessagePawButton(doc, messageId, swipeId);
+  button.classList.add('sotl-message-paw-action--anchored');
+  const rect = hostElement.getBoundingClientRect();
+  button.style.position = 'fixed';
+  button.style.right = `${Math.max(8, Math.round((doc.defaultView?.innerWidth ?? rect.right) - rect.right + 10))}px`;
+  button.style.top = `${Math.max(72, Math.round(rect.top + 8))}px`;
+  doc.body.append(button);
+  return button;
+}
+
+function visibleContextMenuCandidate(element: Element): element is HTMLElement {
+  if (!isVisibleElement(element)) return false;
+  const text = element.textContent || '';
+  return /\b(Copy|Edit|Delete|Hide from AI context|Fork chat here|Prompt Breakdown)\b/i.test(text);
+}
+
+function mountContextMenuTrackerAction(doc: Document, state: LoomFrontendState): number {
+  const target = lastMessageActionTarget;
+  if (!target) return 0;
+  const hasTracker = state.messageTrackers.some((tracker) => tracker.messageId === target.messageId)
+    || state.latestTracker?.messageId === target.messageId;
+  if (!hasTracker) return 0;
+  const menus = Array.from(doc.querySelectorAll('[role="menu"], [data-context-menu], [data-lv-context-menu], .context-menu, .lv-context-menu, .menu, .popover'))
+    .filter(visibleContextMenuCandidate);
+  let mounted = 0;
+  for (const menu of menus) {
+    if (menu.querySelector('[data-sotl-context-menu-item="true"]')) continue;
+    const reference = Array.from(menu.querySelectorAll<HTMLElement>('button, [role="menuitem"], [data-menu-item], li, div'))
+      .find((candidate) => isVisibleElement(candidate) && /\b(Copy|Edit|Hide from AI context|Fork chat here|Prompt Breakdown)\b/i.test(candidate.textContent || ''));
+    const item = doc.createElement(reference?.tagName.toLowerCase() === 'button' ? 'button' : 'div');
+    if (item instanceof HTMLButtonElement) item.type = 'button';
+    item.className = 'sotl-context-menu-item';
+    item.dataset.sotlContextMenuItem = 'true';
+    item.dataset.sotlAction = 'message-paw';
+    item.dataset.sotlMessageId = target.messageId;
+    if (typeof target.swipeId === 'number') item.dataset.sotlSwipeId = String(target.swipeId);
+    item.setAttribute('role', reference?.getAttribute('role') || 'menuitem');
+    item.setAttribute('tabindex', '0');
+    item.innerHTML = `<span class="sotl-context-menu-item__icon">${pawSvg('sotl-message-paw-svg')}</span><span>Open Tracker</span>`;
+    if (reference) syncNativeLikeButtonVariables(item, reference);
+    const deleteItem = Array.from(menu.children).find((child) => /\bDelete\b/i.test(child.textContent || ''));
+    menu.insertBefore(item, deleteItem ?? null);
+    injectedContextMenuItems.add(item);
+    mounted += 1;
+  }
+  return mounted;
 }
 function renderTrackerHtmlCard(tracker: LoomTrackerState, state: LoomFrontendState): string {
   const id = tracker.messageId || '';
@@ -396,49 +637,48 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
 
   for (const messageId of messageIds) {
     const activeSwipe = state.activeSwipeByMessageId[messageId];
+    const key = messageActionKey(messageId, activeSwipe);
     const hostElement = findMessageElement?.(messageId) ?? findMessageHostById(doc, messageId) as HTMLElement | null;
     if (!hostElement) {
       missingHost += 1;
       continue;
     }
 
-    const toolbar = findVisibleMessageToolbar(hostElement);
+    const toolbar = findVisibleMessageToolbar(hostElement) ?? findDocumentMessageToolbar(doc, hostElement);
     if (!toolbar) {
+      if (lastMessageActionTarget?.messageId === messageId && hostElement instanceof HTMLElement) {
+        const anchored = mountAnchoredMessagePaw(doc, hostElement, messageId, activeSwipe);
+        injectedMessagePaws.set(key, anchored);
+        mounted += 1;
+        continue;
+      }
       missingToolbar += 1;
       continue;
     }
 
-    const key = messageActionKey(messageId, activeSwipe);
-    const button = doc.createElement('button');
-    button.className = 'sotl-message-paw-action';
-    button.type = 'button';
-    button.dataset.sotlMessagePaw = 'true';
-    button.dataset.sotlAction = 'message-paw';
-    button.dataset.sotlMessageId = messageId;
-    if (typeof activeSwipe === 'number') button.dataset.sotlSwipeId = String(activeSwipe);
-    button.title = typeof activeSwipe === 'number'
-      ? `Open Loom tracker for Swipe ${activeSwipe + 1}`
-      : 'Open Loom tracker for this message';
-    button.setAttribute('aria-label', button.title);
-    button.innerHTML = pawSvg('sotl-message-paw-svg');
+    const button = createMessagePawButton(doc, messageId, activeSwipe);
 
     const reference = Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))
       .find((entry) => isVisibleElement(entry) && entry.dataset.sotlMessagePaw !== 'true');
     if (reference) syncNativeLikeButtonVariables(button, reference);
 
-    toolbar.append(button);
+    const deleteLike = Array.from(toolbar.children).find((child) => /\b(delete|trash)\b/i.test(child.getAttribute('aria-label') || child.getAttribute('title') || child.textContent || ''));
+    if (deleteLike) toolbar.insertBefore(button, deleteLike);
+    else toolbar.append(button);
     injectedMessagePaws.set(key, button);
     mounted += 1;
   }
 
   const reports: string[] = [];
   if (mounted > 0) reports.push(`Mounted ${mounted} message paw action${mounted === 1 ? '' : 's'}.`);
+  const menuMounted = mountContextMenuTrackerAction(doc, state);
+  if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action${menuMounted === 1 ? '' : 's'}.`);
   if (missingToolbar > 0) reports.push(`${missingToolbar} message toolbar${missingToolbar === 1 ? '' : 's'} not visible.`);
   if (missingHost > 0) reports.push(`${missingHost} tracked message host${missingHost === 1 ? '' : 's'} not mounted.`);
   return { status: reports.join(' ') || 'No visible message toolbar found for paw actions.' };
 }
 
-function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFrontendState): string {
+function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFrontendState, missingSwipeId?: number | undefined): string {
   const isGenerating = state.generation.running;
   const isCompact = state.settings.hudDefaultView === 'compact';
 
@@ -495,11 +735,14 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
   `;
 
   if (!tracker) {
+    const missingText = typeof missingSwipeId === 'number'
+      ? `No tracker retained/generated for Swipe ${missingSwipeId + 1}. State of the Loom will not show a sibling swipe's tracker here.`
+      : 'No tracker has been stored for this chat yet.';
     return [
       '<div class="sotl-chat-panel">',
       header,
       '  <div class="sotl-chat-panel__body">',
-      '    <p class="sotl-chat-panel__desc">No tracker has been stored for this chat yet.</p>',
+      `    <p class="sotl-chat-panel__desc">${escapeHtml(missingText)}</p>`,
       `    <button class="sotl-button" data-sotl-panel-action="generate" ${isGenerating || state.generation.disabledReason ? 'disabled' : ''} style="margin-top: 6px; width: 100%; justify-content: center;">Generate Tracker</button>`,
       '  </div>',
       '</div>'
@@ -628,7 +871,7 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
     // Lumiverse typically places action icons in a vertical flex column on the right side of the chat.
     // We look for common host selectors for the right action column, then find the star/spark button inside it,
     // and insert our paw pill immediately after it.
-    if (!isChatLoomPanelExpanded && !softHide) {
+    if (false && !isChatLoomPanelExpanded && !softHide) {
       const hostSelectors = [
         '.chat-action-buttons',
         '.chat-actions',
@@ -639,7 +882,7 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
       ];
       let hostContainer: Element | null = null;
       for (const sel of hostSelectors) {
-        hostContainer = doc.querySelector(sel);
+        hostContainer = (doc as Document).querySelector(sel);
         if (hostContainer) break;
       }
 
@@ -649,14 +892,19 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
         container.style.removeProperty('position');
         container.style.setProperty('display', 'block');
         container.style.setProperty('margin-top', '8px');
-        hostContainer.append(container);
+        (hostContainer as Element).append(container);
         // Attach click handler and return early (skip doc.body.append below)
-        attachContainerClickHandler(container, ctx, state, doc);
+        attachContainerClickHandler(container, ctx, state as LoomFrontendState, doc as Document);
         return;
       }
     }
   } else {
-    container.innerHTML = renderCompactPanel(state.latestTracker, state);
+    const resolution = resolveActiveTrackerForState(state);
+    container.innerHTML = renderCompactPanel(resolution.tracker, state, resolution.missingSwipeId);
+  }
+
+  if (!isChatLoomPanelExpanded && !softHide) {
+    syncFixedLauncherToStockIcon(doc, container);
   }
 
   attachContainerClickHandler(container, ctx, state, doc);
@@ -696,6 +944,7 @@ function attachContainerClickHandler(
       }
     } else if (action === 'drawer') {
       isChatLoomPanelExpanded = false;
+      container.remove();
       triggerRerender();
       setTimeout(() => {
         if (openDrawerCallback) {

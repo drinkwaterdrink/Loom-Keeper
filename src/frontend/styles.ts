@@ -733,18 +733,19 @@ export const loomStyles = `
   display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--sotl-native-size, 36px);
-  height: var(--sotl-native-size, 36px);
+  width: var(--sotl-native-width, var(--sotl-native-size, 36px));
+  height: var(--sotl-native-height, var(--sotl-native-size, 36px));
   border-radius: var(--sotl-native-radius, 8px);
   background: var(--sotl-native-bg, var(--lumiverse-fill, var(--lv-surface-raised, rgba(255, 255, 255, 0.85))));
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--sotl-native-border, var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.25))));
+  backdrop-filter: var(--sotl-native-backdrop, blur(12px));
+  -webkit-backdrop-filter: var(--sotl-native-backdrop, blur(12px));
+  border: var(--sotl-native-border, 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.25))));
   cursor: pointer;
   box-shadow: var(--sotl-native-shadow, 0 4px 16px rgba(20, 24, 32, 0.12));
+  opacity: var(--sotl-native-opacity, 1);
   user-select: none;
   transition: all 0.2s ease;
-  padding: 0;
+  padding: var(--sotl-native-padding, 0);
   color: var(--sotl-native-color, var(--lumiverse-text, var(--lv-text, #1e2329)));
   position: relative;
   overflow: visible;
@@ -752,8 +753,8 @@ export const loomStyles = `
 .sotl-paw-svg,
 .sotl-message-paw-svg {
   display: block;
-  width: 20px;
-  height: 20px;
+  width: var(--sotl-native-glyph-size, 22px);
+  height: var(--sotl-native-glyph-size, 22px);
   overflow: visible;
 }
 .sotl-paw-pad,
@@ -922,16 +923,17 @@ export const loomStyles = `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--sotl-native-size, 28px);
-  height: var(--sotl-native-size, 28px);
-  min-width: var(--sotl-native-size, 28px);
-  min-height: var(--sotl-native-size, 28px);
+  width: var(--sotl-native-width, var(--sotl-native-size, 28px));
+  height: var(--sotl-native-height, var(--sotl-native-size, 28px));
+  min-width: var(--sotl-native-width, var(--sotl-native-size, 28px));
+  min-height: var(--sotl-native-height, var(--sotl-native-size, 28px));
   border-radius: var(--sotl-native-radius, 6px);
-  border: 1px solid var(--sotl-native-border, var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.2))));
+  border: var(--sotl-native-border, 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.2))));
   background: var(--sotl-native-bg, transparent);
   color: var(--sotl-native-color, currentColor);
   box-shadow: var(--sotl-native-shadow, none);
-  padding: 0;
+  opacity: var(--sotl-native-opacity, 1);
+  padding: var(--sotl-native-padding, 0);
   margin-left: 4px;
   cursor: pointer;
   line-height: 1;
@@ -944,8 +946,57 @@ export const loomStyles = `
   outline: none;
 }
 .sotl-message-paw-action .sotl-message-paw-svg {
-  width: 14px;
-  height: 14px;
+  width: var(--sotl-native-glyph-size, 16px);
+  height: var(--sotl-native-glyph-size, 16px);
+}
+.sotl-message-paw-action--anchored {
+  z-index: 2147483646;
+  background: var(--sotl-native-bg, color-mix(in srgb, var(--lv-surface-raised, #111827) 92%, transparent));
+  backdrop-filter: var(--sotl-native-backdrop, blur(12px));
+  -webkit-backdrop-filter: var(--sotl-native-backdrop, blur(12px));
+  box-shadow: var(--sotl-native-shadow, 0 8px 18px rgba(0, 0, 0, 0.28));
+}
+.sotl-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--sotl-native-height, 40px);
+  padding: var(--sotl-native-padding, 10px 14px);
+  border: var(--sotl-native-border, 0);
+  border-radius: var(--sotl-native-radius, 8px);
+  background: var(--sotl-native-bg, transparent);
+  color: var(--sotl-native-color, inherit);
+  box-shadow: var(--sotl-native-shadow, none);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sotl-context-menu-item:hover,
+.sotl-context-menu-item:focus-visible {
+  color: var(--lv-accent, #3864d9);
+  outline: none;
+}
+.sotl-context-menu-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  min-width: 22px;
+}
+.sotl-message-row,
+.sotl-swipe-row {
+  cursor: pointer;
+}
+.sotl-message-row:focus-visible,
+.sotl-swipe-row:focus-visible {
+  outline: 2px solid var(--lv-accent, #3864d9);
+  outline-offset: 2px;
+}
+.sotl-message-row__eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 .sotl-focused-tracker {
   border-color: var(--lv-accent, #3864d9);

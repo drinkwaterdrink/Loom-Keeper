@@ -35,4 +35,8 @@ const snapshot = uiState.captureUiState(null);
 assert.deepEqual(snapshot.openSections, []);
 uiState.restoreUiState(null, snapshot);
 
+uiState.setFocusedTrackerRef({ messageId: 'm1', swipeId: 0, notice: 'old swipe' });
+uiState.syncFocusedTrackerSwipe({ m1: 2 });
+assert.deepEqual(uiState.getFocusedTrackerRef(), { messageId: 'm1', swipeId: 2 }, 'focused tracker should sync to the active swipe for that message');
+
 console.log('OK: UI state smoke passed');

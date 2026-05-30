@@ -1,11 +1,11 @@
 import type { LoomBackendMessage, LoomFrontendMessage, LoomFrontendState, LoomSettings } from '../shared/types.js';
 import { renderDrawer } from './drawer.js';
-import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, mountMessageTrackerActions, cleanupMessageTrackerActions, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback } from './messageCards.js';
-import { renderTrackerForState } from './rendering.js';
+import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, mountMessageTrackerActions, cleanupMessageTrackerActions, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback, rememberMessageActionTarget } from './messageCards.js';
+import { renderTrackerForState, resolveActiveTrackerForState } from './rendering.js';
 import { renderSettingsPanel } from './settingsPanel.js';
 import { loomStyles } from './styles.js';
 import type { LoomUiStatus } from './ui.js';
-import { captureUiState, clearFocusedTrackerRef, restoreUiState, setFocusedTrackerRef, setUiSectionOpen } from './uiState.js';
+import { captureUiState, clearFocusedTrackerRef, restoreUiState, setFocusedTrackerRef, setUiSectionOpen, syncFocusedTrackerSwipe } from './uiState.js';
 import {
   editingPreset,
   selectPresetForEditing,
@@ -47,6 +47,7 @@ const cleanupFns: Array<() => void> = [];
 const rootListenerCleanups = new Map<HTMLElement, () => void>();
 const pawIconSvg = '<svg viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/></svg>';
 let swipeStateRefreshTimer: number | undefined;
+let swipeStateRefreshBurstTimers: number[] = [];
 
 function documentRef(): Document | null {
   return typeof document === 'undefined' ? null : document;
@@ -129,6 +130,24 @@ function scheduleSwipeStateRefresh(delayMs = 160): void {
   }, delayMs);
 }
 
+function scheduleSwipeStateRefreshBurst(): void {
+  if (typeof globalThis.clearTimeout === 'function') {
+    for (const timer of swipeStateRefreshBurstTimers) globalThis.clearTimeout(timer);
+  }
+  swipeStateRefreshBurstTimers = [];
+  const delays = [80, 260, 700];
+  if (typeof globalThis.setTimeout !== 'function') {
+    scheduleSwipeStateRefresh(80);
+    return;
+  }
+  for (const delay of delays) {
+    const timer = globalThis.setTimeout(() => {
+      scheduleSwipeStateRefresh(delay);
+    }, delay);
+    swipeStateRefreshBurstTimers.push(timer);
+  }
+}
+
 function looksLikeSwipeControl(target: HTMLElement): boolean {
   const control = target.closest<HTMLElement>('button, [role="button"], [data-action], [data-lv-action], [aria-label], [title]');
   if (!control) return false;
@@ -141,6 +160,11 @@ function looksLikeSwipeControl(target: HTMLElement): boolean {
     control.textContent,
   ].filter(Boolean).join(' ');
   return /\b(swipe|variant|alternate|previous response|next response|prev response|regenerate)\b/i.test(text);
+}
+
+function resolveActiveJsonTracker(): ReturnType<typeof resolveActiveTrackerForState>['tracker'] {
+  if (!state) return null;
+  return resolveActiveTrackerForState(state).tracker ?? state.latestTracker;
 }
 
 function datasetSwipeId(element: HTMLElement): number | undefined {
@@ -312,6 +336,8 @@ function registerInputActions(ctx: FrontendContext): void {
 }
 
 function activateDrawer(): void {
+  setDrawerOpenState(true);
+  documentRef()?.querySelector('.sotl-chat-panel-container')?.remove();
   if (drawerHandle?.activate) {
     drawerHandle.activate();
   }
@@ -458,6 +484,20 @@ function handleDrawerEvent(event: Event): void {
       activateDrawer();
       return;
     }
+    if (action === 'view-tracker') {
+      const messageId = actionButton.dataset.sotlMessageId;
+      const actionSwipeId = datasetSwipeId(actionButton);
+      const resolved = resolveTrackerForMessageSwipe(state, messageId, actionSwipeId);
+      if (messageId) {
+        setFocusedTrackerRef({
+          messageId,
+          swipeId: typeof actionSwipeId === 'number' ? actionSwipeId : resolved.swipeId,
+          notice: resolved.notice,
+        });
+      }
+      rerender();
+      return;
+    }
     if (action === 'generate') postToBackend(contextRef, { type: 'generate_tracker' });
     if (action === 'cancel-generation') {
       postToBackend(contextRef, { type: 'cancel_generation' } as any);
@@ -478,7 +518,8 @@ function handleDrawerEvent(event: Event): void {
     if (action === 'card-edit') activateDrawer();
     if (action === 'card-hide' && state?.activeChat.id) postToBackend(contextRef, { type: 'hide_tracker', chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId, hidden: true });
     if (action === 'card-delete' && state?.activeChat.id) postToBackend(contextRef, { type: 'delete_tracker', chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId });
-    if (action === 'save-json' && state?.latestTracker) {
+    const activeJsonTracker = resolveActiveJsonTracker();
+    if (action === 'save-json' && activeJsonTracker) {
       const doc = documentRef();
       const textarea = doc?.querySelector<HTMLTextAreaElement>('[data-sotl-field="latestJson"]');
       if (!textarea) return;
@@ -488,7 +529,7 @@ function handleDrawerEvent(event: Event): void {
         postToBackend(contextRef, {
           type: 'edit_tracker',
           tracker: {
-            ...state.latestTracker,
+            ...activeJsonTracker,
             data: parsed as Record<string, unknown>,
           },
         });
@@ -499,8 +540,8 @@ function handleDrawerEvent(event: Event): void {
       }
     }
 
-    if (action === 'copy-json' && state?.latestTracker) {
-      const jsonText = JSON.stringify(state.latestTracker.data, null, 2);
+    if (action === 'copy-json' && activeJsonTracker) {
+      const jsonText = JSON.stringify(activeJsonTracker.data, null, 2);
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         navigator.clipboard.writeText(jsonText)
           .then(() => {
@@ -944,6 +985,7 @@ function handleBackendMessage(message: LoomBackendMessage): void {
   if (state) {
     backendTimedOut = false;
     clearBackendTimer();
+    syncFocusedTrackerSwipe(state.activeSwipeByMessageId);
   }
   rerender();
   if (message.type === 'tracker_generated' || message.type === 'tracker_updated' || message.type === 'state') {
@@ -969,7 +1011,7 @@ function registerFrontendEvents(ctx: FrontendContext): void {
       const unsubscribe = (on as (name: string, handler: (payload?: unknown) => void) => void | (() => void))(eventName, () => {
         scheduleMessageCardRetry();
         if (eventName === 'MESSAGE_RENDERED' || eventName === 'CHAT_CHANGED' || eventName === 'CHAT_SWITCHED') {
-          scheduleSwipeStateRefresh(220);
+          scheduleSwipeStateRefreshBurst();
         }
       });
       if (typeof unsubscribe === 'function') cleanupFns.push(unsubscribe);
@@ -980,7 +1022,7 @@ function registerFrontendEvents(ctx: FrontendContext): void {
   for (const eventName of ['SWIPE_CHANGED', 'MESSAGE_SWIPE_CHANGED', 'CHAT_SWIPE_CHANGED', 'SWIPE_SELECTED', 'MESSAGE_VARIANT_CHANGED']) {
     try {
       const unsubscribe = (on as (name: string, handler: (payload?: unknown) => void) => void | (() => void))(eventName, () => {
-        scheduleSwipeStateRefresh(80);
+        scheduleSwipeStateRefreshBurst();
       });
       if (typeof unsubscribe === 'function') cleanupFns.push(unsubscribe);
     } catch {
@@ -1032,28 +1074,39 @@ export function setup(ctx: FrontendContext): () => void {
   documentRef()?.addEventListener('toggle', handleDrawerEvent, true);
   const swipeClickHandler = (event: Event) => {
     const target = event.target as HTMLElement | null;
-    if (target && looksLikeSwipeControl(target)) scheduleSwipeStateRefresh(220);
+    if (target && looksLikeSwipeControl(target)) scheduleSwipeStateRefreshBurst();
   };
   documentRef()?.addEventListener('click', swipeClickHandler, true);
+  documentRef()?.addEventListener('pointerup', swipeClickHandler, true);
+  documentRef()?.addEventListener('touchend', swipeClickHandler, true);
   cleanupFns.push(() => documentRef()?.removeEventListener('click', swipeClickHandler, true));
+  cleanupFns.push(() => documentRef()?.removeEventListener('pointerup', swipeClickHandler, true));
+  cleanupFns.push(() => documentRef()?.removeEventListener('touchend', swipeClickHandler, true));
   const messageActionRefreshHandler = (event: Event) => {
     const target = event.target as HTMLElement | null;
     if (!target) return;
-    if (target.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions')) {
+    rememberMessageActionTarget(target, state);
+    if (target.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover')) {
       scheduleMessageCardRetry();
     }
   };
   documentRef()?.addEventListener('pointerover', messageActionRefreshHandler, true);
   documentRef()?.addEventListener('focusin', messageActionRefreshHandler, true);
+  documentRef()?.addEventListener('pointerdown', messageActionRefreshHandler, true);
+  documentRef()?.addEventListener('contextmenu', messageActionRefreshHandler, true);
+  documentRef()?.addEventListener('touchstart', messageActionRefreshHandler, true);
   cleanupFns.push(() => documentRef()?.removeEventListener('pointerover', messageActionRefreshHandler, true));
   cleanupFns.push(() => documentRef()?.removeEventListener('focusin', messageActionRefreshHandler, true));
+  cleanupFns.push(() => documentRef()?.removeEventListener('pointerdown', messageActionRefreshHandler, true));
+  cleanupFns.push(() => documentRef()?.removeEventListener('contextmenu', messageActionRefreshHandler, true));
+  cleanupFns.push(() => documentRef()?.removeEventListener('touchstart', messageActionRefreshHandler, true));
   const doc = documentRef();
   if (doc && typeof MutationObserver !== 'undefined') {
     const observer = new MutationObserver((records) => {
       if (Date.now() < ignoreMessageActionMutationsUntil) return;
       if (records.some((record) => {
         const target = record.target instanceof HTMLElement ? record.target : null;
-        return Boolean(target?.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions'));
+        return Boolean(target?.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover'));
       })) {
         scheduleMessageCardRetry();
       }
@@ -1079,6 +1132,10 @@ export function setup(ctx: FrontendContext): () => void {
     clearBackendTimer();
     if (messageCardRetryTimer !== undefined && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(messageCardRetryTimer);
     if (settingsSavedTimer !== undefined && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(settingsSavedTimer);
+    if (typeof globalThis.clearTimeout === 'function') {
+      for (const timer of swipeStateRefreshBurstTimers) globalThis.clearTimeout(timer);
+    }
+    swipeStateRefreshBurstTimers = [];
     fallbackRoot?.remove();
     documentRef()?.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
     documentRef()?.querySelector('.sotl-chat-panel-container')?.remove();

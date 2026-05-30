@@ -1,6 +1,6 @@
 import { renderTrackerHtml } from '../shared/renderer.js';
 import type { LoomCustomTemplateMode, LoomFrontendState, LoomTrackerState } from '../shared/types.js';
-import { renderTrackerForState } from './rendering.js';
+import { renderTrackerForState, resolveActiveTrackerForState } from './rendering.js';
 import { renderPresetEditor } from './presetEditor.js';
 import { renderFeatureBreakdown } from './settingsPanel.js';
 import { badge, button, escapeHtml, type LoomUiStatus } from './ui.js';
@@ -139,6 +139,12 @@ function trackerActionButton(label: string, action: string, tracker: LoomTracker
   return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml(action)}" data-sotl-message-id="${escapeHtml(id)}"${swipe}${primary}>${escapeHtml(label)}</button>`;
 }
 
+function formatMessageReference(id: string, index: number): string {
+  const match = id.match(/(?:message[-_:#]?|msg[-_:#]?|^)(\d+)$/i);
+  if (match?.[1]) return `Message #${match[1]}`;
+  return `Retained message ${index + 1}`;
+}
+
 function resolveFocusedTracker(state: LoomFrontendState, ref: FocusedTrackerRef): { tracker?: LoomTrackerState | undefined; swipeId?: number | undefined; notice?: string | undefined } {
   const trackers = state.messageTrackers.filter((tracker) => tracker.messageId === ref.messageId);
   const activeSwipe = typeof ref.swipeId === 'number' ? ref.swipeId : state.activeSwipeByMessageId[ref.messageId];
@@ -209,7 +215,12 @@ function renderFocusedTracker(state: LoomFrontendState): string {
 }
 
 function renderLatestTracker(state: LoomFrontendState): string {
-  if (!state.latestTracker) {
+  const activeResolution = resolveActiveTrackerForState(state);
+  const tracker = activeResolution.tracker;
+  if (!tracker) {
+    if (activeResolution.missingMessageId && typeof activeResolution.missingSwipeId === 'number') {
+      return `<p class="sotl-note sotl-warning">No tracker retained/generated for ${escapeHtml(formatSwipeLabel(activeResolution.missingSwipeId))} on the currently selected response. State of the Loom will not show another swipe's tracker here.</p>`;
+    }
     const activeMessageId = state.diagnostics.swipeReport?.activeMessageId;
     const activeSwipeId = state.diagnostics.swipeReport?.activeSwipeId;
     const hasOtherSwipeTracker = Boolean(activeMessageId && state.messageTrackers.some((tracker) => tracker.messageId === activeMessageId));
@@ -218,29 +229,29 @@ function renderLatestTracker(state: LoomFrontendState): string {
     }
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
   }
-  const render = renderTrackerForState(state.latestTracker, state);
+  const render = renderTrackerForState(tracker, state);
   const html = render.html;
   const renderWarning = render.warning
     ? `<p class="sotl-note sotl-warning" style="margin-top: 8px;">${escapeHtml(render.warning)}</p>`
     : '';
   const isActiveSwipe = Boolean(
-    state.latestTracker.messageId
-    && typeof state.latestTracker.swipeId === 'number'
-    && state.activeSwipeByMessageId[state.latestTracker.messageId] === state.latestTracker.swipeId,
+    tracker.messageId
+    && typeof tracker.swipeId === 'number'
+    && state.activeSwipeByMessageId[tracker.messageId] === tracker.swipeId,
   );
-  const attachmentStatus = state.settings.renderInMessages && state.latestTracker.messageId
-    ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">Attached to message card (${escapeHtml(state.latestTracker.messageId)})</p>`
+  const attachmentStatus = state.settings.renderInMessages && tracker.messageId
+    ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">Attached to message card (${escapeHtml(tracker.messageId)})</p>`
     : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
 
   return [
-    typeof state.latestTracker.swipeId === 'number' ? `<div class="sotl-chip-row">${renderSwipeChip(state.latestTracker.swipeId, isActiveSwipe)}</div>` : '',
-    `<p class="sotl-note">${escapeHtml(state.latestTracker.compactSummary)}</p>`,
+    typeof tracker.swipeId === 'number' ? `<div class="sotl-chip-row">${renderSwipeChip(tracker.swipeId, isActiveSwipe)}</div>` : '',
+    `<p class="sotl-note">${escapeHtml(tracker.compactSummary)}</p>`,
     `<div class="sotl-preview">${html}</div>`,
     renderWarning,
     attachmentStatus,
     '<details class="sotl-details"><summary>Manual JSON edit</summary>',
     '<div class="sotl-fields" style="margin-top: 10px;">',
-    `<textarea class="sotl-textarea" data-sotl-field="latestJson">${escapeHtml(JSON.stringify(state.latestTracker.data, null, 2))}</textarea>`,
+    `<textarea class="sotl-textarea" data-sotl-field="latestJson">${escapeHtml(JSON.stringify(tracker.data, null, 2))}</textarea>`,
     '<div class="sotl-actions">',
     button('Save JSON', 'save-json'),
     button('Copy JSON', 'copy-json', { title: 'Copy Loom JSON to clipboard' }),
@@ -251,7 +262,7 @@ function renderLatestTracker(state: LoomFrontendState): string {
 }
 
 function renderMessageList(state: LoomFrontendState): string {
-  if (state.messageTrackers.length === 0) return '<p class="sotl-note">No per-message trackers yet.</p>';
+  if (state.messageTrackers.length === 0) return '<p class="sotl-note">No retained message trackers yet. The list uses your tracker history limit and shows message/swipe snapshots that have not been cleaned.</p>';
   const focused = getFocusedTrackerRef();
   const groups = new Map<string, LoomTrackerState[]>();
   for (const tracker of state.messageTrackers) {
@@ -261,19 +272,25 @@ function renderMessageList(state: LoomFrontendState): string {
     groups.set(id, list);
   }
 
-  const renderTrackerRow = (tracker: LoomTrackerState, activeSwipe?: number | undefined, compact = false): string => {
+  const currentTracker = resolveActiveTrackerForState(state).tracker;
+  const renderTrackerRow = (tracker: LoomTrackerState, activeSwipe?: number | undefined, compact = false, index = 0): string => {
     const id = tracker.messageId || 'latest';
     const active = typeof activeSwipe === 'number' && tracker.swipeId === activeSwipe;
     const isFocused = Boolean(focused && focused.messageId === id && (typeof focused.swipeId !== 'number' || focused.swipeId === tracker.swipeId));
+    const isCurrent = Boolean(currentTracker && currentTracker.messageId === tracker.messageId && currentTracker.swipeId === tracker.swipeId);
     const rowClass = `${compact ? 'sotl-swipe-row' : 'sotl-message-row'}${isFocused ? ' sotl-message-row--focused' : ''}`;
+    const exactSwipe = typeof tracker.swipeId === 'number' ? ` data-sotl-swipe-id="${tracker.swipeId}"` : '';
+    const status = isCurrent ? 'Current selected tracker' : active ? 'Selected swipe tracker' : 'Previous retained tracker';
     return [
-      `<div class="${rowClass}">`,
+      `<div class="${rowClass}" data-sotl-action="view-tracker" data-sotl-message-id="${escapeHtml(id)}"${exactSwipe} role="button" tabindex="0" title="Open this retained tracker">`,
       '  <div class="sotl-message-row__main">',
+      `    <p class="sotl-note sotl-message-row__eyebrow">${escapeHtml(formatMessageReference(id, index))} - ${escapeHtml(status)}</p>`,
       `    <h3>${escapeHtml(tracker.compactSummary || id)}</h3>`,
       `    <p class="sotl-note">${renderSwipeChip(tracker.swipeId, active)} ${escapeHtml(tracker.source)} - ${escapeHtml(tracker.generatedAt)}</p>`,
       '  </div>',
       '  <div class="sotl-actions">',
-      trackerActionButton('Regenerate', `regenerate:${id}`, tracker, { primary: !compact }),
+      trackerActionButton('View', 'view-tracker', tracker, { primary: isCurrent }),
+      trackerActionButton('Regenerate', `regenerate:${id}`, tracker, { primary: false }),
       trackerActionButton(tracker.hidden ? 'Show' : 'Hide', `hide:${id}`, tracker),
       trackerActionButton('Delete', `delete:${id}`, tracker),
       '  </div>',
@@ -281,7 +298,8 @@ function renderMessageList(state: LoomFrontendState): string {
     ].join('');
   };
 
-  return Array.from(groups.entries()).map(([id, trackers]) => {
+  const intro = '<p class="sotl-note">Retained tracker snapshots for this chat. The list follows your tracker history limit; rows open the exact message/swipe tracker.</p>';
+  return intro + Array.from(groups.entries()).map(([id, trackers], groupIndex) => {
     const activeSwipe = state.activeSwipeByMessageId[id];
     const sorted = trackers
       .slice()
@@ -297,13 +315,13 @@ function renderMessageList(state: LoomFrontendState): string {
     if (!primary) return '';
     return [
       '<div class="sotl-panel sotl-message-group">',
-      renderTrackerRow(primary, activeSwipe),
+      renderTrackerRow(primary, activeSwipe, false, groupIndex),
       alternatives.length > 0
         ? [
           `<details class="sotl-details sotl-swipe-alternatives" data-sotl-section="swipe-alternatives-${escapeHtml(id)}">`,
           `<summary><span class="sotl-summary-title">Swipe Alternatives</span><span class="sotl-summary-meta">${alternatives.length} stored</span></summary>`,
           '<div class="sotl-fields">',
-          alternatives.map((tracker) => renderTrackerRow(tracker, activeSwipe, true)).join(''),
+          alternatives.map((tracker) => renderTrackerRow(tracker, activeSwipe, true, groupIndex)).join(''),
           '</div>',
           '</details>',
         ].join('')

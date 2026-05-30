@@ -34,6 +34,56 @@ export function renderTrackerForState(
   return renderTrackerHtmlDetailed(tracker, preset, mode);
 }
 
+export interface ActiveTrackerResolution {
+  tracker: LoomTrackerState | null;
+  missingMessageId?: string | undefined;
+  missingSwipeId?: number | undefined;
+}
+
+export function resolveActiveTrackerForState(state: LoomFrontendState): ActiveTrackerResolution {
+  const latest = state.latestTracker;
+  if (!latest?.messageId) {
+    const activeMessageId = state.diagnostics.swipeReport?.activeMessageId;
+    const activeSwipe = typeof activeMessageId === 'string'
+      ? state.activeSwipeByMessageId[activeMessageId] ?? state.diagnostics.swipeReport?.activeSwipeId
+      : undefined;
+    if (activeMessageId) {
+      const sameMessageTrackers = state.messageTrackers.filter((tracker) => tracker.messageId === activeMessageId);
+      const exact = typeof activeSwipe === 'number'
+        ? sameMessageTrackers.find((tracker) => tracker.swipeId === activeSwipe)
+        : undefined;
+      if (exact) return { tracker: exact };
+      if (typeof activeSwipe === 'number' && sameMessageTrackers.some((tracker) => typeof tracker.swipeId === 'number')) {
+        return {
+          tracker: null,
+          missingMessageId: activeMessageId,
+          missingSwipeId: activeSwipe,
+        };
+      }
+      const newest = sameMessageTrackers.slice().sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))[0];
+      if (newest) return { tracker: newest };
+    }
+    return { tracker: latest };
+  }
+
+  const activeSwipe = state.activeSwipeByMessageId[latest.messageId];
+  if (typeof activeSwipe !== 'number' || latest.swipeId === activeSwipe) {
+    return { tracker: latest };
+  }
+
+  const sameMessageTrackers = state.messageTrackers.filter((tracker) => tracker.messageId === latest.messageId);
+  const exact = sameMessageTrackers.find((tracker) => tracker.swipeId === activeSwipe);
+  if (exact) return { tracker: exact };
+  if (sameMessageTrackers.some((tracker) => typeof tracker.swipeId === 'number')) {
+    return {
+      tracker: null,
+      missingMessageId: latest.messageId,
+      missingSwipeId: activeSwipe,
+    };
+  }
+  return { tracker: latest };
+}
+
 function compactValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '';
   if (typeof value !== 'object') return String(value);

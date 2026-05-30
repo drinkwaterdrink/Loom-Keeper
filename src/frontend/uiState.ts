@@ -88,6 +88,16 @@ export function clearFocusedTrackerRef(): void {
   focusedTrackerRef = null;
 }
 
+export function syncFocusedTrackerSwipe(activeSwipeByMessageId: Record<string, number>): void {
+  if (!focusedTrackerRef) return;
+  const activeSwipe = activeSwipeByMessageId[focusedTrackerRef.messageId];
+  if (typeof activeSwipe !== 'number' || focusedTrackerRef.swipeId === activeSwipe) return;
+  focusedTrackerRef = {
+    messageId: focusedTrackerRef.messageId,
+    swipeId: activeSwipe,
+  };
+}
+
 export function captureUiState(root: HTMLElement | Document | null): UiStateSnapshot {
   const doc = documentRef();
   const scope = root ?? doc;

@@ -1,8 +1,8 @@
-# State of the Loom (v1.0.18)
+# State of the Loom (v1.0.19)
 
 State of the Loom is a Lumiverse-native State of the Loom continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.18 makes the paw launcher more native-feeling, adds a subtle active-generation paw animation, and adds best-effort per-message paw actions that open the exact message/swipe tracker in the drawer without rendering the full tracker inline. Version 1.0.17 refreshed the active tracker when Lumiverse swipe controls changed the selected assistant response and prevented missing-swipe trackers from showing the wrong sibling swipe.
+Version 1.0.19 polishes the mobile tracker access layer: the floating paw now copies the stock side icon shell more closely, selected-message paws use broader native toolbar detection plus a long-press menu fallback, swipe changes refresh in bursts so the active tracker follows the visible response, and Message Tracker List rows can be opened directly. Version 1.0.18 made the paw launcher more native-feeling, added a subtle active-generation paw animation, and added best-effort per-message paw actions that open the exact message/swipe tracker in the drawer without rendering the full tracker inline.
 
 ---
 
@@ -123,7 +123,7 @@ npm run smoke:swipe-ui
 
 ## Diagnostics & Troubleshooting
 
-State of the Loom (v1.0.18) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, wrong-swipe tracker display, stuck generation states, settings-section collapse, confusing message-card action initials, mobile drawer overflow, native-toolbar paw duplication, and overlarge prompt injection.
+State of the Loom (v1.0.19) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, wrong-swipe tracker display, stuck generation states, settings-section collapse, confusing message-card action initials, mobile drawer overflow, native-toolbar paw duplication, clipped HUD-to-drawer transitions, and overlarge prompt injection.
 
 ### 1. What to do when a Custom Preset renders blank
 * **Root Cause**: If a custom preset uses template variables that are missing from the generated JSON, those individual fields render empty. This is now a warning instead of a fatal blank-card condition.

@@ -21,6 +21,7 @@ async function importBundled(entryPoint) {
 
 const defaults = await importBundled('src/shared/defaults.ts');
 const drawer = await importBundled('src/frontend/drawer.ts');
+const rendering = await importBundled('src/frontend/rendering.ts');
 
 function tracker(messageId, swipeId, summary) {
   return {
@@ -88,9 +89,22 @@ const state = {
 const html = drawer.renderDrawer(state);
 assert.match(html, /Swipe 2 active/, 'current loom should show active swipe chip');
 assert.match(html, /Swipe Alternatives/, 'drawer should group same-message alternatives');
+assert.match(html, /Retained tracker snapshots/, 'message tracker list should explain retained snapshots');
+assert.match(html, /View/, 'message tracker rows should expose a View/Open action');
+assert.match(html, /Current selected tracker/, 'message tracker list should label the active current tracker');
 assert.match(html, /data-sotl-swipe-id="1"/, 'active row actions should carry swipe id');
 assert.match(html, /data-sotl-swipe-id="0"/, 'alternative row actions should carry swipe id');
+assert.match(html, /data-sotl-action="view-tracker"/, 'message tracker rows should open/focus trackers');
 assert.match(html, /Swipe Tracker Report/, 'diagnostics should expose swipe report');
+
+const missingSwipeResolution = rendering.resolveActiveTrackerForState({
+  ...state,
+  latestTracker: tracker('m1', 0, 'Wrong sibling swipe'),
+  messageTrackers: [tracker('m1', 0, 'Wrong sibling swipe')],
+  activeSwipeByMessageId: { m1: 2 },
+});
+assert.equal(missingSwipeResolution.tracker, null, 'active tracker resolver should not fall back to the wrong swipe when swipe-aware trackers exist');
+assert.equal(missingSwipeResolution.missingSwipeId, 2);
 
 const styles = readFileSync('src/frontend/styles.ts', 'utf8');
 const frontend = readFileSync('src/frontend/frontend.ts', 'utf8');
@@ -104,18 +118,26 @@ assert.match(frontend, /shortName:\s*'Track'/, 'drawer tab should be labeled Tra
 assert.match(frontend, /title:\s*'Track'/, 'drawer title should be Track');
 assert.match(frontend, /viewBox="0 0 512 512"/, 'drawer tab should use the paw icon');
 assert.match(frontend, /SWIPE_CHANGED/, 'frontend should listen for swipe change events');
-assert.match(frontend, /scheduleSwipeStateRefresh/, 'frontend should refresh backend state after swipe changes');
+assert.match(frontend, /scheduleSwipeStateRefreshBurst/, 'frontend should refresh backend state repeatedly after swipe changes');
+assert.match(frontend, /pointerup/, 'frontend should watch mobile swipe-control pointer completion');
 assert.match(frontend, /message-paw/, 'frontend should route message paw actions');
+assert.match(frontend, /view-tracker/, 'drawer rows should route direct tracker open actions');
 assert.match(frontend, /setFocusedTrackerRef/, 'message paw should focus an exact tracker in the drawer');
+assert.match(frontend, /syncFocusedTrackerSwipe/, 'focused trackers should follow active swipe changes for the same message');
 assert.match(frontend, /MutationObserver/, 'message paw mounting should react to native toolbar visibility changes');
 assert.match(messageCards, /mountMessageTrackerActions/, 'message paw actions should have a dedicated mount path');
 assert.match(messageCards, /dataset\.sotlMessagePaw = 'true'/, 'message paw actions should be marked for duplicate cleanup');
 assert.match(messageCards, /activeSwipeByMessageId\[messageId\]/, 'message paw action should use active swipe metadata');
+assert.match(messageCards, /Open Tracker/, 'message paw should provide a context-menu fallback item');
+assert.match(messageCards, /visibleToolbarClusterCandidate/, 'message paw should detect unlabeled native toolbar clusters');
+assert.match(messageCards, /syncFixedLauncherToStockIcon/, 'floating paw should copy fixed fallback position from stock side icon');
+assert.match(messageCards, /findStockSideIcon/, 'floating paw should probe for stock side icon shell');
 assert.doesNotMatch(messageCards, /const hostSelectors = \[[\s\S]*'\.message-actions'[\s\S]*\]/, 'HUD launcher fallback should not attach to message action toolbars');
 assert.match(styles, /sotl-chat-pill--generating/, 'floating paw should expose an active generation animation state');
 assert.match(styles, /sotl-paw-pad-bounce/, 'floating paw should animate individual pads');
 assert.match(styles, /prefers-reduced-motion:\s*reduce/, 'paw animation should respect reduced motion');
 assert.match(styles, /sotl-message-paw-action/, 'per-message paw should have native-styled action CSS');
+assert.match(styles, /sotl-context-menu-item/, 'context-menu fallback should have native-styled CSS');
 assert.match(drawerSource, /Focused Tracker/, 'drawer should render focused tracker state');
 
 console.log('OK: swipe UI smoke passed');
