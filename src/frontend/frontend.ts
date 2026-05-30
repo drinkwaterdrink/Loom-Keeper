@@ -13,7 +13,7 @@ import {
   setImportStatus,
   clearImportStatus,
 } from './presetEditor.js';
-import { builtInPresets } from '../shared/defaults.js';
+import { builtInPresets, LOOM_VERSION } from '../shared/defaults.js';
 import { coerceImportedPresets } from '../shared/validation.js';
 
 type FrontendContext = Record<string, unknown>;
@@ -383,7 +383,7 @@ function handleDrawerEvent(event: Event): void {
       const newPreset = {
         id: newId,
         name: 'New Custom Loom',
-        version: '1.0.13',
+        version: LOOM_VERSION,
         description: 'User custom continuity tracker.',
         mode: 'hybrid' as const,
         templateEngine: 'handlebars_compat' as const,
@@ -718,6 +718,30 @@ function handleDrawerEvent(event: Event): void {
   }
   if (fieldName === 'autoGenerate' && field instanceof HTMLInputElement) {
     saveSettings({ autoGenerate: field.checked });
+  }
+  if (fieldName === 'promptInjectionEnabled' && field instanceof HTMLInputElement) {
+    saveSettings({ promptInjectionEnabled: field.checked });
+  }
+  if (fieldName === 'promptInjectionMode' && field instanceof HTMLSelectElement) {
+    const value = field.value as LoomSettings['promptInjectionMode'];
+    if (value === 'latest_brief' || value === 'latest_plus_history') saveSettings({ promptInjectionMode: value });
+  }
+  if (fieldName === 'promptInjectionTokenBudget' && field instanceof HTMLSelectElement) {
+    const val = parseInt(field.value, 10);
+    if (!isNaN(val)) saveSettings({ promptInjectionTokenBudget: val });
+  }
+  if (fieldName === 'promptInjectionTrackerLimit' && field instanceof HTMLSelectElement) {
+    const val = parseInt(field.value, 10);
+    if (!isNaN(val)) saveSettings({ promptInjectionTrackerLimit: val });
+  }
+  if (fieldName === 'promptInjectionIncludeAppearance' && field instanceof HTMLInputElement) {
+    saveSettings({ promptInjectionIncludeAppearance: field.checked });
+  }
+  if (fieldName === 'promptInjectionIncludeRules' && field instanceof HTMLInputElement) {
+    saveSettings({ promptInjectionIncludeRules: field.checked });
+  }
+  if (fieldName === 'promptInjectionIncludeNextTurn' && field instanceof HTMLInputElement) {
+    saveSettings({ promptInjectionIncludeNextTurn: field.checked });
   }
   if (fieldName === 'fallback' && field instanceof HTMLInputElement) {
     saveSettings({ useDefaultConnectionFallback: field.checked });

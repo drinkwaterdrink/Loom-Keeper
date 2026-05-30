@@ -1,4 +1,4 @@
-import { describeInjectionStatus } from './injectionService.js';
+import { buildContinuityInjection, describeInjectionStatus } from './injectionService.js';
 import { getCompanionMilestoneStatus } from './companionService.js';
 import { getEntityCaptureMilestoneStatus } from './entityCaptureService.js';
 import { LoomGenerationFailure, LoomGenerationService, type GenerationTarget } from './generationService.js';
@@ -7,6 +7,7 @@ import {
   getGlobalSpindle,
   getPermissionState,
   onFrontendMessage,
+  registerPromptInterceptor,
   sendFrontend,
   type LoomSpindle,
 } from './lumiverseApi.js';
@@ -65,6 +66,7 @@ class StateOfTheLoomBackend {
   private readonly chatUsers = new Map<string, string>();
   private lastFrontendUserId: string | null = null;
   private reportedUnknownGenerationUser = false;
+  private interceptorRegistered = false;
   private diagnostics: LoomDiagnostics = {
     backendReady: true,
     renderLimitation: 'Top-of-message rendering uses Lumiverse render hooks when available and a scoped compatibility mount otherwise.',
@@ -99,6 +101,27 @@ class StateOfTheLoomBackend {
     onEvent?.('PERMISSION_CHANGED', async () => {
       await this.notifyPermissionsChanged();
     });
+    const unregisterInterceptor = registerPromptInterceptor(this.spindle, async (messages, context) => {
+      return this.handlePromptInjection(messages, context);
+    }, 80);
+    this.interceptorRegistered = typeof unregisterInterceptor === 'function' || typeof this.spindle.registerInterceptor === 'function' || Boolean((this.spindle.interceptors as Record<string, unknown> | undefined)?.register);
+    if (!this.interceptorRegistered) {
+      this.diagnostics = {
+        ...this.diagnostics,
+        injectionReport: {
+          enabled: false,
+          registered: false,
+          available: false,
+          mode: 'latest_plus_history',
+          trackerCount: 0,
+          historyCount: 0,
+          estimatedTokens: 0,
+          tokenBudget: 700,
+          truncated: false,
+          lastSkippedReason: 'Lumiverse interceptor API was not detected in this runtime.',
+        },
+      };
+    }
     this.spindle.log?.info?.('State of the Loom backend loaded.');
   }
 
@@ -132,6 +155,82 @@ class StateOfTheLoomBackend {
 
   private async send(userId: string, message: LoomBackendMessage): Promise<void> {
     await sendFrontend(this.spindle, userId, message);
+  }
+
+  private async handlePromptInjection(
+    messages: Array<Record<string, unknown>>,
+    context?: Record<string, unknown>,
+  ): Promise<Array<Record<string, unknown>>> {
+    try {
+      const source = context?.source ?? context?.extensionId ?? context?.extension_id;
+      const generationType = context?.generationType ?? context?.generation_type;
+      const internal = context?.internal;
+      if (source === 'state_of_the_loom' || generationType === 'quiet' || internal === true) return messages;
+      const looksLikeTrackerSidecar = messages.some((message) => {
+        const content = typeof message.content === 'string' ? message.content : '';
+        return content.includes('Latest assistant message to track:') && content.includes('Return JSON only. No markdown.');
+      });
+      if (looksLikeTrackerSidecar) return messages;
+
+      let chatId = this.payloadString(context?.chatId ?? context?.chat_id ?? context?.conversationId ?? context?.conversation_id);
+      const contextUserId = this.payloadString(context?.userId ?? context?.user_id);
+      const userId = contextUserId ?? this.resolveUserForEvent(context ?? {}, chatId) ?? this.lastFrontendUserId;
+      if (!userId) return messages;
+      if (!chatId) {
+        const active = await getActiveChat(this.spindle, userId).catch(() => null);
+        chatId = active?.chat.id ?? null;
+      }
+      if (!chatId) {
+        this.diagnostics = {
+          ...this.diagnostics,
+          injectionReport: {
+            enabled: false,
+            registered: this.interceptorRegistered,
+            available: false,
+            mode: 'latest_plus_history',
+            trackerCount: 0,
+            historyCount: 0,
+            estimatedTokens: 0,
+            tokenBudget: 700,
+            truncated: false,
+            lastSkippedReason: 'Skipped prompt injection because no active chat id was available.',
+          },
+        };
+        return messages;
+      }
+
+      const settings = await this.settingsService.load(userId);
+      const latestTracker = await this.trackerService.getLatest(userId, chatId).catch(() => null);
+      const trackers = await this.trackerService.listForChat(userId, chatId).catch(() => []);
+      const { content, report } = buildContinuityInjection({
+        settings,
+        latestTracker,
+        trackers,
+        registered: this.interceptorRegistered,
+        injectedAt: new Date().toISOString(),
+      });
+      this.diagnostics = {
+        ...this.diagnostics,
+        injectionReport: report,
+      };
+      if (!content) return messages;
+
+      const injectionMessage = {
+        role: 'system',
+        content,
+        source: 'state_of_the_loom',
+      };
+      const firstNonSystem = messages.findIndex((message) => String(message.role || '').toLowerCase() !== 'system');
+      if (firstNonSystem <= 0) return [injectionMessage, ...messages];
+      return [
+        ...messages.slice(0, firstNonSystem),
+        injectionMessage,
+        ...messages.slice(firstNonSystem),
+      ];
+    } catch (error) {
+      this.recordRuntimeError('Prompt injection failed', error);
+      return messages;
+    }
   }
 
   private async buildState(userId: string): Promise<LoomFrontendState> {
@@ -172,6 +271,13 @@ class StateOfTheLoomBackend {
         return [];
       }),
     ]);
+    const injectionPreview = buildContinuityInjection({
+      settings,
+      latestTracker,
+      trackers: messageTrackers,
+      registered: this.interceptorRegistered,
+      skippedReason: this.interceptorRegistered ? undefined : 'Lumiverse interceptor API was not detected in this runtime.',
+    }).report;
     const baseGenerationStatus = this.generationService.getStatus();
     const disabledReason = this.generationService.getDisabledReason({
         settings,
@@ -208,7 +314,16 @@ class StateOfTheLoomBackend {
     const simulationNote = getSimulationMilestoneStatus();
     const entityNote = getEntityCaptureMilestoneStatus();
     const companionNote = getCompanionMilestoneStatus();
-    const injectionNote = describeInjectionStatus(settings, permissions);
+    const injectionNote = describeInjectionStatus(settings, permissions, this.interceptorRegistered);
+    const lastInjectionReport = this.diagnostics.injectionReport;
+    diagnostics.injectionReport = lastInjectionReport?.injectedAt && lastInjectionReport.chatId === activeChat.id
+      ? {
+        ...injectionPreview,
+        injectedAt: lastInjectionReport.injectedAt,
+        lastSkippedReason: lastInjectionReport.lastSkippedReason,
+        registered: this.interceptorRegistered,
+      }
+      : injectionPreview;
     diagnostics.renderLimitation = [
       this.diagnostics.renderLimitation,
       injectionNote,

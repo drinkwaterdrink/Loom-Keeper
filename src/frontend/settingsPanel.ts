@@ -9,12 +9,13 @@ export function renderFeatureBreakdown(collapsible = false): string {
     '<article><strong>Grand Continuity Atlas</strong><span>New default tracker with rich scene, appearance, relationship, world-state, and next-turn continuity sections.</span></article>',
     '<article><strong>Passive extraction</strong><span>Reads fenced <code>tracker</code> and <code>loom</code> JSON blocks from assistant replies.</span></article>',
     '<article><strong>Generate tracker</strong><span>Uses a sidecar connection or default fallback to make tracker JSON for the latest assistant message.</span></article>',
+    '<article><strong>Context Injection Lite</strong><span>Compresses the latest tracker into a configurable continuity brief for live roleplay prompts.</span></article>',
     '<article><strong>Per-chat storage</strong><span>Saves latest and per-message tracker state through user storage.</span></article>',
     '<article><strong>Message cards</strong><span>Best-effort top or bottom card mounting when Lumiverse exposes message host ids.</span></article>',
     '<article><strong>Manual JSON edit</strong><span>Lets you correct the current tracker without regenerating.</span></article>',
     '<article><strong>Runtime recovery</strong><span>Repairs corrupt Loom storage and exposes Reset Loom Storage when the backend is slow or offline.</span></article>',
     '</div>',
-    '<p class="sotl-note">Not in this milestone: prompt injection, simulation clocks, entity inbox, companion autonomy, Council tools, and arbitrary template JavaScript.</p>',
+    '<p class="sotl-note">Not in this milestone: simulation clocks, entity inbox, companion autonomy, Council tools, and arbitrary template JavaScript.</p>',
   ].join('');
 
   if (collapsible) {
@@ -65,6 +66,7 @@ export function renderSettingsPanel(state: LoomFrontendState | null, status: Loo
     badge('Chats', state.permissions.chats),
     badge('Chat mutation', state.permissions.chat_mutation),
     badge('Generation', state.permissions.generation),
+    badge('Prompt injection', Boolean(state.permissions.interceptor || state.diagnostics.injectionReport?.registered)),
     '</div>',
     '<div class="sotl-actions">',
     button('Open Loom Drawer', 'open-drawer', { primary: true }),
@@ -89,6 +91,8 @@ export function renderSettingsPanel(state: LoomFrontendState | null, status: Loo
     '<div class="sotl-fields">',
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="enabled" ${state.settings.enabled ? 'checked' : ''}> Extension enabled</label>`,
     `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatHudLauncher" ${state.settings.showChatHudLauncher ? 'checked' : ''}> Show chat HUD button</label>`,
+    `<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionEnabled" ${state.settings.promptInjectionEnabled ? 'checked' : ''}> Inject compact continuity brief</label>`,
+    state.diagnostics.injectionReport ? `<p class="sotl-note">Injection estimate: ~${state.diagnostics.injectionReport.estimatedTokens} / ${state.diagnostics.injectionReport.tokenBudget} tokens.</p>` : '',
     '</div>',
     '</section>',
     '</div>',

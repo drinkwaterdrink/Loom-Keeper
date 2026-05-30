@@ -7,6 +7,7 @@ export type LoomParseFailureCategory = 'empty' | 'invalid_json' | 'fenced_markdo
 export type LoomTemplateEngine = 'loom' | 'handlebars_compat';
 export type LoomTemplateSourceFormat = 'loom' | 'simtracker';
 export type LoomCustomTemplateMode = 'trusted_layout' | 'strict_sanitized' | 'safe_generic';
+export type LoomInjectionMode = 'latest_brief' | 'latest_plus_history';
 
 export interface LoomTemplateField {
   key: string;
@@ -94,12 +95,19 @@ export interface LoomSettings {
   sidecarGenerationTimeoutMs?: number | undefined;
   useSafeRenderer?: boolean | undefined;
   customTemplateMode?: LoomCustomTemplateMode | undefined;
+  promptInjectionMode?: LoomInjectionMode | undefined;
+  promptInjectionTrackerLimit?: number | undefined;
+  promptInjectionTokenBudget?: number | undefined;
+  promptInjectionIncludeAppearance?: boolean | undefined;
+  promptInjectionIncludeRules?: boolean | undefined;
+  promptInjectionIncludeNextTurn?: boolean | undefined;
 }
 
 export interface LoomPermissionState {
   chats: boolean;
   chat_mutation: boolean;
   generation: boolean;
+  interceptor?: boolean | undefined;
   app_manipulation?: boolean | undefined;
 }
 
@@ -179,6 +187,24 @@ export interface LoomPipelineReport {
   lastError?: string | undefined;
 }
 
+export interface LoomInjectionReport {
+  enabled: boolean;
+  registered: boolean;
+  available: boolean;
+  mode: LoomInjectionMode;
+  chatId?: string | undefined;
+  trackerPresetId?: string | undefined;
+  trackerGeneratedAt?: string | undefined;
+  trackerCount: number;
+  historyCount: number;
+  estimatedTokens: number;
+  tokenBudget: number;
+  truncated: boolean;
+  injectedAt?: string | undefined;
+  lastSkippedReason?: string | undefined;
+  preview?: string | undefined;
+}
+
 export interface LoomDiagnostics {
   backendReady: boolean;
   lastError?: string | undefined;
@@ -189,6 +215,7 @@ export interface LoomDiagnostics {
   storageWarning?: string | undefined;
   renderLimitation?: string | undefined;
   pipelineReport?: LoomPipelineReport | undefined;
+  injectionReport?: LoomInjectionReport | undefined;
 }
 
 export interface LoomFrontendState {

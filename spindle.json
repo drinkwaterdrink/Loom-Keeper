@@ -1,5 +1,5 @@
 {
-  "version": "1.0.13",
+  "version": "1.0.14",
   "name": "State of the Loom",
   "identifier": "state_of_the_loom",
   "author": "Loom Architect",
@@ -10,6 +10,7 @@
     "chats",
     "chat_mutation",
     "generation",
+    "interceptor",
     "app_manipulation"
   ],
   "requested_capabilities": [],

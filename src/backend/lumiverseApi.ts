@@ -11,6 +11,10 @@ export type LoomSpindle = AnyRecord & {
   sendToFrontend?: (message: unknown, userId?: string) => void | Promise<void>;
   onFrontendMessage?: (handler: (message: unknown, userId?: string) => void | Promise<void>) => void | (() => void);
   on?: (eventName: string, handler: (payload?: unknown) => void | Promise<void>) => void | (() => void);
+  registerInterceptor?: (
+    handler: (messages: Array<Record<string, unknown>>, context?: AnyRecord) => Array<Record<string, unknown>> | Promise<Array<Record<string, unknown>>>,
+    priority?: number,
+  ) => void | (() => void);
   log?: {
     info?: (message: string) => void;
     warn?: (message: string) => void;
@@ -25,6 +29,7 @@ export type LoomSpindle = AnyRecord & {
   chats?: AnyRecord;
   generate?: AnyRecord;
   generation?: AnyRecord;
+  interceptors?: AnyRecord;
   connections?: AnyRecord;
   frontend?: {
     send?: (message: unknown, options?: AnyRecord) => void | Promise<void>;
@@ -77,16 +82,18 @@ export async function hasPermission(spindle: LoomSpindle, permission: keyof Loom
 }
 
 export async function getPermissionState(spindle: LoomSpindle): Promise<LoomPermissionState> {
-  const [chats, chatMutation, generation, appManipulation] = await Promise.all([
+  const [chats, chatMutation, generation, appManipulation, interceptor] = await Promise.all([
     hasPermission(spindle, 'chats'),
     hasPermission(spindle, 'chat_mutation'),
     hasPermission(spindle, 'generation'),
     hasPermission(spindle, 'app_manipulation' as keyof LoomPermissionState),
+    hasPermission(spindle, 'interceptor' as keyof LoomPermissionState),
   ]);
   return {
     chats,
     chat_mutation: chatMutation,
     generation,
+    interceptor,
     app_manipulation: appManipulation,
   };
 }
@@ -156,7 +163,31 @@ export function onFrontendMessage(
   const unsubscribe = spindle.frontend.onMessage(async (message, meta) => {
     await handler(message, getSenderUserId(meta));
   });
-  return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  return typeof unsubscribe === 'function' ? unsubscribe as () => void : undefined;
+}
+
+export function registerPromptInterceptor(
+  spindle: LoomSpindle,
+  handler: (messages: Array<Record<string, unknown>>, context?: AnyRecord) => Array<Record<string, unknown>> | Promise<Array<Record<string, unknown>>>,
+  priority = 80,
+): (() => void) | undefined {
+  if (typeof spindle.registerInterceptor === 'function') {
+    try {
+      const unsubscribe = spindle.registerInterceptor(handler, priority);
+      return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  const interceptors = asRecord(spindle.interceptors) ?? {};
+  const register = interceptors.register ?? interceptors.add ?? interceptors.use;
+  if (typeof register !== 'function') return undefined;
+  try {
+    const unsubscribe = (register as (...args: unknown[]) => unknown)(handler, priority);
+    return typeof unsubscribe === 'function' ? unsubscribe as () => void : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function tryCall<T>(fn: unknown, args: unknown[][]): Promise<T | null> {

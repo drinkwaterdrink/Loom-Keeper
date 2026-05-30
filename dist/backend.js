@@ -1,8 +1,267 @@
 // src/backend/injectionService.ts
-function describeInjectionStatus(settings, permissions) {
-  if (!settings.promptInjectionEnabled) return "Prompt injection is off for Milestone 1.";
-  if (!permissions.generation) return "Prompt injection needs interceptor support in the next milestone.";
-  return "Prompt injection foundation is ready; interceptor registration is planned for Milestone 2.";
+function asRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+function cleanText(value) {
+  if (value === void 0 || value === null) return "";
+  if (typeof value === "string") return value.replace(/\s+/g, " ").trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+function clampText(value, max = 260) {
+  const text = cleanText(value);
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(0, max - 1)).trim()}...`;
+}
+function uniq(values) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const value of values) {
+    const text = cleanText(value);
+    const key = text.toLowerCase();
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+  return out;
+}
+function readPath(source, path) {
+  let current = source;
+  for (const part of path) {
+    const record = asRecord(current);
+    if (!record || !(part in record)) return void 0;
+    current = record[part];
+  }
+  return current;
+}
+function firstText(data, paths, max = 260) {
+  for (const path of paths) {
+    const value = clampText(readPath(data, path), max);
+    if (value) return value;
+  }
+  return "";
+}
+function firstArray(data, paths) {
+  for (const path of paths) {
+    const value = asArray(readPath(data, path));
+    if (value.length > 0) return value;
+  }
+  return [];
+}
+function itemText(value, preferredKeys = ["text", "fact", "note", "summary", "title", "name", "goal", "label"]) {
+  const direct = cleanText(value);
+  if (direct) return direct;
+  const record = asRecord(value);
+  if (!record) return "";
+  for (const key of preferredKeys) {
+    const text = clampText(record[key], 220);
+    if (text) return text;
+  }
+  const parts = Object.entries(record).filter(([, entry]) => typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean").slice(0, 3).map(([key, entry]) => `${key}: ${cleanText(entry)}`).filter(Boolean);
+  return clampText(parts.join("; "), 220);
+}
+function listItems(data, paths, limit, preferredKeys) {
+  return firstArray(data, paths).map((item) => itemText(item, preferredKeys)).filter(Boolean).slice(0, limit);
+}
+function fieldList(data, paths, max = 220) {
+  return paths.map(([label, candidates]) => {
+    const value = firstText(data, candidates, max);
+    return value ? `${label}: ${value}` : "";
+  }).filter(Boolean);
+}
+function summarizeCharacter(value, includeAppearance = true) {
+  const record = asRecord(value);
+  if (!record) return clampText(value, 240);
+  const identity = asRecord(record.identity) ?? {};
+  const appearance = asRecord(record.appearance) ?? {};
+  const clothing = asRecord(record.clothing) ?? {};
+  const state = asRecord(record.state) ?? {};
+  const name = cleanText(record.name ?? record.characterName ?? record.id) || "Unnamed";
+  const role = cleanText(record.role ?? record.kind ?? record.relationshipToUser);
+  const location = cleanText(record.location ?? state.location ?? record.presence);
+  const visual = includeAppearance ? clampText(
+    identity.fullDesc ?? appearance.fullDesc ?? appearance.summary ?? record.fullDesc ?? record.description ?? identity.anchor,
+    260
+  ) : "";
+  const clothingSummary = includeAppearance ? clampText(clothing.summary ?? record.clothingSummary, 180) : "";
+  const condition = uniq([
+    cleanText(state.injury ?? record.injury ?? record.visibleCondition),
+    cleanText(state.emotion ?? record.emotionalState ?? record.mood),
+    cleanText(state.intent ?? record.intent ?? record.currentAction)
+  ]).join("; ");
+  const relations = clampText(record.relSummary ?? record.relationshipSummary ?? record.relationshipToUser, 180);
+  const parts = [
+    role ? `role ${role}` : "",
+    location ? `at ${location}` : ""
+  ].filter(Boolean).join(", ");
+  return [
+    `${name}${parts ? ` (${parts})` : ""}:`,
+    visual,
+    clothingSummary ? `Clothing: ${clothingSummary}.` : "",
+    condition ? `State: ${condition}.` : "",
+    relations ? `Relations: ${relations}.` : ""
+  ].filter(Boolean).join(" ");
+}
+function summarizeRelationships(data) {
+  const direct = listItems(data, [["relationships"]], 5, ["summary", "label", "status", "target"]);
+  if (direct.length > 0) return direct;
+  return firstArray(data, [["characters"], ["cast"]]).map((item) => {
+    const record = asRecord(item);
+    if (!record) return "";
+    const name = cleanText(record.name ?? record.characterName ?? record.id);
+    const rel = cleanText(record.relSummary ?? record.relationshipSummary ?? record.relationshipToUser);
+    return name && rel ? `${name}: ${rel}` : "";
+  }).filter(Boolean).slice(0, 5);
+}
+function addSection(output, title, lines, tokenBudget, truncated) {
+  const cleanLines = uniq(lines).map((line) => clampText(line, 300)).filter(Boolean);
+  if (cleanLines.length === 0) return;
+  const header = output.length === 0 ? `## ${title}` : `
+## ${title}`;
+  const before = output.join("\n");
+  const withHeader = `${before}${before ? "\n" : ""}${header}`;
+  if (estimateTokens(withHeader) > tokenBudget) {
+    truncated.value = true;
+    return;
+  }
+  output.push(header);
+  for (const line of cleanLines) {
+    const candidate = [...output, `- ${line}`].join("\n");
+    if (estimateTokens(candidate) > tokenBudget) {
+      truncated.value = true;
+      break;
+    }
+    output.push(`- ${line}`);
+  }
+}
+function normalizeMode(value) {
+  return value === "latest_brief" ? "latest_brief" : "latest_plus_history";
+}
+function numberSetting(value, fallback, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+function estimateTokens(text) {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (!compact) return 0;
+  return Math.max(1, Math.ceil(compact.length / 4));
+}
+function buildContinuityInjection(input) {
+  const mode = normalizeMode(input.settings.promptInjectionMode);
+  const tokenBudget = numberSetting(input.settings.promptInjectionTokenBudget, 700, 200, 2e3);
+  const trackerLimit = numberSetting(input.settings.promptInjectionTrackerLimit, 5, 1, 10);
+  const baseReport = {
+    enabled: Boolean(input.settings.promptInjectionEnabled),
+    registered: Boolean(input.registered),
+    available: Boolean(input.latestTracker),
+    mode,
+    trackerCount: input.trackers?.length ?? (input.latestTracker ? 1 : 0),
+    historyCount: 0,
+    estimatedTokens: 0,
+    tokenBudget,
+    truncated: false,
+    lastSkippedReason: input.skippedReason
+  };
+  if (!input.settings.promptInjectionEnabled) {
+    return { content: "", report: { ...baseReport, lastSkippedReason: "Prompt injection is disabled." } };
+  }
+  const latest = input.latestTracker;
+  if (!latest) {
+    return { content: "", report: { ...baseReport, available: false, lastSkippedReason: "No tracker is available for this chat." } };
+  }
+  const data = latest.data || {};
+  const output = [
+    "STATE OF THE LOOM CONTINUITY BRIEF",
+    "Use this as compact continuity reference for the next roleplay response. Do not mention the tracker. Do not reveal hidden facts or secrets unless the scene makes them discoverable."
+  ];
+  const truncated = { value: false };
+  addSection(output, "Scene", fieldList(data, [
+    ["Title", [["sceneIdentity", "title"], ["sceneTitle"], ["title"], ["topic"]]],
+    ["Location", [["sceneIdentity", "location"], ["location"]]],
+    ["Time", [["sceneIdentity", "time"], ["time"]]],
+    ["Weather", [["sceneIdentity", "weather"], ["weather"]]],
+    ["Mood", [["sceneIdentity", "mood"], ["mood"], ["tone"]]],
+    ["Privacy", [["sceneIdentity", "privacy"], ["privacy"]]],
+    ["Tension", [["sceneIdentity", "tension"], ["tension"]]]
+  ], 180), tokenBudget, truncated);
+  addSection(output, "What Changed", uniq([
+    latest.compactSummary,
+    firstText(data, [["narrativeDelta", "summary"], ["delta"], ["summary"]], 260),
+    ...listItems(data, [["narrativeDelta", "whatChanged"], ["changes"]], 5, ["text", "summary", "age"]),
+    ...listItems(data, [["narrativeDelta", "immediateConsequences"]], 4),
+    ...listItems(data, [["narrativeDelta", "unresolvedBeats"], ["beats"]], 4)
+  ]), tokenBudget, truncated);
+  const characterSource = firstArray(data, [["characters"], ["cast"]]);
+  addSection(
+    output,
+    "Characters",
+    characterSource.slice(0, 6).map((item) => summarizeCharacter(item, input.settings.promptInjectionIncludeAppearance !== false)).filter(Boolean),
+    tokenBudget,
+    truncated
+  );
+  addSection(output, "Relationships", summarizeRelationships(data), tokenBudget, truncated);
+  addSection(output, "World And Objects", uniq([
+    ...listItems(data, [["worldState", "importantObjects"], ["items"]], 6, ["name", "summary", "condition", "location"]),
+    ...listItems(data, [["worldState", "hazards"], ["hazards"], ["loaded"]], 5, ["thing", "hazard", "summary", "state"]),
+    ...listItems(data, [["worldState", "activeThreads"], ["threads"]], 5, ["title", "summary", "label"]),
+    ...listItems(data, [["space"]], 5)
+  ]), tokenBudget, truncated);
+  if (input.settings.promptInjectionIncludeRules !== false) {
+    const rules = asRecord(readPath(data, ["rules"])) ?? {};
+    addSection(output, "Continuity Rules", uniq([
+      ...listItems(data, [["worldState", "loreFacts"], ["facts"]], 5, ["fact", "summary"]),
+      ...asArray(rules.cant).map((item) => `Cannot: ${itemText(item)}`).filter(Boolean),
+      ...asArray(rules.offscreen).map((item) => `Offscreen: ${itemText(item)}`).filter(Boolean),
+      ...listItems(data, [["bans"]], 4).map((item) => `Avoid next: ${item}`),
+      ...listItems(data, [["narrativeDelta", "continuityWarnings"], ["worldState", "continuityWarnings"], ["continuityWarnings"]], 5)
+    ]), tokenBudget, truncated);
+  }
+  if (input.settings.promptInjectionIncludeNextTurn !== false) {
+    addSection(output, "Next Turn Guidance", uniq([
+      ...fieldList(data, [
+        ["Likely focus", [["nextTurnGuidance", "likelyFocus"], ["focus", "next"]]],
+        ["Fragile detail", [["nextTurnGuidance", "fragileDetails"]]],
+        ["Risk", [["focus", "risk"]]]
+      ], 220),
+      ...listItems(data, [["nextTurnGuidance", "thingsNotToForget"]], 5),
+      ...listItems(data, [["goals"]], 5, ["goal", "status", "note"]),
+      ...listItems(data, [["countdowns"]], 4, ["title", "left"]),
+      ...listItems(data, [["autonomy"]], 3, ["who", "action"])
+    ]), tokenBudget, truncated);
+  }
+  const history = mode === "latest_plus_history" ? (input.trackers || []).filter((tracker) => tracker.generatedAt !== latest.generatedAt || tracker.messageId !== latest.messageId).slice(0, Math.max(0, trackerLimit - 1)).map((tracker) => `${tracker.generatedAt}: ${tracker.compactSummary}`).filter(Boolean) : [];
+  addSection(output, "Recent Tracker History", history, tokenBudget, truncated);
+  if (truncated.value) {
+    const candidate = [...output, "\nNote: Lower-priority tracker details were omitted to fit the injection token budget."].join("\n");
+    if (estimateTokens(candidate) <= tokenBudget) output.push("\nNote: Lower-priority tracker details were omitted to fit the injection token budget.");
+  }
+  const content = output.join("\n").trim();
+  const estimatedTokens = estimateTokens(content);
+  const report = {
+    ...baseReport,
+    available: true,
+    chatId: latest.chatId,
+    trackerPresetId: latest.presetId,
+    trackerGeneratedAt: latest.generatedAt,
+    trackerCount: input.trackers?.length ?? 1,
+    historyCount: history.length,
+    estimatedTokens,
+    truncated: truncated.value,
+    injectedAt: input.injectedAt,
+    lastSkippedReason: input.skippedReason,
+    preview: content.length > 900 ? `${content.slice(0, 900).trim()}...` : content
+  };
+  return { content, report };
+}
+function describeInjectionStatus(settings, permissions, registered = false) {
+  if (!settings.promptInjectionEnabled) return "Prompt injection is off.";
+  if (!permissions.generation) return "Prompt injection can run when generation support is available.";
+  if (!permissions.interceptor && !registered) return "Prompt injection is enabled, but Lumiverse interceptor permission/support was not detected.";
+  return registered ? "Prompt injection is active: the latest Loom is compressed into the live roleplay prompt." : "Prompt injection is configured and will activate when Lumiverse exposes interceptor support.";
 }
 
 // src/backend/companionService.ts
@@ -16,7 +275,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.13";
+var LOOM_VERSION = "1.0.14";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -44,12 +303,18 @@ var defaultSettings = {
   trackerHistoryLimit: 5,
   sidecarGenerationTimeoutMs: 18e4,
   useSafeRenderer: false,
-  customTemplateMode: "trusted_layout"
+  customTemplateMode: "trusted_layout",
+  promptInjectionMode: "latest_plus_history",
+  promptInjectionTrackerLimit: 5,
+  promptInjectionTokenBudget: 700,
+  promptInjectionIncludeAppearance: true,
+  promptInjectionIncludeRules: true,
+  promptInjectionIncludeNextTurn: true
 };
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.13",
+  version: "1.0.14",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -1053,7 +1318,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.13",
+  version: "1.0.14",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -1674,34 +1939,36 @@ async function hasPermission(spindle2, permission) {
   return false;
 }
 async function getPermissionState(spindle2) {
-  const [chats, chatMutation, generation, appManipulation] = await Promise.all([
+  const [chats, chatMutation, generation, appManipulation, interceptor] = await Promise.all([
     hasPermission(spindle2, "chats"),
     hasPermission(spindle2, "chat_mutation"),
     hasPermission(spindle2, "generation"),
-    hasPermission(spindle2, "app_manipulation")
+    hasPermission(spindle2, "app_manipulation"),
+    hasPermission(spindle2, "interceptor")
   ]);
   return {
     chats,
     chat_mutation: chatMutation,
     generation,
+    interceptor,
     app_manipulation: appManipulation
   };
 }
-function asRecord(value) {
+function asRecord2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 }
 function asMessageArray(value) {
-  const recordValue = asRecord(value);
+  const recordValue = asRecord2(value);
   const source = Array.isArray(value) ? value : Array.isArray(recordValue?.messages) ? recordValue.messages : Array.isArray(recordValue?.data) ? recordValue.data : [];
   return source.map((item, index) => {
-    const record = asRecord(item) ?? {};
+    const record = asRecord2(item) ?? {};
     const swipes = Array.isArray(record.swipes) ? record.swipes : [];
     const swipeId = typeof record.swipe_id === "number" ? record.swipe_id : typeof record.swipeId === "number" ? record.swipeId : 0;
     const activeSwipe = typeof swipes[swipeId] === "string" ? swipes[swipeId] : void 0;
     const content = record.content ?? activeSwipe ?? record.text ?? record.message;
     const role = record.role ?? record.sender ?? record.type;
     const id = record.id ?? record.messageId ?? record.message_id ?? String(index);
-    const metadata = asRecord(record.metadata) ?? void 0;
+    const metadata = asRecord2(record.metadata) ?? void 0;
     const swipe = record.swipeId ?? record.swipe_id;
     const normalized = {
       id: typeof id === "string" || typeof id === "number" ? String(id) : String(index),
@@ -1738,6 +2005,25 @@ function onFrontendMessage(spindle2, handler) {
   });
   return typeof unsubscribe === "function" ? unsubscribe : void 0;
 }
+function registerPromptInterceptor(spindle2, handler, priority = 80) {
+  if (typeof spindle2.registerInterceptor === "function") {
+    try {
+      const unsubscribe = spindle2.registerInterceptor(handler, priority);
+      return typeof unsubscribe === "function" ? unsubscribe : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  const interceptors = asRecord2(spindle2.interceptors) ?? {};
+  const register = interceptors.register ?? interceptors.add ?? interceptors.use;
+  if (typeof register !== "function") return void 0;
+  try {
+    const unsubscribe = register(handler, priority);
+    return typeof unsubscribe === "function" ? unsubscribe : void 0;
+  } catch {
+    return void 0;
+  }
+}
 async function tryCall(fn, args) {
   if (typeof fn !== "function") return null;
   for (const callArgs of args) {
@@ -1750,8 +2036,8 @@ async function tryCall(fn, args) {
   return null;
 }
 async function getActiveChat(spindle2, userId) {
-  const chatsApi = asRecord(spindle2.chats) ?? {};
-  const legacyChatApi = asRecord(spindle2.chat) ?? {};
+  const chatsApi = asRecord2(spindle2.chats) ?? {};
+  const legacyChatApi = asRecord2(spindle2.chat) ?? {};
   const active = await tryCall(chatsApi.getActive ?? chatsApi.getCurrent ?? chatsApi.active, [
     [{ userId }],
     [userId],
@@ -1761,7 +2047,7 @@ async function getActiveChat(spindle2, userId) {
     [userId],
     []
   ]);
-  const activeRecord = asRecord(active);
+  const activeRecord = asRecord2(active);
   const chatId = activeRecord?.id ?? activeRecord?.chatId ?? activeRecord?.chat_id;
   const chatName = activeRecord?.name ?? activeRecord?.title ?? activeRecord?.label;
   const chat = {
@@ -1774,8 +2060,8 @@ async function getActiveChat(spindle2, userId) {
   return { chat, messages: asMessageArray(activeRecord?.messages) };
 }
 async function getChatMessages(spindle2, chatId, userId) {
-  const chatApi = asRecord(spindle2.chat) ?? {};
-  const chatsApi = asRecord(spindle2.chats) ?? {};
+  const chatApi = asRecord2(spindle2.chat) ?? {};
+  const chatsApi = asRecord2(spindle2.chats) ?? {};
   const messages = await tryCall(chatApi.getMessages ?? chatApi.messages ?? chatApi.listMessages, [
     [chatId, { userId }],
     [{ chatId, userId }],
@@ -1790,8 +2076,8 @@ async function getChatMessages(spindle2, chatId, userId) {
   return asMessageArray(fallback);
 }
 async function listConnectionProfiles(spindle2, userId) {
-  const connectionsApi = asRecord(spindle2.connections) ?? {};
-  const generationApi = asRecord(spindle2.generate) ?? asRecord(spindle2.generation) ?? {};
+  const connectionsApi = asRecord2(spindle2.connections) ?? {};
+  const generationApi = asRecord2(spindle2.generate) ?? asRecord2(spindle2.generation) ?? {};
   const raw = await tryCall(
     connectionsApi.list ?? connectionsApi.getAll ?? generationApi.listConnectionProfiles ?? generationApi.getConnectionProfiles ?? generationApi.listConnections,
     [
@@ -1800,9 +2086,9 @@ async function listConnectionProfiles(spindle2, userId) {
       []
     ]
   );
-  const list = Array.isArray(raw) ? raw : Array.isArray(asRecord(raw)?.profiles) ? asRecord(raw)?.profiles : [];
+  const list = Array.isArray(raw) ? raw : Array.isArray(asRecord2(raw)?.profiles) ? asRecord2(raw)?.profiles : [];
   return list.map((item, index) => {
-    const record = asRecord(item) ?? {};
+    const record = asRecord2(item) ?? {};
     const id = record.id ?? record.connectionId ?? record.connection_id ?? record.name ?? String(index);
     const name = record.name ?? record.label ?? record.displayName ?? id;
     const provider = record.provider ?? record.providerName;
@@ -1821,7 +2107,7 @@ async function listConnectionProfiles(spindle2, userId) {
   });
 }
 async function runSidecarGeneration(spindle2, userId, messages, connectionId) {
-  const generationApi = asRecord(spindle2.generate) ?? asRecord(spindle2.generation) ?? {};
+  const generationApi = asRecord2(spindle2.generate) ?? asRecord2(spindle2.generation) ?? {};
   const payload = {
     messages,
     internal: true,
@@ -1841,14 +2127,14 @@ async function runSidecarGeneration(spindle2, userId, messages, connectionId) {
       [messages, { userId, connectionId }]
     ]
   );
-  const record = asRecord(response);
+  const record = asRecord2(response);
   const content = record?.content ?? record?.text ?? record?.message ?? record?.output ?? record?.response ?? response;
   if (typeof content !== "string") throw new Error("Generation API did not return text content.");
   return content;
 }
 async function updateMessageContent(spindle2, chatId, messageId, content, userId) {
-  const chatApi = asRecord(spindle2.chat) ?? {};
-  const chatsApi = asRecord(spindle2.chats) ?? {};
+  const chatApi = asRecord2(spindle2.chat) ?? {};
+  const chatsApi = asRecord2(spindle2.chats) ?? {};
   const result = await tryCall(chatApi.updateMessage ?? chatApi.editMessage ?? chatApi.setMessageContent, [
     [chatId, messageId, { content, userId }],
     [{ chatId, messageId, content, userId }],
@@ -2261,6 +2547,16 @@ var LoomSettingsService = class {
       next.customTemplateMode = defaultSettings.customTemplateMode;
     }
     if (next.useSafeRenderer) next.customTemplateMode = "safe_generic";
+    if (next.promptInjectionMode !== "latest_brief" && next.promptInjectionMode !== "latest_plus_history") {
+      next.promptInjectionMode = defaultSettings.promptInjectionMode;
+    }
+    const injectionTrackerLimit = Number(next.promptInjectionTrackerLimit);
+    next.promptInjectionTrackerLimit = Number.isFinite(injectionTrackerLimit) ? Math.max(1, Math.min(10, Math.round(injectionTrackerLimit))) : defaultSettings.promptInjectionTrackerLimit;
+    const injectionBudget = Number(next.promptInjectionTokenBudget);
+    next.promptInjectionTokenBudget = Number.isFinite(injectionBudget) ? Math.max(200, Math.min(2e3, Math.round(injectionBudget))) : defaultSettings.promptInjectionTokenBudget;
+    next.promptInjectionIncludeAppearance = next.promptInjectionIncludeAppearance !== false;
+    next.promptInjectionIncludeRules = next.promptInjectionIncludeRules !== false;
+    next.promptInjectionIncludeNextTurn = next.promptInjectionIncludeNextTurn !== false;
     return next;
   }
 };
@@ -2413,6 +2709,7 @@ var StateOfTheLoomBackend = class {
     this.chatUsers = /* @__PURE__ */ new Map();
     this.lastFrontendUserId = null;
     this.reportedUnknownGenerationUser = false;
+    this.interceptorRegistered = false;
     this.diagnostics = {
       backendReady: true,
       renderLimitation: "Top-of-message rendering uses Lumiverse render hooks when available and a scoped compatibility mount otherwise."
@@ -2442,6 +2739,27 @@ var StateOfTheLoomBackend = class {
     onEvent?.("PERMISSION_CHANGED", async () => {
       await this.notifyPermissionsChanged();
     });
+    const unregisterInterceptor = registerPromptInterceptor(this.spindle, async (messages, context) => {
+      return this.handlePromptInjection(messages, context);
+    }, 80);
+    this.interceptorRegistered = typeof unregisterInterceptor === "function" || typeof this.spindle.registerInterceptor === "function" || Boolean(this.spindle.interceptors?.register);
+    if (!this.interceptorRegistered) {
+      this.diagnostics = {
+        ...this.diagnostics,
+        injectionReport: {
+          enabled: false,
+          registered: false,
+          available: false,
+          mode: "latest_plus_history",
+          trackerCount: 0,
+          historyCount: 0,
+          estimatedTokens: 0,
+          tokenBudget: 700,
+          truncated: false,
+          lastSkippedReason: "Lumiverse interceptor API was not detected in this runtime."
+        }
+      };
+    }
     this.spindle.log?.info?.("State of the Loom backend loaded.");
   }
   rememberUser(userId, chatId) {
@@ -2470,6 +2788,75 @@ var StateOfTheLoomBackend = class {
   }
   async send(userId, message) {
     await sendFrontend(this.spindle, userId, message);
+  }
+  async handlePromptInjection(messages, context) {
+    try {
+      const source = context?.source ?? context?.extensionId ?? context?.extension_id;
+      const generationType = context?.generationType ?? context?.generation_type;
+      const internal = context?.internal;
+      if (source === "state_of_the_loom" || generationType === "quiet" || internal === true) return messages;
+      const looksLikeTrackerSidecar = messages.some((message) => {
+        const content2 = typeof message.content === "string" ? message.content : "";
+        return content2.includes("Latest assistant message to track:") && content2.includes("Return JSON only. No markdown.");
+      });
+      if (looksLikeTrackerSidecar) return messages;
+      let chatId = this.payloadString(context?.chatId ?? context?.chat_id ?? context?.conversationId ?? context?.conversation_id);
+      const contextUserId = this.payloadString(context?.userId ?? context?.user_id);
+      const userId = contextUserId ?? this.resolveUserForEvent(context ?? {}, chatId) ?? this.lastFrontendUserId;
+      if (!userId) return messages;
+      if (!chatId) {
+        const active = await getActiveChat(this.spindle, userId).catch(() => null);
+        chatId = active?.chat.id ?? null;
+      }
+      if (!chatId) {
+        this.diagnostics = {
+          ...this.diagnostics,
+          injectionReport: {
+            enabled: false,
+            registered: this.interceptorRegistered,
+            available: false,
+            mode: "latest_plus_history",
+            trackerCount: 0,
+            historyCount: 0,
+            estimatedTokens: 0,
+            tokenBudget: 700,
+            truncated: false,
+            lastSkippedReason: "Skipped prompt injection because no active chat id was available."
+          }
+        };
+        return messages;
+      }
+      const settings = await this.settingsService.load(userId);
+      const latestTracker = await this.trackerService.getLatest(userId, chatId).catch(() => null);
+      const trackers = await this.trackerService.listForChat(userId, chatId).catch(() => []);
+      const { content, report } = buildContinuityInjection({
+        settings,
+        latestTracker,
+        trackers,
+        registered: this.interceptorRegistered,
+        injectedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      this.diagnostics = {
+        ...this.diagnostics,
+        injectionReport: report
+      };
+      if (!content) return messages;
+      const injectionMessage = {
+        role: "system",
+        content,
+        source: "state_of_the_loom"
+      };
+      const firstNonSystem = messages.findIndex((message) => String(message.role || "").toLowerCase() !== "system");
+      if (firstNonSystem <= 0) return [injectionMessage, ...messages];
+      return [
+        ...messages.slice(0, firstNonSystem),
+        injectionMessage,
+        ...messages.slice(firstNonSystem)
+      ];
+    } catch (error) {
+      this.recordRuntimeError("Prompt injection failed", error);
+      return messages;
+    }
   }
   async buildState(userId) {
     let [settings, permissions] = await Promise.all([
@@ -2507,6 +2894,13 @@ var StateOfTheLoomBackend = class {
         return [];
       })
     ]);
+    const injectionPreview = buildContinuityInjection({
+      settings,
+      latestTracker,
+      trackers: messageTrackers,
+      registered: this.interceptorRegistered,
+      skippedReason: this.interceptorRegistered ? void 0 : "Lumiverse interceptor API was not detected in this runtime."
+    }).report;
     const baseGenerationStatus = this.generationService.getStatus();
     const disabledReason = this.generationService.getDisabledReason({
       settings,
@@ -2539,7 +2933,14 @@ var StateOfTheLoomBackend = class {
     const simulationNote = getSimulationMilestoneStatus();
     const entityNote = getEntityCaptureMilestoneStatus();
     const companionNote = getCompanionMilestoneStatus();
-    const injectionNote = describeInjectionStatus(settings, permissions);
+    const injectionNote = describeInjectionStatus(settings, permissions, this.interceptorRegistered);
+    const lastInjectionReport = this.diagnostics.injectionReport;
+    diagnostics.injectionReport = lastInjectionReport?.injectedAt && lastInjectionReport.chatId === activeChat.id ? {
+      ...injectionPreview,
+      injectedAt: lastInjectionReport.injectedAt,
+      lastSkippedReason: lastInjectionReport.lastSkippedReason,
+      registered: this.interceptorRegistered
+    } : injectionPreview;
     diagnostics.renderLimitation = [
       this.diagnostics.renderLimitation,
       injectionNote,

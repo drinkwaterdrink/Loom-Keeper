@@ -75,6 +75,20 @@ export class LoomSettingsService {
       next.customTemplateMode = defaultSettings.customTemplateMode;
     }
     if (next.useSafeRenderer) next.customTemplateMode = 'safe_generic';
+    if (next.promptInjectionMode !== 'latest_brief' && next.promptInjectionMode !== 'latest_plus_history') {
+      next.promptInjectionMode = defaultSettings.promptInjectionMode;
+    }
+    const injectionTrackerLimit = Number(next.promptInjectionTrackerLimit);
+    next.promptInjectionTrackerLimit = Number.isFinite(injectionTrackerLimit)
+      ? Math.max(1, Math.min(10, Math.round(injectionTrackerLimit)))
+      : defaultSettings.promptInjectionTrackerLimit;
+    const injectionBudget = Number(next.promptInjectionTokenBudget);
+    next.promptInjectionTokenBudget = Number.isFinite(injectionBudget)
+      ? Math.max(200, Math.min(2000, Math.round(injectionBudget)))
+      : defaultSettings.promptInjectionTokenBudget;
+    next.promptInjectionIncludeAppearance = next.promptInjectionIncludeAppearance !== false;
+    next.promptInjectionIncludeRules = next.promptInjectionIncludeRules !== false;
+    next.promptInjectionIncludeNextTurn = next.promptInjectionIncludeNextTurn !== false;
     return next;
   }
 }

@@ -243,6 +243,19 @@ export const loomStyles = `
   font-family: var(--lv-font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
   font-size: 12px;
 }
+.sotl-injection-report {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.18)));
+  border-radius: 6px;
+  background: rgba(56, 100, 217, 0.05);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.sotl-injection-report code {
+  overflow-wrap: anywhere;
+}
 .sotl-details {
   border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.18)));
   border-radius: var(--lumiverse-radius, 6px);

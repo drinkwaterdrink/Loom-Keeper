@@ -162,6 +162,34 @@ function renderPipelineReport(state: LoomFrontendState): string {
   `;
 }
 
+function renderInjectionReport(state: LoomFrontendState): string {
+  const report = state.diagnostics.injectionReport;
+  const successColor = 'var(--lv-success-text, #176b43)';
+  const warningColor = 'var(--lv-warning-text, #8a4f00)';
+  if (!report) return '<p class="sotl-note">No injection report is available yet.</p>';
+  const enabled = report.enabled
+    ? `<span style="color: ${successColor}; font-weight: 600;">Enabled</span>`
+    : `<span style="color: ${warningColor}; font-weight: 600;">Disabled</span>`;
+  const registered = report.registered
+    ? `<span style="color: ${successColor}; font-weight: 600;">Interceptor detected</span>`
+    : `<span style="color: ${warningColor}; font-weight: 600;">Interceptor not detected</span>`;
+  const tokenColor = report.estimatedTokens > report.tokenBudget ? 'var(--lv-error-text, #bd2130)' : successColor;
+  return [
+    '<div class="sotl-injection-report">',
+    `<div><strong>Status:</strong> ${enabled} - ${registered}</div>`,
+    `<div><strong>Mode:</strong> <code>${escapeHtml(report.mode)}</code></div>`,
+    `<div><strong>Estimated prompt cost:</strong> <span style="color:${tokenColor};font-weight:700;">~${report.estimatedTokens} tokens</span> / ${report.tokenBudget}</div>`,
+    `<div><strong>Trackers used:</strong> ${report.trackerCount} retained - ${report.historyCount} history summaries</div>`,
+    report.trackerPresetId ? `<div><strong>Latest preset:</strong> <code>${escapeHtml(report.trackerPresetId)}</code></div>` : '',
+    report.trackerGeneratedAt ? `<div><strong>Latest tracker:</strong> <code>${escapeHtml(report.trackerGeneratedAt)}</code></div>` : '',
+    report.truncated ? `<div><strong>Budget trim:</strong> <span style="color:${warningColor};font-weight:600;">Lower-priority details omitted</span></div>` : '',
+    report.injectedAt ? `<div><strong>Last injected:</strong> <code>${escapeHtml(report.injectedAt)}</code></div>` : '',
+    report.lastSkippedReason ? `<div><strong>Note:</strong> ${escapeHtml(report.lastSkippedReason)}</div>` : '',
+    report.preview ? `<details class="sotl-details"><summary>Injection Preview</summary><pre class="sotl-code">${escapeHtml(report.preview)}</pre></details>` : '',
+    '</div>',
+  ].filter(Boolean).join('');
+}
+
 export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStatus = {}): string {
   if (!state) {
     const offlineText = status.backendTimedOut
@@ -194,6 +222,7 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     badge('Chats', state.permissions.chats),
     badge('Chat mutation', state.permissions.chat_mutation),
     badge('Generation', state.permissions.generation),
+    badge('Prompt injection', Boolean(state.permissions.interceptor || state.diagnostics.injectionReport?.registered)),
     badge('Settings UI', Boolean(state.permissions.app_manipulation)),
     '</div>',
     '</section>',
@@ -239,6 +268,40 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     `<p class="sotl-note">Connection: ${escapeHtml(selectedConnection?.name || (state.settings.useDefaultConnectionFallback ? 'default/current fallback' : 'none selected'))}</p>`,
     !state.permissions.generation ? '<p class="sotl-note">Generation permission is missing; passive fenced extraction is still available.</p>' : '',
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="autoGenerate" ' + (state.settings.autoGenerate ? 'checked' : '') + '> Auto-generate after assistant messages</label>',
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionEnabled" ' + (state.settings.promptInjectionEnabled ? 'checked' : '') + '> Inject compact continuity into roleplay prompts</label>',
+    '<details class="sotl-details"><summary>Context Injection Lite</summary>',
+    '<div class="sotl-fields">',
+    '<label class="sotl-label">Injection mode',
+    `<select class="sotl-select" data-sotl-field="promptInjectionMode">`,
+    `  <option value="latest_plus_history"${state.settings.promptInjectionMode !== 'latest_brief' ? ' selected' : ''}>Latest tracker + recent summaries</option>`,
+    `  <option value="latest_brief"${state.settings.promptInjectionMode === 'latest_brief' ? ' selected' : ''}>Latest tracker only</option>`,
+    '</select>',
+    '</label>',
+    '<label class="sotl-label">Injection token budget',
+    (() => {
+      const budget = state.settings.promptInjectionTokenBudget ?? 700;
+      const options = [300, 500, 700, 1000, 1500, 2000].map((value) => (
+        `<option value="${value}"${budget === value ? ' selected' : ''}>~${value} tokens</option>`
+      ));
+      return `<select class="sotl-select" data-sotl-field="promptInjectionTokenBudget">${options.join('')}</select>`;
+    })(),
+    '</label>',
+    '<label class="sotl-label">Trackers considered for injection',
+    (() => {
+      const limit = state.settings.promptInjectionTrackerLimit ?? 5;
+      const options = [1, 3, 5, 10].map((value) => (
+        `<option value="${value}"${limit === value ? ' selected' : ''}>Last ${value} tracker${value === 1 ? '' : 's'}</option>`
+      ));
+      return `<select class="sotl-select" data-sotl-field="promptInjectionTrackerLimit">${options.join('')}</select>`;
+    })(),
+    '</label>',
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeAppearance" ' + (state.settings.promptInjectionIncludeAppearance !== false ? 'checked' : '') + '> Include character appearance anchors</label>',
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeRules" ' + (state.settings.promptInjectionIncludeRules !== false ? 'checked' : '') + '> Include continuity rules and warnings</label>',
+    '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeNextTurn" ' + (state.settings.promptInjectionIncludeNextTurn !== false ? 'checked' : '') + '> Include next-turn guidance</label>',
+    '<p class="sotl-note">Best setup: inject the latest detailed tracker as a compact brief, plus a few old compact summaries. The full tracker stays stored and visible without flooding context.</p>',
+    renderInjectionReport(state),
+    '</div>',
+    '</details>',
     '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="showChatHudLauncher" ' + (state.settings.showChatHudLauncher ? 'checked' : '') + '> Show chat HUD button</label>',
     
     '<label class="sotl-label">HUD detail level',
@@ -367,6 +430,9 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     state.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastRenderStatus)}</p>` : '',
     '<details class="sotl-details" open style="margin-top: 8px;"><summary>🔍 Tracker Pipeline Report</summary>',
     renderPipelineReport(state),
+    '</details>',
+    '<details class="sotl-details" open style="margin-top: 8px;"><summary>Context Injection Report</summary>',
+    renderInjectionReport(state),
     '</details>',
     (() => {
       const doc = typeof document !== 'undefined' ? document : null;

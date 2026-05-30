@@ -1,8 +1,8 @@
-# State of the Loom (v1.0.13)
+# State of the Loom (v1.0.14)
 
 State of the Loom is a Lumiverse-native State of the Loom continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.13 adds the Grand Continuity Atlas default tracker, a Handlebars-compatible interpreted template renderer, SimTracker-style import compatibility, trusted-layout custom rendering, template compatibility diagnostics, and a wider mobile HUD that sits higher above the input bar.
+Version 1.0.14 adds Context Injection Lite: a configurable, token-budgeted continuity brief built from the latest tracker plus recent compact tracker summaries. Version 1.0.13 added the Grand Continuity Atlas default tracker, a Handlebars-compatible interpreted template renderer, SimTracker-style import compatibility, trusted-layout custom rendering, template compatibility diagnostics, and a wider mobile HUD that sits higher above the input bar.
 
 ---
 
@@ -27,6 +27,12 @@ Version 1.0.13 adds the Grand Continuity Atlas default tracker, a Handlebars-com
    - Grand Continuity Atlas $\rightarrow$ `[~2500t - Grand]`
 5. **Stale Tracker Detection**: Flags the Current Loom status with a yellow badge `⚠️ Stale: New messages sent` if new user or assistant messages are added to the chat history after the latest tracker was saved.
 6. **Quick Copy JSON**: Copy the entire Current Loom state to your clipboard with a single click.
+7. **Context Injection Lite**: Optionally injects a compact continuity brief into live roleplay prompts.
+   - Uses the latest detailed tracker as the main source of truth.
+   - Adds recent tracker history as compact summaries only.
+   - Provides configurable budgets of ~300, 500, 700, 1000, 1500, or 2000 tokens.
+   - Shows an estimated token counter and preview in the drawer diagnostics.
+   - Keeps the full tracker stored/rendered without flooding the model context.
 
 ---
 
@@ -59,6 +65,7 @@ The extension manifest requests the following capabilities:
 - `chats`: Inspect chat details and titles.
 - `chat_mutation`: Read chat messages to parse passive fenced code blocks and assistant responses.
 - `generation`: Query connection profiles and request sidecar generation from your selected models.
+- `interceptor`: Add the compact continuity brief to normal roleplay prompt messages when Context Injection Lite is enabled.
 - `app_manipulation`: Insert the settings screen, viewport drawer, and chat overlay hooks.
 
 ---
@@ -97,13 +104,16 @@ npm run smoke:default-preset
 
 # Run HUD mobile layout CSS smoke test
 npm run smoke:hud-css
+
+# Run prompt injection brief smoke test
+npm run smoke:injection
 ```
 
 ---
 
 ## Diagnostics & Troubleshooting
 
-State of the Loom (v1.0.13) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, and stuck generation states.
+State of the Loom (v1.0.14) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, stuck generation states, and overlarge prompt injection.
 
 ### 1. What to do when a Custom Preset renders blank
 * **Root Cause**: If a custom preset uses template variables that are missing from the generated JSON, those individual fields render empty. This is now a warning instead of a fatal blank-card condition.
@@ -116,6 +126,16 @@ Expose exactly where a generation or render breaks using the **Tracker Pipeline 
 * **Active Preset Details**: Displays current preset ID, source type (built-in vs custom), and time.
 * **JSON Parse / Validation State**: Exposes whether the LLM output was valid JSON, the parse failure category, and whether it conformed to your custom preset's schema.
 * **Raw / Timeout / Render Flags**: Inspect raw response availability, elapsed generation time, configured timeout, render warnings, template cleanup, fallback usage, unrendered-data preservation, and missing latest-template fields.
+
+### 3. Context Injection Lite
+When enabled, the extension compresses the current tracker into a system-level continuity brief for the next roleplay generation. The recommended setup is:
+* **Tracker history limit**: keep the default last 5 trackers per chat.
+* **Injection mode**: latest tracker + recent summaries.
+* **Injection token budget**: start at ~700 tokens.
+* **Appearance anchors**: enabled for character-heavy roleplay.
+* **Rules and next-turn guidance**: enabled when continuity drift matters.
+
+The full tracker JSON is not injected every turn. Older trackers are summarized, and lower-priority sections are omitted when the token budget would be exceeded.
 
 ---
 
@@ -133,4 +153,4 @@ We are adopting several concrete reliability and feature ideas from reference to
 * **Sequential Generation** (Roadmap): Support multi-step tracking passes for massive roleplay logs.
 * **Per-Section Regeneration** (Roadmap): Allow regenerating a single subsection or field (e.g., character pockets or location description) rather than rebuilding the entire tracker.
 * **Message-Local Status Badges** (Roadmap): Display real-time progress indicators directly on the specific message being tracked.
-* **Compact Snapshot Injection** (Roadmap): Direct prompt insertion of compact continuity strings into native system commands.
+* **Compact Snapshot Injection** (Adopted): Direct prompt insertion of compact continuity strings into native system commands through Context Injection Lite.
