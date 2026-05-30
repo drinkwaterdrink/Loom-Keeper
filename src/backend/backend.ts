@@ -20,10 +20,12 @@ import type {
   LoomDiagnostics,
   LoomFrontendMessage,
   LoomFrontendState,
+  LoomChatMessage,
   LoomPreset,
   LoomSettings,
   LoomTrackerState,
   LoomPipelineReport,
+  LoomSwipeReport,
 } from '../shared/types.js';
 import { makeCompactSummary } from '../shared/renderer.js';
 import { getPresetOrigin, validateAgainstSchema } from '../shared/validation.js';
@@ -55,6 +57,60 @@ function previewRawOutput(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const compact = value.replace(/\s+/g, ' ').trim();
   return compact.length > 700 ? `${compact.slice(0, 700)}...` : compact;
+}
+
+function activeSwipeByMessageId(messages: LoomChatMessage[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const message of messages) {
+    if (message.id && typeof message.swipe_id === 'number') {
+      map[message.id] = message.swipe_id;
+    }
+  }
+  return map;
+}
+
+function latestAssistantMessage(messages: LoomChatMessage[]): LoomChatMessage | undefined {
+  return [...messages].reverse().find(isAssistantMessage);
+}
+
+function countSwipeAlternatives(trackers: LoomTrackerState[]): { stored: number; alternatives: number } {
+  const grouped = new Map<string, number>();
+  let stored = 0;
+  for (const tracker of trackers) {
+    if (!tracker.messageId || typeof tracker.swipeId !== 'number') continue;
+    stored += 1;
+    grouped.set(tracker.messageId, (grouped.get(tracker.messageId) ?? 0) + 1);
+  }
+  let alternatives = 0;
+  for (const count of grouped.values()) {
+    if (count > 1) alternatives += count - 1;
+  }
+  return { stored, alternatives };
+}
+
+function activeSwipeTrackers(trackers: LoomTrackerState[], swipeMap: Record<string, number>): LoomTrackerState[] {
+  const grouped = new Map<string, LoomTrackerState[]>();
+  const passthrough: LoomTrackerState[] = [];
+  for (const tracker of trackers) {
+    if (!tracker.messageId) {
+      passthrough.push(tracker);
+      continue;
+    }
+    const group = grouped.get(tracker.messageId) ?? [];
+    group.push(tracker);
+    grouped.set(tracker.messageId, group);
+  }
+  for (const [messageId, group] of grouped) {
+    const activeSwipe = swipeMap[messageId];
+    const chosen = typeof activeSwipe === 'number'
+      ? group.find((tracker) => tracker.swipeId === activeSwipe)
+      : undefined;
+    const newest = group.slice().sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))[0];
+    const active = chosen ?? newest;
+    if (active) passthrough.push(active);
+  }
+  return passthrough
+    .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
 }
 
 class StateOfTheLoomBackend {
@@ -200,8 +256,20 @@ class StateOfTheLoomBackend {
       }
 
       const settings = await this.settingsService.load(userId);
-      const latestTracker = await this.trackerService.getLatest(userId, chatId).catch(() => null);
-      const trackers = await this.trackerService.listForChat(userId, chatId).catch(() => []);
+      const activeForInjection = await getActiveChat(this.spindle, userId).catch(() => null);
+      const activeInjectionMessage = activeForInjection?.chat.id === chatId
+        ? latestAssistantMessage(activeForInjection.messages)
+        : undefined;
+      const injectionSwipeMap = activeForInjection?.chat.id === chatId
+        ? activeSwipeByMessageId(activeForInjection.messages)
+        : {};
+      const latestTracker = await this.trackerService.getLatestForActive(
+        userId,
+        chatId,
+        activeInjectionMessage?.id,
+        activeInjectionMessage?.swipe_id,
+      ).catch(() => null);
+      const trackers = activeSwipeTrackers(await this.trackerService.listForChat(userId, chatId).catch(() => []), injectionSwipeMap);
       const { content, report } = buildContinuityInjection({
         settings,
         latestTracker,
@@ -257,12 +325,14 @@ class StateOfTheLoomBackend {
       name: activeChatName(active.chat.id, active.chat.name),
     };
     if (activeChat.id) this.rememberUser(userId, activeChat.id);
+    const activeSwipeMap = activeSwipeByMessageId(active.messages);
+    const activeAssistant = latestAssistantMessage(active.messages);
     const connections = await this.generationService.listConnections(userId, permissions).catch((error) => {
       this.recordRuntimeError('Connection profile lookup failed', error);
       return [];
     });
     const [latestTracker, messageTrackers] = await Promise.all([
-      this.trackerService.getLatest(userId, activeChat.id).catch((error) => {
+      this.trackerService.getLatestForActive(userId, activeChat.id, activeAssistant?.id, activeAssistant?.swipe_id).catch((error) => {
         this.recordRuntimeError('Latest tracker lookup failed', error);
         return null;
       }),
@@ -271,10 +341,11 @@ class StateOfTheLoomBackend {
         return [];
       }),
     ]);
+    const activeMessageTrackers = activeSwipeTrackers(messageTrackers, activeSwipeMap);
     const injectionPreview = buildContinuityInjection({
       settings,
       latestTracker,
-      trackers: messageTrackers,
+      trackers: activeMessageTrackers,
       registered: this.interceptorRegistered,
       skippedReason: this.interceptorRegistered ? undefined : 'Lumiverse interceptor API was not detected in this runtime.',
     }).report;
@@ -296,12 +367,28 @@ class StateOfTheLoomBackend {
     let isStale = false;
     if (latestTracker && active.messages && active.messages.length > 0) {
       const trackedMsgIndex = active.messages.findIndex((m) => m.id === latestTracker.messageId);
+      const activeSwipe = latestTracker.messageId ? activeSwipeMap[latestTracker.messageId] : undefined;
       if (trackedMsgIndex === -1) {
+        isStale = true;
+      } else if (typeof activeSwipe === 'number' && latestTracker.swipeId !== activeSwipe) {
         isStale = true;
       } else if (trackedMsgIndex < active.messages.length - 1) {
         isStale = true;
       }
     }
+    const swipeCounts = countSwipeAlternatives(messageTrackers);
+    const previousSwipeReport = this.diagnostics.swipeReport;
+    const swipeReport: LoomSwipeReport = {
+      activeMessageId: activeAssistant?.id,
+      activeSwipeId: activeAssistant?.swipe_id,
+      activeSwipeByMessageId: activeSwipeMap,
+      storedSwipeTrackerCount: swipeCounts.stored,
+      alternativeSwipeTrackerCount: swipeCounts.alternatives,
+      cleanupLastRunAt: previousSwipeReport?.cleanupLastRunAt,
+      cleanupRemovedCount: previousSwipeReport?.cleanupRemovedCount,
+      cleanupKeptCount: previousSwipeReport?.cleanupKeptCount,
+      cleanupWarning: previousSwipeReport?.cleanupWarning,
+    };
 
     const diagnostics: LoomDiagnostics = {
       ...this.diagnostics,
@@ -309,7 +396,12 @@ class StateOfTheLoomBackend {
       lastParserError: this.diagnostics.lastParserError,
       lastGenerationError: this.diagnostics.lastGenerationError,
       storageWarning: this.diagnostics.storageWarning,
-      lastRenderStatus: isStale ? 'Current Loom state is Stale (new user or assistant messages have been added).' : this.diagnostics.lastRenderStatus,
+      lastRenderStatus: isStale
+        ? (latestTracker?.messageId && typeof activeSwipeMap[latestTracker.messageId] === 'number' && latestTracker.swipeId !== activeSwipeMap[latestTracker.messageId]
+          ? 'Current Loom state is Stale (active swipe changed).'
+          : 'Current Loom state is Stale (new user or assistant messages have been added).')
+        : this.diagnostics.lastRenderStatus,
+      swipeReport,
     };
     const simulationNote = getSimulationMilestoneStatus();
     const entityNote = getEntityCaptureMilestoneStatus();
@@ -342,6 +434,7 @@ class StateOfTheLoomBackend {
       connections,
       latestTracker,
       messageTrackers,
+      activeSwipeByMessageId: activeSwipeMap,
       generation,
       diagnostics,
     };
@@ -372,8 +465,9 @@ class StateOfTheLoomBackend {
         const settings = await this.settingsService.save(userId, message.settings);
         const active = await getActiveChat(this.spindle, userId).catch(() => null);
         const activeChatId = active?.chat?.id;
+        const activeAssistant = active ? latestAssistantMessage(active.messages) : undefined;
         if (activeChatId && settings.trackerHistoryLimit > 0) {
-          await this.trackerService.pruneChatHistory(userId, activeChatId, settings.trackerHistoryLimit);
+          await this.trackerService.pruneChatHistory(userId, activeChatId, settings.trackerHistoryLimit, activeAssistant?.id);
         }
         await this.send(userId, { type: 'settings_saved', settings });
         await this.send(userId, { type: 'state', state: await this.buildState(userId) });
@@ -384,8 +478,9 @@ class StateOfTheLoomBackend {
         const settings = await this.settingsService.save(userId, { activePresetId: message.presetId });
         const active = await getActiveChat(this.spindle, userId).catch(() => null);
         const activeChatId = active?.chat?.id;
+        const activeAssistant = active ? latestAssistantMessage(active.messages) : undefined;
         if (activeChatId && settings.trackerHistoryLimit > 0) {
-          await this.trackerService.pruneChatHistory(userId, activeChatId, settings.trackerHistoryLimit);
+          await this.trackerService.pruneChatHistory(userId, activeChatId, settings.trackerHistoryLimit, activeAssistant?.id);
         }
         await this.send(userId, { type: 'settings_saved', settings });
         await this.send(userId, { type: 'state', state: await this.buildState(userId) });
@@ -393,7 +488,7 @@ class StateOfTheLoomBackend {
       }
 
       if (message.type === 'generate_tracker') {
-        await this.generateTrackerForUser(userId, message.chatId, message.messageId);
+        await this.generateTrackerForUser(userId, message.chatId, message.messageId, message.swipeId);
         return;
       }
 
@@ -416,13 +511,13 @@ class StateOfTheLoomBackend {
       }
 
       if (message.type === 'delete_tracker') {
-        await this.trackerService.delete(userId, message.chatId, message.messageId);
+        await this.trackerService.delete(userId, message.chatId, message.messageId, message.swipeId);
         await this.send(userId, { type: 'tracker_deleted', state: await this.buildState(userId) });
         return;
       }
 
       if (message.type === 'hide_tracker') {
-        const tracker = await this.trackerService.setHidden(userId, message.chatId, message.messageId, message.hidden);
+        const tracker = await this.trackerService.setHidden(userId, message.chatId, message.messageId, message.swipeId, message.hidden);
         const state = await this.buildState(userId);
         if (tracker) await this.send(userId, { type: 'tracker_updated', tracker, state });
         else await this.send(userId, { type: 'tracker_error', message: 'Tracker was not found.', state });
@@ -471,11 +566,12 @@ class StateOfTheLoomBackend {
     userId: string,
     chatId?: string | null,
     messageId?: string,
+    swipeId?: number | undefined,
     targetOverride?: GenerationTarget | null,
   ): Promise<void> {
     try {
       const state = await this.buildState(userId);
-      const target = targetOverride ?? await this.generationService.findLatestAssistantTarget(userId, chatId, messageId);
+      const target = targetOverride ?? await this.generationService.findLatestAssistantTarget(userId, chatId, messageId, swipeId);
       if (state.generation.disabledReason && state.generation.disabledReason !== 'No assistant message is available to track.') {
         await this.send(userId, { type: 'tracker_error', message: state.generation.disabledReason, state });
         return;
@@ -508,7 +604,10 @@ class StateOfTheLoomBackend {
         });
         return;
       }
-      const recentTrackers = await this.trackerService.listForChat(userId, target.chatId);
+      const recentTrackers = activeSwipeTrackers(
+        await this.trackerService.listForChat(userId, target.chatId),
+        state.activeSwipeByMessageId,
+      );
       const contextLimit = settings.trackerHistoryLimit > 0 ? settings.trackerHistoryLimit : 5;
       const previousSummaries = recentTrackers
         .slice(1, contextLimit)
@@ -534,7 +633,14 @@ class StateOfTheLoomBackend {
           }
         });
 
-      await this.trackerService.save(userId, result.tracker, settings.trackerHistoryLimit);
+      await this.trackerService.save(userId, result.tracker, 0);
+      const cleanup = await this.cleanupSwipeAlternatives(
+        userId,
+        target.chatId,
+        settings.trackerHistoryLimit,
+        target.message.id,
+      );
+      const retainedTrackers = await this.trackerService.listForChat(userId, target.chatId).catch(() => recentTrackers);
       await this.generationService.stripPassiveBlockIfAllowed({
         permissions: state.permissions,
         settings,
@@ -568,9 +674,10 @@ class StateOfTheLoomBackend {
         fallbackUsed: false, // Will be updated dynamically on frontend
         trackerPresetId: result.tracker.presetId,
         messageId: target.message.id || 'latest',
+        swipeId: result.tracker.swipeId,
         chatId: target.chatId,
         hudView: settings.hudDefaultView,
-        retainedCount: recentTrackers.length,
+        retainedCount: retainedTrackers.length,
       };
 
       const valError = result.tracker.validation.issues.filter(i => i.severity === 'error').map(i => i.message).join(', ');
@@ -583,6 +690,17 @@ class StateOfTheLoomBackend {
         lastParserError: undefined,
         lastGenerationError: undefined,
         pipelineReport: report,
+        swipeReport: {
+          activeMessageId: cleanup.activeMessageId,
+          activeSwipeId: cleanup.activeSwipeId,
+          activeSwipeByMessageId: cleanup.activeSwipeByMessageId,
+          storedSwipeTrackerCount: countSwipeAlternatives(retainedTrackers).stored,
+          alternativeSwipeTrackerCount: countSwipeAlternatives(retainedTrackers).alternatives,
+          cleanupLastRunAt: cleanup.cleanupLastRunAt,
+          cleanupRemovedCount: cleanup.cleanupRemovedCount,
+          cleanupKeptCount: cleanup.cleanupKeptCount,
+          cleanupWarning: cleanup.cleanupWarning,
+        },
       };
 
       await this.send(userId, { type: 'tracker_generated', tracker: result.tracker, state: await this.buildState(userId) });
@@ -624,6 +742,7 @@ class StateOfTheLoomBackend {
           fallbackUsed: true,
           trackerPresetId: preset.id,
           messageId: messageId || 'latest',
+          swipeId,
           chatId: chatId || 'unknown',
           hudView: state.settings.hudDefaultView,
           retainedCount: recentTrackers.length,
@@ -642,8 +761,39 @@ class StateOfTheLoomBackend {
     }
   }
 
+  private async cleanupSwipeAlternatives(
+    userId: string,
+    chatId: string,
+    historyLimit: number,
+    protectedMessageId?: string | undefined,
+  ): Promise<LoomSwipeReport> {
+    const active = await getActiveChat(this.spindle, userId).catch(() => null);
+    const activeMessages = active?.chat.id === chatId ? active.messages : [];
+    const activeSwipeMap = activeSwipeByMessageId(activeMessages);
+    const activeAssistant = latestAssistantMessage(activeMessages);
+    const protect = activeAssistant?.id ?? protectedMessageId;
+    const cleanup = await this.trackerService.pruneInactiveSwipeAlternatives(userId, chatId, activeSwipeMap, protect);
+    if (historyLimit > 0) {
+      await this.trackerService.pruneChatHistory(userId, chatId, historyLimit, protect);
+    }
+    const trackers = await this.trackerService.listForChat(userId, chatId).catch(() => []);
+    const counts = countSwipeAlternatives(trackers);
+    return {
+      activeMessageId: activeAssistant?.id,
+      activeSwipeId: activeAssistant?.swipe_id,
+      activeSwipeByMessageId: activeSwipeMap,
+      storedSwipeTrackerCount: counts.stored,
+      alternativeSwipeTrackerCount: counts.alternatives,
+      cleanupLastRunAt: new Date().toISOString(),
+      cleanupRemovedCount: cleanup.removedCount,
+      cleanupKeptCount: cleanup.keptCount,
+      cleanupWarning: cleanup.warning,
+    };
+  }
+
   private async saveManualTracker(userId: string, tracker: LoomTrackerState): Promise<void> {
     const preset: LoomPreset = await this.presetService.resolve(userId, tracker.presetId);
+    const settings = await this.settingsService.load(userId);
     const validation = validateAgainstSchema(tracker.data, preset.schemaJson);
     const updated: LoomTrackerState = {
       ...tracker,
@@ -652,7 +802,8 @@ class StateOfTheLoomBackend {
       validation,
       compactSummary: makeCompactSummary(tracker.data),
     };
-    await this.trackerService.save(userId, updated);
+    await this.trackerService.save(userId, updated, 0);
+    await this.cleanupSwipeAlternatives(userId, updated.chatId, settings.trackerHistoryLimit, updated.messageId);
     await this.send(userId, { type: 'tracker_updated', tracker: updated, state: await this.buildState(userId) });
   }
 
@@ -665,6 +816,7 @@ class StateOfTheLoomBackend {
       const chatId = this.payloadString(payload.chatId ?? payload.chat_id);
       const messageId = this.payloadString(payload.messageId ?? payload.message_id ?? payload.targetMessageId ?? payload.target_message_id) ?? undefined;
       const content = this.payloadString(payload.content) ?? undefined;
+      const swipeId = this.payloadNumber(payload.swipeId ?? payload.swipe_id ?? payload.swipeIndex ?? payload.swipe_index);
       const userId = this.resolveUserForEvent(payload, chatId);
       if (!userId) {
         if (!this.reportedUnknownGenerationUser) {
@@ -683,9 +835,9 @@ class StateOfTheLoomBackend {
       if (!state.permissions.chats) return;
       try {
         const target = chatId
-          ? await this.generationService.findPayloadTarget({ userId, chatId, messageId, content })
+          ? await this.generationService.findPayloadTarget({ userId, chatId, messageId, content, swipeId })
           : null;
-        await this.generateTrackerForUser(userId, chatId ?? state.activeChat.id, messageId, target);
+        await this.generateTrackerForUser(userId, chatId ?? state.activeChat.id, messageId, swipeId, target);
       } catch (error) {
         this.diagnostics = {
           ...this.diagnostics,
@@ -699,6 +851,15 @@ class StateOfTheLoomBackend {
 
   private payloadString(value: unknown): string | null {
     return typeof value === 'string' && value.trim() ? value : null;
+  }
+
+  private payloadNumber(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return undefined;
   }
 
   private resolveUserForEvent(payload: Record<string, unknown>, chatId: string | null): string | null {

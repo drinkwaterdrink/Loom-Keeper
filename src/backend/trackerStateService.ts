@@ -10,13 +10,29 @@ interface StoredChatTrackers {
 
 type ChatTrackerIndex = Record<string, StoredChatTrackers>;
 
+export interface LoomSwipeCleanupResult {
+  removedCount: number;
+  keptCount: number;
+  warning?: string | undefined;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function makeMessageKey(messageId?: string, swipeId?: number): string {
+export function makeMessageKey(messageId?: string, swipeId?: number): string {
   const base = messageId || 'latest';
   return typeof swipeId === 'number' ? `${base}::swipe:${swipeId}` : base;
+}
+
+function sameMessage(tracker: LoomTrackerState, messageId?: string): boolean {
+  return (tracker.messageId || 'latest') === (messageId || 'latest');
+}
+
+function newestTracker(trackers: LoomTrackerState[]): LoomTrackerState | undefined {
+  return trackers
+    .filter((tracker) => tracker.version === LOOM_VERSION)
+    .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))[0];
 }
 
 function normalizeIndex(value: unknown): ChatTrackerIndex {
@@ -55,6 +71,28 @@ export class LoomTrackerStateService {
     return index[chatId]?.latest ?? null;
   }
 
+  async getLatestForActive(
+    userId: string,
+    chatId: string | null,
+    messageId?: string | undefined,
+    swipeId?: number | undefined,
+  ): Promise<LoomTrackerState | null> {
+    if (!chatId) return null;
+    const index = await this.loadIndex(userId);
+    const chat = index[chatId];
+    if (!chat) return null;
+    if (messageId) {
+      if (typeof swipeId === 'number') {
+        const exact = chat.messages[makeMessageKey(messageId, swipeId)];
+        if (exact?.version === LOOM_VERSION) return exact;
+      }
+      const matching = newestTracker(Object.values(chat.messages).filter((tracker) => sameMessage(tracker, messageId)));
+      if (matching) return matching;
+    }
+    if (chat.latest?.version === LOOM_VERSION) return chat.latest;
+    return newestTracker(Object.values(chat.messages)) ?? null;
+  }
+
   async listForChat(userId: string, chatId: string | null): Promise<LoomTrackerState[]> {
     if (!chatId) return [];
     const index = await this.loadIndex(userId);
@@ -78,7 +116,12 @@ export class LoomTrackerStateService {
     }
   }
 
-  async pruneChatHistory(userId: string, chatId: string | null, limit: number): Promise<void> {
+  async pruneChatHistory(
+    userId: string,
+    chatId: string | null,
+    limit: number,
+    protectedMessageId?: string | undefined,
+  ): Promise<void> {
     if (!chatId || limit <= 0) return;
     const index = await this.loadIndex(userId);
     const existing = index[chatId];
@@ -96,6 +139,11 @@ export class LoomTrackerStateService {
       if (existing.latest) {
         keptKeys.add(makeMessageKey(existing.latest.messageId, existing.latest.swipeId));
       }
+      if (protectedMessageId) {
+        for (const [key, tracker] of Object.entries(existing.messages)) {
+          if (sameMessage(tracker, protectedMessageId)) keptKeys.add(key);
+        }
+      }
 
       const newMessages: Record<string, LoomTrackerState> = {};
       for (const [k, t] of Object.entries(existing.messages)) {
@@ -109,14 +157,92 @@ export class LoomTrackerStateService {
     }
   }
 
-  async delete(userId: string, chatId: string, messageId?: string): Promise<void> {
+  async pruneInactiveSwipeAlternatives(
+    userId: string,
+    chatId: string | null,
+    activeSwipeByMessageId: Record<string, number>,
+    protectedMessageId?: string | undefined,
+  ): Promise<LoomSwipeCleanupResult> {
+    if (!chatId) return { removedCount: 0, keptCount: 0 };
+    const index = await this.loadIndex(userId);
+    const chat = index[chatId];
+    if (!chat) return { removedCount: 0, keptCount: 0 };
+
+    const groups = new Map<string, Array<{ key: string; tracker: LoomTrackerState }>>();
+    for (const [key, tracker] of Object.entries(chat.messages)) {
+      if (!tracker.messageId || tracker.version !== LOOM_VERSION) continue;
+      const group = groups.get(tracker.messageId) ?? [];
+      group.push({ key, tracker });
+      groups.set(tracker.messageId, group);
+    }
+
+    const keptKeys = new Set<string>();
+    let removedCount = 0;
+    let warning: string | undefined;
+
+    for (const [messageId, items] of groups) {
+      if (items.length <= 1) {
+        keptKeys.add(items[0].key);
+        continue;
+      }
+      if (messageId === protectedMessageId) {
+        for (const item of items) keptKeys.add(item.key);
+        continue;
+      }
+
+      const activeSwipe = activeSwipeByMessageId[messageId];
+      const exact = typeof activeSwipe === 'number'
+        ? items.find((item) => item.tracker.swipeId === activeSwipe)
+        : undefined;
+      const keeper = exact ?? items.sort((a, b) => b.tracker.generatedAt.localeCompare(a.tracker.generatedAt))[0];
+      if (!exact) {
+        warning = warning || `Active swipe could not be determined for message ${messageId}; kept newest tracker.`;
+      }
+      keptKeys.add(keeper.key);
+      removedCount += items.filter((item) => item.key !== keeper.key).length;
+    }
+
+    if (removedCount === 0) {
+      return { removedCount: 0, keptCount: Object.keys(chat.messages).length, warning };
+    }
+
+    const nextMessages: Record<string, LoomTrackerState> = {};
+    for (const [key, tracker] of Object.entries(chat.messages)) {
+      const grouped = tracker.messageId ? groups.get(tracker.messageId) : undefined;
+      if (!grouped || grouped.length <= 1 || keptKeys.has(key)) {
+        nextMessages[key] = tracker;
+      }
+    }
+    chat.messages = nextMessages;
+    if (chat.latest) {
+      const latestKey = makeMessageKey(chat.latest.messageId, chat.latest.swipeId);
+      if (!chat.messages[latestKey]) {
+        const nextLatest = newestTracker(Object.values(chat.messages));
+        if (nextLatest) chat.latest = nextLatest;
+        else delete chat.latest;
+      }
+    }
+    index[chatId] = chat;
+    await setJsonWithRecovery(this.spindle, STORAGE_KEYS.trackerStates, userId, index);
+    return { removedCount, keptCount: Object.keys(chat.messages).length, warning };
+  }
+
+  async delete(userId: string, chatId: string, messageId?: string, swipeId?: number): Promise<void> {
     const index = await this.loadIndex(userId);
     const chat = index[chatId];
     if (!chat) return;
     if (messageId) {
-      delete chat.messages[makeMessageKey(messageId)];
-      if (chat.latest?.messageId === messageId) {
-        chat.latest = Object.values(chat.messages).sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))[0];
+      if (typeof swipeId === 'number') {
+        delete chat.messages[makeMessageKey(messageId, swipeId)];
+      } else {
+        for (const [key, tracker] of Object.entries(chat.messages)) {
+          if (sameMessage(tracker, messageId)) delete chat.messages[key];
+        }
+      }
+      if (chat.latest?.messageId === messageId && (typeof swipeId !== 'number' || chat.latest.swipeId === swipeId)) {
+        const nextLatest = newestTracker(Object.values(chat.messages));
+        if (nextLatest) chat.latest = nextLatest;
+        else delete chat.latest;
       }
     } else {
       delete index[chatId];
@@ -124,16 +250,27 @@ export class LoomTrackerStateService {
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.trackerStates, userId, index);
   }
 
-  async setHidden(userId: string, chatId: string, messageId: string | undefined, hidden: boolean): Promise<LoomTrackerState | null> {
+  async setHidden(
+    userId: string,
+    chatId: string,
+    messageId: string | undefined,
+    swipeId: number | undefined,
+    hidden: boolean,
+  ): Promise<LoomTrackerState | null> {
     const index = await this.loadIndex(userId);
     const chat = index[chatId];
     if (!chat) return null;
-    const key = makeMessageKey(messageId);
-    const tracker = messageId ? chat.messages[key] : chat.latest;
+    const key = makeMessageKey(messageId, swipeId);
+    const tracker = messageId
+      ? (typeof swipeId === 'number'
+        ? chat.messages[key]
+        : newestTracker(Object.values(chat.messages).filter((candidate) => sameMessage(candidate, messageId))))
+      : chat.latest;
     if (!tracker) return null;
     const updated: LoomTrackerState = { ...tracker, hidden, placement: hidden ? 'hidden' : tracker.placement };
-    if (messageId) chat.messages[key] = updated;
-    if (!messageId || chat.latest?.messageId === messageId) chat.latest = updated;
+    const updatedKey = makeMessageKey(updated.messageId, updated.swipeId);
+    if (messageId) chat.messages[updatedKey] = updated;
+    if (!messageId || (chat.latest?.messageId === updated.messageId && chat.latest?.swipeId === updated.swipeId)) chat.latest = updated;
     await setJsonWithRecovery(this.spindle, STORAGE_KEYS.trackerStates, userId, index);
     return updated;
   }

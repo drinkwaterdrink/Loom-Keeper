@@ -1,5 +1,5 @@
 import { renderTrackerHtml } from '../shared/renderer.js';
-import type { LoomCustomTemplateMode, LoomFrontendState } from '../shared/types.js';
+import type { LoomCustomTemplateMode, LoomFrontendState, LoomTrackerState } from '../shared/types.js';
 import { renderTrackerForState } from './rendering.js';
 import { renderPresetEditor } from './presetEditor.js';
 import { renderFeatureBreakdown } from './settingsPanel.js';
@@ -123,6 +123,22 @@ function renderInjectionLimitOptions(state: LoomFrontendState): string {
   )).join('');
 }
 
+function formatSwipeLabel(swipeId?: number | undefined): string {
+  return typeof swipeId === 'number' ? `Swipe ${swipeId + 1}` : 'Main swipe';
+}
+
+function renderSwipeChip(swipeId?: number | undefined, active = false): string {
+  if (typeof swipeId !== 'number') return '';
+  return `<span class="sotl-swipe-chip${active ? ' sotl-swipe-chip--active' : ''}" title="${active ? 'Currently selected assistant swipe' : 'Stored assistant swipe'}">${escapeHtml(formatSwipeLabel(swipeId))}${active ? ' active' : ''}</span>`;
+}
+
+function trackerActionButton(label: string, action: string, tracker: LoomTrackerState, options: { primary?: boolean } = {}): string {
+  const id = tracker.messageId || 'latest';
+  const primary = options.primary ? ' data-primary="true"' : '';
+  const swipe = typeof tracker.swipeId === 'number' ? ` data-sotl-swipe-id="${tracker.swipeId}"` : '';
+  return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml(action)}" data-sotl-message-id="${escapeHtml(id)}"${swipe}${primary}>${escapeHtml(label)}</button>`;
+}
+
 function renderLatestTracker(state: LoomFrontendState): string {
   if (!state.latestTracker) {
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
@@ -132,11 +148,17 @@ function renderLatestTracker(state: LoomFrontendState): string {
   const renderWarning = render.warning
     ? `<p class="sotl-note sotl-warning" style="margin-top: 8px;">${escapeHtml(render.warning)}</p>`
     : '';
+  const isActiveSwipe = Boolean(
+    state.latestTracker.messageId
+    && typeof state.latestTracker.swipeId === 'number'
+    && state.activeSwipeByMessageId[state.latestTracker.messageId] === state.latestTracker.swipeId,
+  );
   const attachmentStatus = state.settings.renderInMessages && state.latestTracker.messageId
-    ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">🔗 Attached to message card (${escapeHtml(state.latestTracker.messageId)})</p>`
+    ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">Attached to message card (${escapeHtml(state.latestTracker.messageId)})</p>`
     : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
 
   return [
+    typeof state.latestTracker.swipeId === 'number' ? `<div class="sotl-chip-row">${renderSwipeChip(state.latestTracker.swipeId, isActiveSwipe)}</div>` : '',
     `<p class="sotl-note">${escapeHtml(state.latestTracker.compactSummary)}</p>`,
     `<div class="sotl-preview">${html}</div>`,
     renderWarning,
@@ -155,17 +177,59 @@ function renderLatestTracker(state: LoomFrontendState): string {
 
 function renderMessageList(state: LoomFrontendState): string {
   if (state.messageTrackers.length === 0) return '<p class="sotl-note">No per-message trackers yet.</p>';
-  return state.messageTrackers.map((tracker) => {
+  const groups = new Map<string, LoomTrackerState[]>();
+  for (const tracker of state.messageTrackers) {
     const id = tracker.messageId || 'latest';
+    const list = groups.get(id) ?? [];
+    list.push(tracker);
+    groups.set(id, list);
+  }
+
+  const renderTrackerRow = (tracker: LoomTrackerState, activeSwipe?: number | undefined, compact = false): string => {
+    const id = tracker.messageId || 'latest';
+    const active = typeof activeSwipe === 'number' && tracker.swipeId === activeSwipe;
     return [
-      '<div class="sotl-panel">',
-      `<h3>${escapeHtml(tracker.compactSummary || id)}</h3>`,
-      `<p class="sotl-note">${escapeHtml(tracker.source)} - ${escapeHtml(tracker.generatedAt)}</p>`,
-      '<div class="sotl-actions">',
-      button('Regenerate', `regenerate:${id}`),
-      button(tracker.hidden ? 'Show' : 'Hide', `hide:${id}`),
-      button('Delete', `delete:${id}`),
+      `<div class="${compact ? 'sotl-swipe-row' : 'sotl-message-row'}">`,
+      '  <div class="sotl-message-row__main">',
+      `    <h3>${escapeHtml(tracker.compactSummary || id)}</h3>`,
+      `    <p class="sotl-note">${renderSwipeChip(tracker.swipeId, active)} ${escapeHtml(tracker.source)} - ${escapeHtml(tracker.generatedAt)}</p>`,
+      '  </div>',
+      '  <div class="sotl-actions">',
+      trackerActionButton('Regenerate', `regenerate:${id}`, tracker, { primary: !compact }),
+      trackerActionButton(tracker.hidden ? 'Show' : 'Hide', `hide:${id}`, tracker),
+      trackerActionButton('Delete', `delete:${id}`, tracker),
+      '  </div>',
       '</div>',
+    ].join('');
+  };
+
+  return Array.from(groups.entries()).map(([id, trackers]) => {
+    const activeSwipe = state.activeSwipeByMessageId[id];
+    const sorted = trackers
+      .slice()
+      .sort((a, b) => {
+        if (typeof activeSwipe === 'number') {
+          if (a.swipeId === activeSwipe) return -1;
+          if (b.swipeId === activeSwipe) return 1;
+        }
+        return b.generatedAt.localeCompare(a.generatedAt);
+      });
+    const primary = sorted[0];
+    const alternatives = sorted.slice(1);
+    if (!primary) return '';
+    return [
+      '<div class="sotl-panel sotl-message-group">',
+      renderTrackerRow(primary, activeSwipe),
+      alternatives.length > 0
+        ? [
+          `<details class="sotl-details sotl-swipe-alternatives" data-sotl-section="swipe-alternatives-${escapeHtml(id)}">`,
+          `<summary><span class="sotl-summary-title">Swipe Alternatives</span><span class="sotl-summary-meta">${alternatives.length} stored</span></summary>`,
+          '<div class="sotl-fields">',
+          alternatives.map((tracker) => renderTrackerRow(tracker, activeSwipe, true)).join(''),
+          '</div>',
+          '</details>',
+        ].join('')
+        : '',
       '</div>',
     ].join('');
   }).join('');
@@ -222,12 +286,29 @@ function renderPipelineReport(state: LoomFrontendState): string {
       ${report.templateCompatibility ? `<div><strong>Template Missing Latest Fields:</strong> <code>${escapeHtml(report.templateCompatibility.missingFromLatest.join(', ') || 'none')}</code></div>` : ''}
       ${report.trackerPresetId ? `<div><strong>Tracker Preset ID:</strong> <code>${escapeHtml(report.trackerPresetId)}</code></div>` : ''}
       <div><strong>Latest Tracker Message ID:</strong> <code>${escapeHtml(report.messageId)}</code></div>
+      ${typeof report.swipeId === 'number' ? `<div><strong>Latest Tracker Swipe:</strong> <code>${escapeHtml(formatSwipeLabel(report.swipeId))}</code></div>` : ''}
       <div><strong>Chat ID:</strong> <code>${escapeHtml(report.chatId)}</code></div>
       <div><strong>HUD View Mode:</strong> <code>${escapeHtml(report.hudView)}</code></div>
       <div><strong>Retained Tracker Count:</strong> <code>${report.retainedCount}</code></div>
       ${report.lastError ? `<div><strong>Last Error:</strong> <code>${escapeHtml(report.lastError)}</code></div>` : ''}
     </div>
   `;
+}
+
+function renderSwipeReport(state: LoomFrontendState): string {
+  const report = state.diagnostics.swipeReport;
+  if (!report) return '<p class="sotl-note">No swipe report is available yet.</p>';
+  return [
+    '<div class="sotl-diagnostic-grid sotl-swipe-report">',
+    `  <div><strong>Active Message ID:</strong> <code>${escapeHtml(report.activeMessageId || 'unknown')}</code></div>`,
+    `  <div><strong>Active Swipe ID:</strong> <code>${typeof report.activeSwipeId === 'number' ? escapeHtml(formatSwipeLabel(report.activeSwipeId)) : 'unknown'}</code></div>`,
+    `  <div><strong>Stored Swipe Trackers:</strong> <code>${report.storedSwipeTrackerCount}</code></div>`,
+    `  <div><strong>Swipe Alternatives:</strong> <code>${report.alternativeSwipeTrackerCount}</code></div>`,
+    `  <div><strong>Last Cleanup:</strong> <code>${escapeHtml(report.cleanupLastRunAt || 'not run yet')}</code></div>`,
+    `  <div><strong>Cleanup Result:</strong> <code>${report.cleanupRemovedCount ?? 0} removed / ${report.cleanupKeptCount ?? 0} kept</code></div>`,
+    report.cleanupWarning ? `  <div><strong>Cleanup Warning:</strong> <code>${escapeHtml(report.cleanupWarning)}</code></div>` : '',
+    '</div>',
+  ].filter(Boolean).join('');
 }
 
 function renderInjectionReport(state: LoomFrontendState): string {
@@ -337,6 +418,9 @@ function renderControlsPanel(
   const report = state.diagnostics.injectionReport;
   const tokenMeta = report ? `~${report.estimatedTokens}/${report.tokenBudget} tokens` : 'no estimate';
   const latestAge = formatTrackerAge(state.latestTracker?.generatedAt);
+  const swipeMeta = state.diagnostics.swipeReport?.activeSwipeId !== undefined
+    ? formatSwipeLabel(state.diagnostics.swipeReport.activeSwipeId)
+    : 'active swipe unknown';
   return [
     '<section class="sotl-panel sotl-control-panel">',
     '<div class="sotl-panel-head">',
@@ -350,7 +434,7 @@ function renderControlsPanel(
     `  <article><span>Preset</span><strong>${escapeHtml(state.activePreset.name)}</strong><em>${escapeHtml(state.activePreset.origin || 'built-in')}</em></article>`,
     `  <article><span>Generation</span><strong>${state.generation.running ? 'Running' : disabledReason ? 'Blocked' : 'Ready'}</strong><em>${escapeHtml(disabledReason || state.generation.message || 'manual or auto')}</em></article>`,
     `  <article><span>Injection</span><strong>${state.settings.promptInjectionEnabled ? 'Enabled' : 'Disabled'}</strong><em>${escapeHtml(tokenMeta)}</em></article>`,
-    `  <article><span>Latest Tracker</span><strong>${escapeHtml(latestAge)}</strong><em>${state.messageTrackers.length} retained cards</em></article>`,
+    `  <article><span>Latest Tracker</span><strong>${escapeHtml(latestAge)}</strong><em>${state.messageTrackers.length} retained cards - ${escapeHtml(swipeMeta)}</em></article>`,
     '</div>',
     '<div class="sotl-status">',
     badge('Backend ready', state.backendReady),
@@ -498,6 +582,7 @@ function renderControlsPanel(
         status.lastRenderStatus ? `<p class="sotl-note">${escapeHtml(status.lastRenderStatus)}</p>` : '',
         state.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml(state.diagnostics.lastRenderStatus)}</p>` : '',
         renderSettingsSection('pipeline-report', 'Tracker Pipeline Report', state.diagnostics.pipelineReport ? 'available' : 'empty', renderPipelineReport(state)),
+        renderSettingsSection('swipe-report', 'Swipe Tracker Report', state.diagnostics.swipeReport ? `${state.diagnostics.swipeReport.storedSwipeTrackerCount} stored` : 'empty', renderSwipeReport(state)),
         renderSettingsSection('injection-report', 'Context Injection Report', report ? tokenMeta : 'empty', renderInjectionReport(state)),
         (() => {
           const doc = typeof document !== 'undefined' ? document : null;

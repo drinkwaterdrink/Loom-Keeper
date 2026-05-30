@@ -113,7 +113,9 @@ function asMessageArray(value: unknown): LoomChatMessage[] {
         : [];
   return source.map((item, index) => {
     const record = asRecord(item) ?? {};
-    const swipes = Array.isArray(record.swipes) ? record.swipes : [];
+    const swipes = Array.isArray(record.swipes)
+      ? record.swipes.filter((swipe): swipe is string => typeof swipe === 'string')
+      : [];
     const swipeId = typeof record.swipe_id === 'number'
       ? record.swipe_id
       : typeof record.swipeId === 'number'
@@ -124,7 +126,7 @@ function asMessageArray(value: unknown): LoomChatMessage[] {
     const role = record.role ?? record.sender ?? record.type;
     const id = record.id ?? record.messageId ?? record.message_id ?? String(index);
     const metadata = asRecord(record.metadata) ?? undefined;
-    const swipe = record.swipeId ?? record.swipe_id;
+    const swipe = record.swipeId ?? record.swipe_id ?? (swipes.length > 0 ? swipeId : undefined);
     const normalized: LoomChatMessage = {
       id: typeof id === 'string' || typeof id === 'number' ? String(id) : String(index),
       role: typeof role === 'string' ? role : undefined,
@@ -132,6 +134,7 @@ function asMessageArray(value: unknown): LoomChatMessage[] {
     };
     if (metadata) normalized.metadata = metadata;
     if (typeof swipe === 'number') normalized.swipe_id = swipe;
+    if (swipes.length > 0) normalized.swipes = swipes;
     return normalized;
   });
 }

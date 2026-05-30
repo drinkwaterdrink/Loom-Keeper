@@ -111,6 +111,13 @@ function requestBackendState(message: LoomFrontendMessage = { type: 'refresh_sta
   startBackendTimer();
 }
 
+function datasetSwipeId(element: HTMLElement): number | undefined {
+  const value = element.dataset.sotlSwipeId;
+  if (value === undefined || value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function installStyle(ctx: FrontendContext): void {
   const dom = ctx.dom && typeof ctx.dom === 'object' ? ctx.dom as Record<string, unknown> : {};
   const addStyle = dom.addStyle ?? getUi(ctx).addStyle ?? ctx.addStyle;
@@ -375,13 +382,14 @@ function handleDrawerEvent(event: Event): void {
       postToBackend(contextRef, { type: 'reset_storage' });
       startBackendTimer();
     }
-    if (action.startsWith('regenerate:')) postToBackend(contextRef, { type: 'generate_tracker', messageId: action.slice('regenerate:'.length) });
-    if (action.startsWith('hide:') && state?.activeChat.id) postToBackend(contextRef, { type: 'hide_tracker', chatId: state.activeChat.id, messageId: action.slice('hide:'.length), hidden: true });
-    if (action.startsWith('delete:') && state?.activeChat.id) postToBackend(contextRef, { type: 'delete_tracker', chatId: state.activeChat.id, messageId: action.slice('delete:'.length) });
-    if (action === 'card-regenerate') postToBackend(contextRef, { type: 'generate_tracker', messageId: actionButton.dataset.sotlMessageId });
+    const actionSwipeId = datasetSwipeId(actionButton);
+    if (action.startsWith('regenerate:')) postToBackend(contextRef, { type: 'generate_tracker', messageId: action.slice('regenerate:'.length), swipeId: actionSwipeId });
+    if (action.startsWith('hide:') && state?.activeChat.id) postToBackend(contextRef, { type: 'hide_tracker', chatId: state.activeChat.id, messageId: action.slice('hide:'.length), swipeId: actionSwipeId, hidden: true });
+    if (action.startsWith('delete:') && state?.activeChat.id) postToBackend(contextRef, { type: 'delete_tracker', chatId: state.activeChat.id, messageId: action.slice('delete:'.length), swipeId: actionSwipeId });
+    if (action === 'card-regenerate') postToBackend(contextRef, { type: 'generate_tracker', messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId });
     if (action === 'card-edit') activateDrawer();
-    if (action === 'card-hide' && state?.activeChat.id) postToBackend(contextRef, { type: 'hide_tracker', chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, hidden: true });
-    if (action === 'card-delete' && state?.activeChat.id) postToBackend(contextRef, { type: 'delete_tracker', chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId });
+    if (action === 'card-hide' && state?.activeChat.id) postToBackend(contextRef, { type: 'hide_tracker', chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId, hidden: true });
+    if (action === 'card-delete' && state?.activeChat.id) postToBackend(contextRef, { type: 'delete_tracker', chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId });
     if (action === 'save-json' && state?.latestTracker) {
       const doc = documentRef();
       const textarea = doc?.querySelector<HTMLTextAreaElement>('[data-sotl-field="latestJson"]');

@@ -181,6 +181,7 @@ export interface LoomPipelineReport {
   fallbackUsed: boolean;
   trackerPresetId?: string | undefined;
   messageId: string;
+  swipeId?: number | undefined;
   chatId: string;
   hudView: string;
   retainedCount: number;
@@ -205,6 +206,18 @@ export interface LoomInjectionReport {
   preview?: string | undefined;
 }
 
+export interface LoomSwipeReport {
+  activeMessageId?: string | undefined;
+  activeSwipeId?: number | undefined;
+  activeSwipeByMessageId: Record<string, number>;
+  storedSwipeTrackerCount: number;
+  alternativeSwipeTrackerCount: number;
+  cleanupLastRunAt?: string | undefined;
+  cleanupRemovedCount?: number | undefined;
+  cleanupKeptCount?: number | undefined;
+  cleanupWarning?: string | undefined;
+}
+
 export interface LoomDiagnostics {
   backendReady: boolean;
   lastError?: string | undefined;
@@ -216,6 +229,7 @@ export interface LoomDiagnostics {
   renderLimitation?: string | undefined;
   pipelineReport?: LoomPipelineReport | undefined;
   injectionReport?: LoomInjectionReport | undefined;
+  swipeReport?: LoomSwipeReport | undefined;
 }
 
 export interface LoomFrontendState {
@@ -228,6 +242,7 @@ export interface LoomFrontendState {
   connections: LoomConnectionProfile[];
   latestTracker: LoomTrackerState | null;
   messageTrackers: LoomTrackerState[];
+  activeSwipeByMessageId: Record<string, number>;
   generation: LoomGenerationStatus;
   diagnostics: LoomDiagnostics;
 }
@@ -237,10 +252,10 @@ export type LoomFrontendMessage =
   | { type: 'refresh_state'; chatId?: string | null | undefined }
   | { type: 'save_settings'; settings: Partial<LoomSettings> }
   | { type: 'select_preset'; presetId: string }
-  | { type: 'generate_tracker'; chatId?: string | null | undefined; messageId?: string | undefined }
+  | { type: 'generate_tracker'; chatId?: string | null | undefined; messageId?: string | undefined; swipeId?: number | undefined }
   | { type: 'edit_tracker'; tracker: LoomTrackerState }
-  | { type: 'delete_tracker'; chatId: string; messageId?: string | undefined }
-  | { type: 'hide_tracker'; chatId: string; messageId?: string | undefined; hidden: boolean }
+  | { type: 'delete_tracker'; chatId: string; messageId?: string | undefined; swipeId?: number | undefined }
+  | { type: 'hide_tracker'; chatId: string; messageId?: string | undefined; swipeId?: number | undefined; hidden: boolean }
   | { type: 'reset_storage' }
   | { type: 'export_diagnostics' }
   | { type: 'save_preset'; preset: LoomPreset; makeActive?: boolean | undefined }
@@ -276,4 +291,5 @@ export interface LoomChatMessage {
   content?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
   swipe_id?: number | undefined;
+  swipes?: string[] | undefined;
 }

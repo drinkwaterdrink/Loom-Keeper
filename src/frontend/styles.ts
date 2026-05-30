@@ -8,16 +8,28 @@ export const loomStyles = `
   display: grid;
   gap: 14px;
   padding: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+.sotl-root *, .sotl-chat-panel-container *, .sotl-message-card * {
+  box-sizing: border-box;
 }
 .sotl-panel {
   border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.28)));
   border-radius: var(--lumiverse-radius, 8px);
   background: var(--lumiverse-fill-subtle, var(--lv-surface, rgba(255, 255, 255, 0.78)));
   padding: 12px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 .sotl-control-panel {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 .sotl-panel-head {
   display: flex;
@@ -126,6 +138,10 @@ export const loomStyles = `
   border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.28)));
   background: var(--lumiverse-fill, var(--lv-surface-raised, rgba(248, 250, 252, 0.9)));
   font-size: 12px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sotl-chip[data-ok="true"] {
   color: var(--lv-success-text, #176b43);
@@ -139,15 +155,20 @@ export const loomStyles = `
   display: grid;
   gap: 10px;
   margin-top: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 .sotl-label {
   display: grid;
   gap: 5px;
   font-size: 12px;
   color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+  min-width: 0;
 }
 .sotl-select, .sotl-input, .sotl-textarea {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.28)));
   border-radius: var(--lumiverse-radius, 6px);
@@ -155,6 +176,11 @@ export const loomStyles = `
   color: inherit;
   padding: 8px;
   font: inherit;
+}
+.sotl-select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sotl-textarea {
   min-height: 180px;
@@ -204,7 +230,20 @@ export const loomStyles = `
 }
 .sotl-preview {
   overflow: auto;
+  overflow-x: auto;
   max-height: 420px;
+  max-width: 100%;
+  min-width: 0;
+  contain: inline-size;
+}
+.sotl-preview > * {
+  max-width: 100%;
+}
+.sotl-preview .wtrk_ol_safe,
+.sotl-preview .sotl-atlas,
+.sotl-preview [data-sotl-card="true"] {
+  max-width: 100% !important;
+  min-width: 0 !important;
 }
 .sotl-card {
   --sotl-card-bg: var(--lumiverse-fill, var(--lv-surface-raised, #ffffff));
@@ -216,6 +255,9 @@ export const loomStyles = `
   background: var(--sotl-card-bg);
   padding: 12px;
   box-shadow: 0 1px 2px rgba(20, 24, 32, 0.06);
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .sotl-card__head {
   display: flex;
@@ -285,6 +327,62 @@ export const loomStyles = `
 }
 .sotl-message-card {
   position: relative;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.sotl-message-group {
+  display: grid;
+  gap: 8px;
+}
+.sotl-message-row, .sotl-swipe-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  max-width: 100%;
+}
+.sotl-message-row__main {
+  min-width: 0;
+}
+.sotl-message-row__main h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sotl-swipe-row {
+  padding: 7px;
+  border: 1px solid var(--lumiverse-border, rgba(80,88,100,0.12));
+  border-radius: 6px;
+  background: rgba(0,0,0,0.035);
+}
+.sotl-swipe-alternatives {
+  margin-top: 0;
+}
+.sotl-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.sotl-swipe-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  max-width: 100%;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 201, 223, 0.28);
+  background: rgba(127, 201, 223, 0.08);
+  color: var(--lv-accent, #3864d9);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sotl-swipe-chip--active {
+  border-color: rgba(27, 126, 80, 0.38);
+  background: rgba(27, 126, 80, 0.1);
+  color: var(--lv-success-text, #176b43);
 }
 .sotl-message-controls {
   display: flex;
@@ -349,6 +447,8 @@ export const loomStyles = `
 .sotl-settings-section {
   padding: 0;
   overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
 }
 .sotl-details summary {
   font-size: 13px;
@@ -371,13 +471,19 @@ export const loomStyles = `
 }
 .sotl-summary-title {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sotl-summary-meta {
   color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
   font-size: 11px;
   font-weight: 500;
   text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sotl-settings-section > .sotl-fields,
 .sotl-settings-section > .sotl-section-pad,
@@ -766,6 +872,12 @@ export const loomStyles = `
   }
   .sotl-grid, .sotl-row, .sotl-feature-grid, .sotl-quick-grid, .sotl-mini-grid {
     grid-template-columns: 1fr;
+  }
+  .sotl-message-row, .sotl-swipe-row {
+    grid-template-columns: 1fr;
+  }
+  .sotl-message-row .sotl-actions, .sotl-swipe-row .sotl-actions {
+    margin-top: 4px;
   }
   .sotl-panel {
     padding: 10px;

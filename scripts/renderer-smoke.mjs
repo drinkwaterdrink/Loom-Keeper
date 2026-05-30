@@ -81,6 +81,7 @@ const state = {
   connections: [],
   latestTracker: tracker,
   messageTrackers: [tracker],
+  activeSwipeByMessageId: {},
   generation: { running: false },
   diagnostics: { backendReady: true },
 };

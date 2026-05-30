@@ -1,6 +1,6 @@
 {
   "name": "state-of-the-loom",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "type": "module",
   "private": true,
   "scripts": {
@@ -17,7 +17,9 @@
     "smoke:hud-css": "node ./scripts/hud-css-smoke.mjs",
     "smoke:injection": "node ./scripts/injection-smoke.mjs",
     "smoke:ui-state": "node ./scripts/ui-state-smoke.mjs",
-    "smoke:ui-settings": "node ./scripts/ui-settings-smoke.mjs"
+    "smoke:ui-settings": "node ./scripts/ui-settings-smoke.mjs",
+    "smoke:swipe-storage": "node ./scripts/swipe-tracker-smoke.mjs",
+    "smoke:swipe-ui": "node ./scripts/swipe-ui-smoke.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.0",

@@ -1,8 +1,8 @@
-# State of the Loom (v1.0.15)
+# State of the Loom (v1.0.16)
 
 State of the Loom is a Lumiverse-native State of the Loom continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.15 overhauls the drawer and settings UX with persistent mobile-first sections, clearer advanced settings, icon-only message-card actions, and smoother autosave feedback. Version 1.0.14 added Context Injection Lite: a configurable, token-budgeted continuity brief built from the latest tracker plus recent compact tracker summaries.
+Version 1.0.16 makes tracker storage swipe-aware, so each assistant swipe can have its own tracker while the HUD, Current Loom, message cards, and diagnostics follow the currently selected swipe. It also tightens mobile drawer overflow handling for long preset names and custom HTML previews. Version 1.0.15 overhauled the drawer and settings UX with persistent mobile-first sections, clearer advanced settings, icon-only message-card actions, and smoother autosave feedback.
 
 ---
 
@@ -25,9 +25,10 @@ Version 1.0.15 overhauls the drawer and settings UX with persistent mobile-first
    - Cast Continuity Loom $\rightarrow$ `[~400t - Detailed]`
    - Full Continuity Ledger $\rightarrow$ `[~450t - Full]`
    - Grand Continuity Atlas $\rightarrow$ `[~2500t - Grand]`
-5. **Stale Tracker Detection**: Flags the Current Loom status with a yellow badge `Stale: New messages sent` if new user or assistant messages are added to the chat history after the latest tracker was saved.
-6. **Quick Copy JSON**: Copy the entire Current Loom state to your clipboard with a single click.
-7. **Context Injection Lite**: Optionally injects a compact continuity brief into live roleplay prompts.
+5. **Swipe-Aware Trackers**: Stores trackers by `messageId + swipeId`, shows the selected swipe in Current Loom and message cards, keeps all swipe alternatives while you are choosing, and auto-cleans non-chosen alternatives once a later assistant response exists.
+6. **Stale Tracker Detection**: Flags the Current Loom status with a yellow badge `Stale: New messages sent` if new user or assistant messages are added to the chat history after the latest tracker was saved, and marks active-swipe changes as stale.
+7. **Quick Copy JSON**: Copy the entire Current Loom state to your clipboard with a single click.
+8. **Context Injection Lite**: Optionally injects a compact continuity brief into live roleplay prompts.
    - Uses the latest detailed tracker as the main source of truth.
    - Adds recent tracker history as compact summaries only.
    - Provides configurable budgets of ~300, 500, 700, 1000, 1500, or 2000 tokens.
@@ -111,13 +112,17 @@ npm run smoke:injection
 # Run drawer/settings UI state smoke tests
 npm run smoke:ui-state
 npm run smoke:ui-settings
+
+# Run swipe-aware storage/UI smoke tests
+npm run smoke:swipe-storage
+npm run smoke:swipe-ui
 ```
 
 ---
 
 ## Diagnostics & Troubleshooting
 
-State of the Loom (v1.0.15) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, stuck generation states, settings-section collapse, confusing message-card action initials, and overlarge prompt injection.
+State of the Loom (v1.0.16) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, wrong-swipe tracker display, stuck generation states, settings-section collapse, confusing message-card action initials, mobile drawer overflow, and overlarge prompt injection.
 
 ### 1. What to do when a Custom Preset renders blank
 * **Root Cause**: If a custom preset uses template variables that are missing from the generated JSON, those individual fields render empty. This is now a warning instead of a fatal blank-card condition.

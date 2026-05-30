@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.15";
+var LOOM_VERSION = "1.0.16";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -7,7 +7,7 @@ var now = "2026-01-01T00:00:00.000Z";
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.15",
+  version: "1.0.16",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -1011,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.15",
+  version: "1.0.16",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -2119,7 +2119,7 @@ function button(label, action, options = {}) {
   const style = options.style ? ` style="${escapeHtml2(options.style)}"` : "";
   return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml2(action)}"${primary}${disabled}${title}${style}>${escapeHtml2(label)}</button>`;
 }
-function iconButton(label, action, id) {
+function iconButton(label, action, id, options = {}) {
   const icons = {
     Regenerate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.7 6.3A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.8-4.3L13 11h8V3l-3.3 3.3Z" fill="currentColor"/></svg>',
     Edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.7V20h3.3L18.6 9.7l-3.3-3.3L5 16.7Zm15-9.1c.4-.4.4-1 0-1.4L17.8 4c-.4-.4-1-.4-1.4 0l-1.1 1.1 3.3 3.3L20 7.6Z" fill="currentColor"/></svg>',
@@ -2128,7 +2128,8 @@ function iconButton(label, action, id) {
     Delete: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-1.1 0-2-.9-2-2V8h14v11c0 1.1-.9 2-2 2H7ZM9 4h6l1 2h4v2H4V6h4l1-2Zm0 7v7h2v-7H9Zm4 0v7h2v-7h-2Z" fill="currentColor"/></svg>'
   };
   const icon = icons[label] || escapeHtml2(label.slice(0, 1));
-  return `<button class="sotl-icon-button" type="button" data-sotl-action="${escapeHtml2(action)}" data-sotl-message-id="${escapeHtml2(id)}" title="${escapeHtml2(label)}" aria-label="${escapeHtml2(label)}">${icon}</button>`;
+  const swipe = typeof options.swipeId === "number" ? ` data-sotl-swipe-id="${options.swipeId}"` : "";
+  return `<button class="sotl-icon-button" type="button" data-sotl-action="${escapeHtml2(action)}" data-sotl-message-id="${escapeHtml2(id)}"${swipe} title="${escapeHtml2(label)}" aria-label="${escapeHtml2(label)}">${icon}</button>`;
 }
 
 // src/frontend/rendering.ts
@@ -3239,6 +3240,19 @@ function renderInjectionLimitOptions(state2) {
   const limit = state2.settings.promptInjectionTrackerLimit ?? 5;
   return [1, 3, 5, 10].map((value) => `<option value="${value}"${limit === value ? " selected" : ""}>Last ${value} tracker${value === 1 ? "" : "s"}</option>`).join("");
 }
+function formatSwipeLabel(swipeId) {
+  return typeof swipeId === "number" ? `Swipe ${swipeId + 1}` : "Main swipe";
+}
+function renderSwipeChip(swipeId, active = false) {
+  if (typeof swipeId !== "number") return "";
+  return `<span class="sotl-swipe-chip${active ? " sotl-swipe-chip--active" : ""}" title="${active ? "Currently selected assistant swipe" : "Stored assistant swipe"}">${escapeHtml2(formatSwipeLabel(swipeId))}${active ? " active" : ""}</span>`;
+}
+function trackerActionButton(label, action, tracker, options = {}) {
+  const id = tracker.messageId || "latest";
+  const primary = options.primary ? ' data-primary="true"' : "";
+  const swipe = typeof tracker.swipeId === "number" ? ` data-sotl-swipe-id="${tracker.swipeId}"` : "";
+  return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml2(action)}" data-sotl-message-id="${escapeHtml2(id)}"${swipe}${primary}>${escapeHtml2(label)}</button>`;
+}
 function renderLatestTracker(state2) {
   if (!state2.latestTracker) {
     return '<p class="sotl-note">No tracker has been stored for this chat yet.</p>';
@@ -3246,8 +3260,12 @@ function renderLatestTracker(state2) {
   const render = renderTrackerForState(state2.latestTracker, state2);
   const html = render.html;
   const renderWarning = render.warning ? `<p class="sotl-note sotl-warning" style="margin-top: 8px;">${escapeHtml2(render.warning)}</p>` : "";
-  const attachmentStatus = state2.settings.renderInMessages && state2.latestTracker.messageId ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">\u{1F517} Attached to message card (${escapeHtml2(state2.latestTracker.messageId)})</p>` : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
+  const isActiveSwipe = Boolean(
+    state2.latestTracker.messageId && typeof state2.latestTracker.swipeId === "number" && state2.activeSwipeByMessageId[state2.latestTracker.messageId] === state2.latestTracker.swipeId
+  );
+  const attachmentStatus = state2.settings.renderInMessages && state2.latestTracker.messageId ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">Attached to message card (${escapeHtml2(state2.latestTracker.messageId)})</p>` : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
   return [
+    typeof state2.latestTracker.swipeId === "number" ? `<div class="sotl-chip-row">${renderSwipeChip(state2.latestTracker.swipeId, isActiveSwipe)}</div>` : "",
     `<p class="sotl-note">${escapeHtml2(state2.latestTracker.compactSummary)}</p>`,
     `<div class="sotl-preview">${html}</div>`,
     renderWarning,
@@ -3265,17 +3283,53 @@ function renderLatestTracker(state2) {
 }
 function renderMessageList(state2) {
   if (state2.messageTrackers.length === 0) return '<p class="sotl-note">No per-message trackers yet.</p>';
-  return state2.messageTrackers.map((tracker) => {
+  const groups = /* @__PURE__ */ new Map();
+  for (const tracker of state2.messageTrackers) {
     const id = tracker.messageId || "latest";
+    const list = groups.get(id) ?? [];
+    list.push(tracker);
+    groups.set(id, list);
+  }
+  const renderTrackerRow = (tracker, activeSwipe, compact = false) => {
+    const id = tracker.messageId || "latest";
+    const active = typeof activeSwipe === "number" && tracker.swipeId === activeSwipe;
     return [
-      '<div class="sotl-panel">',
-      `<h3>${escapeHtml2(tracker.compactSummary || id)}</h3>`,
-      `<p class="sotl-note">${escapeHtml2(tracker.source)} - ${escapeHtml2(tracker.generatedAt)}</p>`,
-      '<div class="sotl-actions">',
-      button("Regenerate", `regenerate:${id}`),
-      button(tracker.hidden ? "Show" : "Hide", `hide:${id}`),
-      button("Delete", `delete:${id}`),
-      "</div>",
+      `<div class="${compact ? "sotl-swipe-row" : "sotl-message-row"}">`,
+      '  <div class="sotl-message-row__main">',
+      `    <h3>${escapeHtml2(tracker.compactSummary || id)}</h3>`,
+      `    <p class="sotl-note">${renderSwipeChip(tracker.swipeId, active)} ${escapeHtml2(tracker.source)} - ${escapeHtml2(tracker.generatedAt)}</p>`,
+      "  </div>",
+      '  <div class="sotl-actions">',
+      trackerActionButton("Regenerate", `regenerate:${id}`, tracker, { primary: !compact }),
+      trackerActionButton(tracker.hidden ? "Show" : "Hide", `hide:${id}`, tracker),
+      trackerActionButton("Delete", `delete:${id}`, tracker),
+      "  </div>",
+      "</div>"
+    ].join("");
+  };
+  return Array.from(groups.entries()).map(([id, trackers]) => {
+    const activeSwipe = state2.activeSwipeByMessageId[id];
+    const sorted = trackers.slice().sort((a, b) => {
+      if (typeof activeSwipe === "number") {
+        if (a.swipeId === activeSwipe) return -1;
+        if (b.swipeId === activeSwipe) return 1;
+      }
+      return b.generatedAt.localeCompare(a.generatedAt);
+    });
+    const primary = sorted[0];
+    const alternatives = sorted.slice(1);
+    if (!primary) return "";
+    return [
+      '<div class="sotl-panel sotl-message-group">',
+      renderTrackerRow(primary, activeSwipe),
+      alternatives.length > 0 ? [
+        `<details class="sotl-details sotl-swipe-alternatives" data-sotl-section="swipe-alternatives-${escapeHtml2(id)}">`,
+        `<summary><span class="sotl-summary-title">Swipe Alternatives</span><span class="sotl-summary-meta">${alternatives.length} stored</span></summary>`,
+        '<div class="sotl-fields">',
+        alternatives.map((tracker) => renderTrackerRow(tracker, activeSwipe, true)).join(""),
+        "</div>",
+        "</details>"
+      ].join("") : "",
       "</div>"
     ].join("");
   }).join("");
@@ -3318,12 +3372,28 @@ function renderPipelineReport(state2) {
       ${report.templateCompatibility ? `<div><strong>Template Missing Latest Fields:</strong> <code>${escapeHtml2(report.templateCompatibility.missingFromLatest.join(", ") || "none")}</code></div>` : ""}
       ${report.trackerPresetId ? `<div><strong>Tracker Preset ID:</strong> <code>${escapeHtml2(report.trackerPresetId)}</code></div>` : ""}
       <div><strong>Latest Tracker Message ID:</strong> <code>${escapeHtml2(report.messageId)}</code></div>
+      ${typeof report.swipeId === "number" ? `<div><strong>Latest Tracker Swipe:</strong> <code>${escapeHtml2(formatSwipeLabel(report.swipeId))}</code></div>` : ""}
       <div><strong>Chat ID:</strong> <code>${escapeHtml2(report.chatId)}</code></div>
       <div><strong>HUD View Mode:</strong> <code>${escapeHtml2(report.hudView)}</code></div>
       <div><strong>Retained Tracker Count:</strong> <code>${report.retainedCount}</code></div>
       ${report.lastError ? `<div><strong>Last Error:</strong> <code>${escapeHtml2(report.lastError)}</code></div>` : ""}
     </div>
   `;
+}
+function renderSwipeReport(state2) {
+  const report = state2.diagnostics.swipeReport;
+  if (!report) return '<p class="sotl-note">No swipe report is available yet.</p>';
+  return [
+    '<div class="sotl-diagnostic-grid sotl-swipe-report">',
+    `  <div><strong>Active Message ID:</strong> <code>${escapeHtml2(report.activeMessageId || "unknown")}</code></div>`,
+    `  <div><strong>Active Swipe ID:</strong> <code>${typeof report.activeSwipeId === "number" ? escapeHtml2(formatSwipeLabel(report.activeSwipeId)) : "unknown"}</code></div>`,
+    `  <div><strong>Stored Swipe Trackers:</strong> <code>${report.storedSwipeTrackerCount}</code></div>`,
+    `  <div><strong>Swipe Alternatives:</strong> <code>${report.alternativeSwipeTrackerCount}</code></div>`,
+    `  <div><strong>Last Cleanup:</strong> <code>${escapeHtml2(report.cleanupLastRunAt || "not run yet")}</code></div>`,
+    `  <div><strong>Cleanup Result:</strong> <code>${report.cleanupRemovedCount ?? 0} removed / ${report.cleanupKeptCount ?? 0} kept</code></div>`,
+    report.cleanupWarning ? `  <div><strong>Cleanup Warning:</strong> <code>${escapeHtml2(report.cleanupWarning)}</code></div>` : "",
+    "</div>"
+  ].filter(Boolean).join("");
 }
 function renderInjectionReport(state2) {
   const report = state2.diagnostics.injectionReport;
@@ -3419,6 +3489,7 @@ function renderControlsPanel(state2, status, selectedConnection, disabledReason)
   const report = state2.diagnostics.injectionReport;
   const tokenMeta = report ? `~${report.estimatedTokens}/${report.tokenBudget} tokens` : "no estimate";
   const latestAge = formatTrackerAge(state2.latestTracker?.generatedAt);
+  const swipeMeta = state2.diagnostics.swipeReport?.activeSwipeId !== void 0 ? formatSwipeLabel(state2.diagnostics.swipeReport.activeSwipeId) : "active swipe unknown";
   return [
     '<section class="sotl-panel sotl-control-panel">',
     '<div class="sotl-panel-head">',
@@ -3432,7 +3503,7 @@ function renderControlsPanel(state2, status, selectedConnection, disabledReason)
     `  <article><span>Preset</span><strong>${escapeHtml2(state2.activePreset.name)}</strong><em>${escapeHtml2(state2.activePreset.origin || "built-in")}</em></article>`,
     `  <article><span>Generation</span><strong>${state2.generation.running ? "Running" : disabledReason ? "Blocked" : "Ready"}</strong><em>${escapeHtml2(disabledReason || state2.generation.message || "manual or auto")}</em></article>`,
     `  <article><span>Injection</span><strong>${state2.settings.promptInjectionEnabled ? "Enabled" : "Disabled"}</strong><em>${escapeHtml2(tokenMeta)}</em></article>`,
-    `  <article><span>Latest Tracker</span><strong>${escapeHtml2(latestAge)}</strong><em>${state2.messageTrackers.length} retained cards</em></article>`,
+    `  <article><span>Latest Tracker</span><strong>${escapeHtml2(latestAge)}</strong><em>${state2.messageTrackers.length} retained cards - ${escapeHtml2(swipeMeta)}</em></article>`,
     "</div>",
     '<div class="sotl-status">',
     badge("Backend ready", state2.backendReady),
@@ -3578,6 +3649,7 @@ function renderControlsPanel(state2, status, selectedConnection, disabledReason)
         status.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(status.lastRenderStatus)}</p>` : "",
         state2.diagnostics.lastRenderStatus ? `<p class="sotl-note">${escapeHtml2(state2.diagnostics.lastRenderStatus)}</p>` : "",
         renderSettingsSection("pipeline-report", "Tracker Pipeline Report", state2.diagnostics.pipelineReport ? "available" : "empty", renderPipelineReport(state2)),
+        renderSettingsSection("swipe-report", "Swipe Tracker Report", state2.diagnostics.swipeReport ? `${state2.diagnostics.swipeReport.storedSwipeTrackerCount} stored` : "empty", renderSwipeReport(state2)),
         renderSettingsSection("injection-report", "Context Injection Report", report ? tokenMeta : "empty", renderInjectionReport(state2)),
         (() => {
           const doc = typeof document !== "undefined" ? document : null;
@@ -3688,8 +3760,37 @@ function findMessageHost(doc, tracker) {
   return doc.querySelector(`[data-message-id="${id}"]`) ?? doc.querySelector(`[data-lumiverse-message-id="${id}"]`) ?? doc.querySelector(`[data-lv-message-id="${id}"]`) ?? doc.querySelector(`[data-chat-message-id="${id}"]`) ?? doc.querySelector(`[data-message_id="${id}"]`) ?? doc.querySelector(`[data-messageid="${id}"]`) ?? doc.getElementById(`message-${tracker.messageId}`);
 }
 function renderTrackerHtmlCard(tracker, state2) {
-  const controls = state2.settings.showMessageButtons ? `<div class="sotl-message-controls">${iconButton("Regenerate", "card-regenerate", tracker.messageId || "")}${iconButton("Edit", "card-edit", tracker.messageId || "")}${iconButton("Hide", "card-hide", tracker.messageId || "")}${iconButton("Delete", "card-delete", tracker.messageId || "")}</div>` : "";
+  const id = tracker.messageId || "";
+  const meta = { swipeId: tracker.swipeId };
+  const controls = state2.settings.showMessageButtons ? `<div class="sotl-message-controls">${iconButton("Regenerate", "card-regenerate", id, meta)}${iconButton("Edit", "card-edit", id, meta)}${iconButton("Hide", "card-hide", id, meta)}${iconButton("Delete", "card-delete", id, meta)}</div>` : "";
   return controls + renderTrackerForState(tracker, state2).html;
+}
+function isActiveSwipeTracker(tracker, state2) {
+  if (!tracker.messageId) return true;
+  const activeSwipe = state2.activeSwipeByMessageId[tracker.messageId];
+  if (typeof activeSwipe !== "number") return true;
+  return tracker.swipeId === activeSwipe;
+}
+function trackerMountKey(tracker) {
+  return `${tracker.messageId || "latest"}::swipe:${typeof tracker.swipeId === "number" ? tracker.swipeId : "main"}`;
+}
+function selectVisibleMessageTrackers(trackers, state2) {
+  const grouped = /* @__PURE__ */ new Map();
+  for (const tracker of trackers) {
+    const id = tracker.messageId || "latest";
+    const list = grouped.get(id) ?? [];
+    list.push(tracker);
+    grouped.set(id, list);
+  }
+  const selected = [];
+  for (const [id, list] of grouped) {
+    const activeSwipe = state2.activeSwipeByMessageId[id];
+    const active = typeof activeSwipe === "number" ? list.find((tracker) => tracker.swipeId === activeSwipe) : void 0;
+    const newest = list.slice().sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))[0];
+    const chosen = active ?? newest;
+    if (chosen) selected.push(chosen);
+  }
+  return selected;
 }
 function cleanupMessageCards(ctx) {
   const domApi = ctx.dom && typeof ctx.dom === "object" ? ctx.dom : null;
@@ -3719,7 +3820,10 @@ function mountMessageCards(ctx, state2) {
   const inject = domApi && typeof domApi.inject === "function" ? domApi.inject : null;
   const findMessageElement = domApi && typeof domApi.findMessageElement === "function" ? domApi.findMessageElement : null;
   cleanupMessageCards(ctx);
-  const trackers = state2.messageTrackers.length > 0 ? state2.messageTrackers : state2.latestTracker ? [state2.latestTracker] : [];
+  const trackers = selectVisibleMessageTrackers(
+    state2.messageTrackers.length > 0 ? state2.messageTrackers : state2.latestTracker ? [state2.latestTracker] : [],
+    state2
+  ).filter((tracker) => isActiveSwipeTracker(tracker, state2));
   if (trackers.length === 0) return { status: "No tracker available for message-card mounting." };
   let mounted = 0;
   let lastMissing;
@@ -3748,7 +3852,7 @@ function mountMessageCards(ctx, state2) {
       try {
         const wrapper = inject(hostElement, cardHtml, pos);
         if (wrapper) {
-          injectedWrappers.set(messageId, wrapper);
+          injectedWrappers.set(trackerMountKey(tracker), wrapper);
           mounted += 1;
         }
       } catch (err) {
@@ -3759,13 +3863,14 @@ function mountMessageCards(ctx, state2) {
       wrapper.className = "sotl-message-card";
       wrapper.dataset.sotlMounted = "true";
       wrapper.dataset.sotlMessageId = messageId;
+      if (typeof tracker.swipeId === "number") wrapper.dataset.sotlSwipeId = String(tracker.swipeId);
       wrapper.innerHTML = cardHtml;
       if (tracker.placement === "bottom") {
         hostElement.append(wrapper);
       } else {
         hostElement.prepend(wrapper);
       }
-      injectedWrappers.set(messageId, wrapper);
+      injectedWrappers.set(trackerMountKey(tracker), wrapper);
       mounted += 1;
     }
   }
@@ -3840,10 +3945,12 @@ function renderCompactPanel(tracker, state2) {
   }
   if (isCompact) {
     const bodyContent2 = renderCompactTrackerForState(tracker, state2);
+    const swipeChip = typeof tracker.swipeId === "number" ? `<span class="sotl-swipe-chip" title="Active assistant swipe">Swipe ${tracker.swipeId + 1}</span>` : "";
     return [
       '<div class="sotl-chat-panel">',
       header,
       '  <div class="sotl-chat-panel__body">',
+      swipeChip,
       bodyContent2,
       "  </div>",
       "</div>"
@@ -3865,8 +3972,10 @@ function renderCompactPanel(tracker, state2) {
       castChips
     ].join("\n");
   } else {
+    const swipeChip = typeof tracker.swipeId === "number" ? `<span class="sotl-swipe-chip" title="Active assistant swipe">Swipe ${tracker.swipeId + 1}</span>` : "";
     bodyContent = `
       <div class="sotl-chat-panel__scroll-body">
+        ${swipeChip}
         ${renderTrackerForState(tracker, state2).html}
       </div>
     `;
@@ -4033,16 +4142,28 @@ var loomStyles = `
   display: grid;
   gap: 14px;
   padding: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+.sotl-root *, .sotl-chat-panel-container *, .sotl-message-card * {
+  box-sizing: border-box;
 }
 .sotl-panel {
   border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.28)));
   border-radius: var(--lumiverse-radius, 8px);
   background: var(--lumiverse-fill-subtle, var(--lv-surface, rgba(255, 255, 255, 0.78)));
   padding: 12px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 .sotl-control-panel {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 .sotl-panel-head {
   display: flex;
@@ -4151,6 +4272,10 @@ var loomStyles = `
   border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.28)));
   background: var(--lumiverse-fill, var(--lv-surface-raised, rgba(248, 250, 252, 0.9)));
   font-size: 12px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sotl-chip[data-ok="true"] {
   color: var(--lv-success-text, #176b43);
@@ -4164,15 +4289,20 @@ var loomStyles = `
   display: grid;
   gap: 10px;
   margin-top: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 .sotl-label {
   display: grid;
   gap: 5px;
   font-size: 12px;
   color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
+  min-width: 0;
 }
 .sotl-select, .sotl-input, .sotl-textarea {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.28)));
   border-radius: var(--lumiverse-radius, 6px);
@@ -4180,6 +4310,11 @@ var loomStyles = `
   color: inherit;
   padding: 8px;
   font: inherit;
+}
+.sotl-select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sotl-textarea {
   min-height: 180px;
@@ -4229,7 +4364,20 @@ var loomStyles = `
 }
 .sotl-preview {
   overflow: auto;
+  overflow-x: auto;
   max-height: 420px;
+  max-width: 100%;
+  min-width: 0;
+  contain: inline-size;
+}
+.sotl-preview > * {
+  max-width: 100%;
+}
+.sotl-preview .wtrk_ol_safe,
+.sotl-preview .sotl-atlas,
+.sotl-preview [data-sotl-card="true"] {
+  max-width: 100% !important;
+  min-width: 0 !important;
 }
 .sotl-card {
   --sotl-card-bg: var(--lumiverse-fill, var(--lv-surface-raised, #ffffff));
@@ -4241,6 +4389,9 @@ var loomStyles = `
   background: var(--sotl-card-bg);
   padding: 12px;
   box-shadow: 0 1px 2px rgba(20, 24, 32, 0.06);
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .sotl-card__head {
   display: flex;
@@ -4310,6 +4461,62 @@ var loomStyles = `
 }
 .sotl-message-card {
   position: relative;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.sotl-message-group {
+  display: grid;
+  gap: 8px;
+}
+.sotl-message-row, .sotl-swipe-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  max-width: 100%;
+}
+.sotl-message-row__main {
+  min-width: 0;
+}
+.sotl-message-row__main h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sotl-swipe-row {
+  padding: 7px;
+  border: 1px solid var(--lumiverse-border, rgba(80,88,100,0.12));
+  border-radius: 6px;
+  background: rgba(0,0,0,0.035);
+}
+.sotl-swipe-alternatives {
+  margin-top: 0;
+}
+.sotl-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.sotl-swipe-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  max-width: 100%;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 201, 223, 0.28);
+  background: rgba(127, 201, 223, 0.08);
+  color: var(--lv-accent, #3864d9);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sotl-swipe-chip--active {
+  border-color: rgba(27, 126, 80, 0.38);
+  background: rgba(27, 126, 80, 0.1);
+  color: var(--lv-success-text, #176b43);
 }
 .sotl-message-controls {
   display: flex;
@@ -4374,6 +4581,8 @@ var loomStyles = `
 .sotl-settings-section {
   padding: 0;
   overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
 }
 .sotl-details summary {
   font-size: 13px;
@@ -4396,13 +4605,19 @@ var loomStyles = `
 }
 .sotl-summary-title {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sotl-summary-meta {
   color: var(--lumiverse-text-muted, var(--lv-text-muted, #64707d));
   font-size: 11px;
   font-weight: 500;
   text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sotl-settings-section > .sotl-fields,
 .sotl-settings-section > .sotl-section-pad,
@@ -4792,6 +5007,12 @@ var loomStyles = `
   .sotl-grid, .sotl-row, .sotl-feature-grid, .sotl-quick-grid, .sotl-mini-grid {
     grid-template-columns: 1fr;
   }
+  .sotl-message-row, .sotl-swipe-row {
+    grid-template-columns: 1fr;
+  }
+  .sotl-message-row .sotl-actions, .sotl-swipe-row .sotl-actions {
+    margin-top: 4px;
+  }
   .sotl-panel {
     padding: 10px;
   }
@@ -4911,6 +5132,12 @@ function requestBackendState(message = { type: "refresh_state" }) {
   if (!contextRef) return;
   postToBackend(contextRef, message);
   startBackendTimer();
+}
+function datasetSwipeId(element) {
+  const value = element.dataset.sotlSwipeId;
+  if (value === void 0 || value === "") return void 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : void 0;
 }
 function installStyle(ctx) {
   const dom = ctx.dom && typeof ctx.dom === "object" ? ctx.dom : {};
@@ -5155,13 +5382,14 @@ function handleDrawerEvent(event) {
       postToBackend(contextRef, { type: "reset_storage" });
       startBackendTimer();
     }
-    if (action.startsWith("regenerate:")) postToBackend(contextRef, { type: "generate_tracker", messageId: action.slice("regenerate:".length) });
-    if (action.startsWith("hide:") && state?.activeChat.id) postToBackend(contextRef, { type: "hide_tracker", chatId: state.activeChat.id, messageId: action.slice("hide:".length), hidden: true });
-    if (action.startsWith("delete:") && state?.activeChat.id) postToBackend(contextRef, { type: "delete_tracker", chatId: state.activeChat.id, messageId: action.slice("delete:".length) });
-    if (action === "card-regenerate") postToBackend(contextRef, { type: "generate_tracker", messageId: actionButton.dataset.sotlMessageId });
+    const actionSwipeId = datasetSwipeId(actionButton);
+    if (action.startsWith("regenerate:")) postToBackend(contextRef, { type: "generate_tracker", messageId: action.slice("regenerate:".length), swipeId: actionSwipeId });
+    if (action.startsWith("hide:") && state?.activeChat.id) postToBackend(contextRef, { type: "hide_tracker", chatId: state.activeChat.id, messageId: action.slice("hide:".length), swipeId: actionSwipeId, hidden: true });
+    if (action.startsWith("delete:") && state?.activeChat.id) postToBackend(contextRef, { type: "delete_tracker", chatId: state.activeChat.id, messageId: action.slice("delete:".length), swipeId: actionSwipeId });
+    if (action === "card-regenerate") postToBackend(contextRef, { type: "generate_tracker", messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId });
     if (action === "card-edit") activateDrawer();
-    if (action === "card-hide" && state?.activeChat.id) postToBackend(contextRef, { type: "hide_tracker", chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, hidden: true });
-    if (action === "card-delete" && state?.activeChat.id) postToBackend(contextRef, { type: "delete_tracker", chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId });
+    if (action === "card-hide" && state?.activeChat.id) postToBackend(contextRef, { type: "hide_tracker", chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId, hidden: true });
+    if (action === "card-delete" && state?.activeChat.id) postToBackend(contextRef, { type: "delete_tracker", chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId });
     if (action === "save-json" && state?.latestTracker) {
       const doc = documentRef3();
       const textarea = doc?.querySelector('[data-sotl-field="latestJson"]');

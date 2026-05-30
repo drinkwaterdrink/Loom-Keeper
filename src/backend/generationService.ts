@@ -57,6 +57,20 @@ function classifyParseFailure(raw: string, message: string): LoomParseFailureCat
   return 'unknown';
 }
 
+function withRequestedSwipe(message: LoomChatMessage, requestedSwipeId?: number | undefined, contentOverride?: string | undefined): LoomChatMessage {
+  if (typeof requestedSwipeId !== 'number') {
+    return contentOverride !== undefined ? { ...message, content: contentOverride } : message;
+  }
+  const swipeContent = Array.isArray(message.swipes) && typeof message.swipes[requestedSwipeId] === 'string'
+    ? message.swipes[requestedSwipeId]
+    : contentOverride;
+  return {
+    ...message,
+    swipe_id: requestedSwipeId,
+    content: swipeContent ?? message.content ?? '',
+  };
+}
+
 export class LoomGenerationService {
   private readonly runningKeys = new Set<string>();
   private readonly activeGenerations = new Map<string, () => void>();
@@ -119,7 +133,12 @@ export class LoomGenerationService {
     return undefined;
   }
 
-  async findLatestAssistantTarget(userId: string, requestedChatId?: string | null, requestedMessageId?: string): Promise<GenerationTarget | null> {
+  async findLatestAssistantTarget(
+    userId: string,
+    requestedChatId?: string | null,
+    requestedMessageId?: string,
+    requestedSwipeId?: number | undefined,
+  ): Promise<GenerationTarget | null> {
     const { chat, messages } = await getActiveChat(this.spindle, userId);
     const chatId = requestedChatId || chat.id;
     if (!chatId) return null;
@@ -127,9 +146,10 @@ export class LoomGenerationService {
       const role = (message.role || '').toLowerCase();
       return role === 'assistant' || role === 'model' || role === 'ai' || (!role && Boolean(message.content));
     });
-    const selected = requestedMessageId
+    const selectedBase = requestedMessageId
       ? assistantMessages.find((message) => message.id === requestedMessageId)
       : assistantMessages[assistantMessages.length - 1];
+    const selected = selectedBase ? withRequestedSwipe(selectedBase, requestedSwipeId) : undefined;
     if (!selected || !selected.content) return null;
     const context = messages.slice(Math.max(0, messages.length - 8)).map((message) => {
       const role = message.role || 'message';
@@ -143,17 +163,18 @@ export class LoomGenerationService {
     chatId: string;
     messageId?: string | undefined;
     content?: string | undefined;
+    swipeId?: number | undefined;
   }): Promise<GenerationTarget | null> {
     if (!input.chatId) return null;
     const messages = await getChatMessages(this.spindle, input.chatId, input.userId);
     const selected = input.messageId
       ? messages.find((message) => message.id === input.messageId)
       : null;
-    const message = selected ?? {
+    const message = withRequestedSwipe(selected ?? {
       id: input.messageId,
       role: 'assistant',
       content: input.content || '',
-    };
+    }, input.swipeId, input.content);
     if (!message.content) return null;
     const contextMessages = messages.length > 0 ? messages : [message];
     const recentContext = contextMessages.slice(Math.max(0, contextMessages.length - 8)).map((item) => {

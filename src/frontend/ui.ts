@@ -30,7 +30,7 @@ export function button(label: string, action: string, options: { primary?: boole
   return `<button class="sotl-button" type="button" data-sotl-action="${escapeHtml(action)}"${primary}${disabled}${title}${style}>${escapeHtml(label)}</button>`;
 }
 
-export function iconButton(label: string, action: string, id: string): string {
+export function iconButton(label: string, action: string, id: string, options: { swipeId?: number | undefined } = {}): string {
   const icons: Record<string, string> = {
     Regenerate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.7 6.3A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.8-4.3L13 11h8V3l-3.3 3.3Z" fill="currentColor"/></svg>',
     Edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.7V20h3.3L18.6 9.7l-3.3-3.3L5 16.7Zm15-9.1c.4-.4.4-1 0-1.4L17.8 4c-.4-.4-1-.4-1.4 0l-1.1 1.1 3.3 3.3L20 7.6Z" fill="currentColor"/></svg>',
@@ -39,5 +39,6 @@ export function iconButton(label: string, action: string, id: string): string {
     Delete: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-1.1 0-2-.9-2-2V8h14v11c0 1.1-.9 2-2 2H7ZM9 4h6l1 2h4v2H4V6h4l1-2Zm0 7v7h2v-7H9Zm4 0v7h2v-7h-2Z" fill="currentColor"/></svg>',
   };
   const icon = icons[label] || escapeHtml(label.slice(0, 1));
-  return `<button class="sotl-icon-button" type="button" data-sotl-action="${escapeHtml(action)}" data-sotl-message-id="${escapeHtml(id)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${icon}</button>`;
+  const swipe = typeof options.swipeId === 'number' ? ` data-sotl-swipe-id="${options.swipeId}"` : '';
+  return `<button class="sotl-icon-button" type="button" data-sotl-action="${escapeHtml(action)}" data-sotl-message-id="${escapeHtml(id)}"${swipe} title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${icon}</button>`;
 }

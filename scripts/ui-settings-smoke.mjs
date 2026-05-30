@@ -46,6 +46,7 @@ const state = {
   connections: [{ id: 'conn-1', name: 'Sidecar Test', model: 'test-model', is_default: true }],
   latestTracker: null,
   messageTrackers: [],
+  activeSwipeByMessageId: {},
   generation: { running: false },
   diagnostics: {
     backendReady: true,
