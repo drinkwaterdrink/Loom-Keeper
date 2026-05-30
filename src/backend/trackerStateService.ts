@@ -101,8 +101,7 @@ export class LoomTrackerStateService {
     const index = await this.loadIndex(userId);
     return Object.values(index[chatId]?.messages ?? {})
       .filter((tracker) => tracker.version === LOOM_VERSION)
-      .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))
-      .slice(0, 20);
+      .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
   }
 
   async save(userId: string, tracker: LoomTrackerState, limit: number = 5): Promise<void> {

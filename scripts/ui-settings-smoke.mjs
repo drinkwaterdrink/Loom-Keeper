@@ -85,6 +85,9 @@ for (const id of [
 assert.match(html, /Quick Status/);
 assert.match(html, /Use default\/current connection when none is selected/);
 assert.match(html, /Show message-card action buttons/);
+assert.match(html, /Full tracker retention/);
+assert.match(html, /Tracker context depth/);
+assert.match(html, /Tracker generation history/);
 assert.match(html, /Legacy desktop floating button/);
 assert.match(html, /Legacy density setting/);
 assert.match(html, /Saved/);

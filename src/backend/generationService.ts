@@ -26,6 +26,7 @@ export interface GenerationTarget {
   chatId: string;
   message: LoomChatMessage;
   recentContext: string;
+  recentContextMessageCount: number;
 }
 
 export interface GenerationResult {
@@ -151,11 +152,12 @@ export class LoomGenerationService {
       : assistantMessages[assistantMessages.length - 1];
     const selected = selectedBase ? withRequestedSwipe(selectedBase, requestedSwipeId) : undefined;
     if (!selected || !selected.content) return null;
-    const context = messages.slice(Math.max(0, messages.length - 8)).map((message) => {
+    const contextMessages = messages.slice(Math.max(0, messages.length - 8));
+    const context = contextMessages.map((message) => {
       const role = message.role || 'message';
       return `${role}: ${message.content || ''}`;
     }).join('\n\n');
-    return { chatId, message: selected, recentContext: context };
+    return { chatId, message: selected, recentContext: context, recentContextMessageCount: contextMessages.length };
   }
 
   async findPayloadTarget(input: {
@@ -177,11 +179,12 @@ export class LoomGenerationService {
     }, input.swipeId, input.content);
     if (!message.content) return null;
     const contextMessages = messages.length > 0 ? messages : [message];
-    const recentContext = contextMessages.slice(Math.max(0, contextMessages.length - 8)).map((item) => {
+    const recentMessages = contextMessages.slice(Math.max(0, contextMessages.length - 8));
+    const recentContext = recentMessages.map((item) => {
       const role = item.role || 'message';
       return `${role}: ${item.content || ''}`;
     }).join('\n\n');
-    return { chatId: input.chatId, message, recentContext };
+    return { chatId: input.chatId, message, recentContext, recentContextMessageCount: recentMessages.length };
   }
 
   tryPassiveExtract(input: {

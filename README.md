@@ -1,8 +1,10 @@
-# State of the Loom (v1.0.19)
+# State of the Loom (v1.0.20)
 
 State of the Loom is a Lumiverse-native State of the Loom continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.19 polishes the mobile tracker access layer: the floating paw now copies the stock side icon shell more closely, selected-message paws use broader native toolbar detection plus a long-press menu fallback, swipe changes refresh in bursts so the active tracker follows the visible response, and Message Tracker List rows can be opened directly. Version 1.0.18 made the paw launcher more native-feeling, added a subtle active-generation paw animation, and added best-effort per-message paw actions that open the exact message/swipe tracker in the drawer without rendering the full tracker inline.
+Version 1.0.20 tightens the native mobile tracker access layer: the global paw is hidden outside the real chat screen, the glyph is now a bear-paw-style icon, duplicate fixed side paws are disabled, per-message paws open a mobile-safe in-chat tracker viewer, swipe changes refresh automatically, and tracker retention/context/generation-history settings are labeled as separate controls. Version 1.0.19 polished native toolbar detection, long-press menu fallback, active-swipe refresh bursts, and direct Message Tracker List opening.
+
+Release notes are tracked in [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
@@ -26,12 +28,13 @@ Version 1.0.19 polishes the mobile tracker access layer: the floating paw now co
    - Full Continuity Ledger $\rightarrow$ `[~450t - Full]`
    - Grand Continuity Atlas $\rightarrow$ `[~2500t - Grand]`
 5. **Swipe-Aware Trackers**: Stores trackers by `messageId + swipeId`, shows the selected swipe in Current Loom and message cards, keeps all swipe alternatives while you are choosing, and auto-cleans non-chosen alternatives once a later assistant response exists.
-6. **Per-Message Paw Access**: When Lumiverse exposes a visible native message action toolbar, State of the Loom adds a small matching paw action beside the normal message controls. Clicking it opens/focuses the tracker for that exact message and selected swipe in the drawer; if that swipe has no tracker, the drawer shows a missing/pruned state instead of guessing.
+6. **Per-Message Paw Access**: When Lumiverse exposes a visible native message action toolbar, State of the Loom adds a small matching bear paw as the first tracker action beside the normal message controls. Clicking it opens a mobile-safe in-chat tracker viewer for that exact message and selected swipe; if that swipe has no tracker, the viewer shows a missing/pruned state instead of guessing.
 7. **Stale Tracker Detection**: Flags the Current Loom status with a yellow badge `Stale: New messages sent` if new user or assistant messages are added to the chat history after the latest tracker was saved, and marks active-swipe changes as stale.
 8. **Quick Copy JSON**: Copy the entire Current Loom state to your clipboard with a single click.
 9. **Context Injection Lite**: Optionally injects a compact continuity brief into live roleplay prompts.
    - Uses the latest detailed tracker as the main source of truth.
    - Adds recent tracker history as compact summaries only.
+   - Keeps full tracker retention separate from live RP context depth and tracker-generation history depth.
    - Provides configurable budgets of ~300, 500, 700, 1000, 1500, or 2000 tokens.
    - Shows an estimated token counter and preview in the drawer diagnostics.
    - Keeps the full tracker stored/rendered without flooding the model context.
@@ -123,7 +126,7 @@ npm run smoke:swipe-ui
 
 ## Diagnostics & Troubleshooting
 
-State of the Loom (v1.0.19) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, wrong-swipe tracker display, stuck generation states, settings-section collapse, confusing message-card action initials, mobile drawer overflow, native-toolbar paw duplication, clipped HUD-to-drawer transitions, and overlarge prompt injection.
+State of the Loom (v1.0.20) includes self-healing and debugging tools to prevent blank custom presets, stale preset rendering, wrong-swipe tracker display, stuck generation states, settings-section collapse, confusing message-card action initials, mobile drawer overflow, duplicate paw actions, clipped drawer/menu transitions, and overlarge prompt injection.
 
 ### 1. What to do when a Custom Preset renders blank
 * **Root Cause**: If a custom preset uses template variables that are missing from the generated JSON, those individual fields render empty. This is now a warning instead of a fatal blank-card condition.

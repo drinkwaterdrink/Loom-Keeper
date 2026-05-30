@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.19";
+var LOOM_VERSION = "1.0.20";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -7,7 +7,7 @@ var now = "2026-01-01T00:00:00.000Z";
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.19",
+  version: "1.0.20",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -1011,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.19",
+  version: "1.0.20",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -3278,13 +3278,12 @@ function renderTimeoutOptions(state2) {
   ].join("");
 }
 function renderHistoryLimitOptions(state2) {
-  const limit = state2.settings.trackerHistoryLimit ?? 5;
+  const limit = state2.settings.trackerHistoryLimit ?? 20;
   return [
-    `<option value="1"${limit === 1 ? " selected" : ""}>Last 1 tracker</option>`,
-    `<option value="3"${limit === 3 ? " selected" : ""}>Last 3 trackers</option>`,
-    `<option value="5"${limit === 5 ? " selected" : ""}>Last 5 trackers (default)</option>`,
-    `<option value="10"${limit === 10 ? " selected" : ""}>Last 10 trackers</option>`,
-    `<option value="20"${limit === 20 ? " selected" : ""}>Last 20 trackers</option>`,
+    `<option value="5"${limit === 5 ? " selected" : ""}>Last 5 full trackers</option>`,
+    `<option value="10"${limit === 10 ? " selected" : ""}>Last 10 full trackers</option>`,
+    `<option value="20"${limit === 20 ? " selected" : ""}>Last 20 full trackers (default)</option>`,
+    `<option value="50"${limit === 50 ? " selected" : ""}>Last 50 full trackers</option>`,
     `<option value="0"${limit === 0 ? " selected" : ""}>Unlimited (manual cleanup)</option>`
   ].join("");
 }
@@ -3294,7 +3293,11 @@ function renderInjectionBudgetOptions(state2) {
 }
 function renderInjectionLimitOptions(state2) {
   const limit = state2.settings.promptInjectionTrackerLimit ?? 5;
-  return [1, 3, 5, 10].map((value) => `<option value="${value}"${limit === value ? " selected" : ""}>Last ${value} tracker${value === 1 ? "" : "s"}</option>`).join("");
+  return [1, 3, 5, 10].map((value) => `<option value="${value}"${limit === value ? " selected" : ""}>Latest + ${value} compact summar${value === 1 ? "y" : "ies"}</option>`).join("");
+}
+function renderGenerationHistoryLimitOptions(state2) {
+  const limit = state2.settings.trackerGenerationHistoryLimit ?? 5;
+  return [0, 3, 5, 10].map((value) => `<option value="${value}"${limit === value ? " selected" : ""}>Previous full + ${value} compact summar${value === 1 ? "y" : "ies"}</option>`).join("");
 }
 function formatSwipeLabel(swipeId) {
   return typeof swipeId === "number" ? `Swipe ${swipeId + 1}` : "Main swipe";
@@ -3502,6 +3505,17 @@ function renderPipelineReport(state2) {
       <div><strong>Generation Completed:</strong> <code>${escapeHtml2(report.generationCompletedAt || "n/a")}</code></div>
       <div><strong>Elapsed:</strong> <code>${report.elapsedMs !== void 0 ? `${Math.round(report.elapsedMs / 100) / 10}s` : "n/a"}</code></div>
       <div><strong>Timeout:</strong> <code>${report.timeoutMs === 0 ? "manual cancel only" : report.timeoutMs ? `${Math.round(report.timeoutMs / 1e3)}s` : "n/a"}</code></div>
+      <div><strong>Previous Full Tracker JSON Included:</strong> <code>${report.previousFullTrackerIncluded ? "yes" : "no"}</code></div>
+      ${report.previousFullTrackerMessageId ? `<div><strong>Previous Full Tracker Source:</strong> <code>${escapeHtml2(report.previousFullTrackerMessageId)}${typeof report.previousFullTrackerSwipeId === "number" ? ` - ${escapeHtml2(formatSwipeLabel(report.previousFullTrackerSwipeId))}` : ""}</code></div>` : ""}
+      <div><strong>Recent Tracker Summaries Included:</strong> <code>${report.recentTrackerSummariesIncluded ?? 0}</code></div>
+      <div><strong>Recent Summaries Compact Only:</strong> <code>${report.recentTrackerSummariesCompactOnly === false ? "no" : "yes"}</code></div>
+      <div><strong>Recent Chat Context Included:</strong> <code>${report.recentChatContextIncluded ? "yes" : "no"}${typeof report.recentChatContextMessageCount === "number" ? ` - ${report.recentChatContextMessageCount} messages` : ""}</code></div>
+      <div><strong>Activated World Info / Lorebook Included:</strong> <code>${report.worldInfoIncluded ? "yes" : "no"}</code></div>
+      ${report.worldInfoStatus ? `<div><strong>World Info Status:</strong> <code>${escapeHtml2(report.worldInfoStatus)}</code></div>` : ""}
+      <div><strong>Estimated Sidecar Prompt:</strong> <code>${typeof report.estimatedSidecarPromptTokens === "number" ? `~${report.estimatedSidecarPromptTokens} tokens` : "n/a"}</code></div>
+      <div><strong>Stored Snapshot Retention:</strong> <code>${report.storageRetentionLimit === 0 ? "unlimited" : `last ${report.storageRetentionLimit ?? "n/a"}`}</code></div>
+      <div><strong>Tracker Generation History:</strong> <code>previous full + ${report.trackerGenerationHistoryLimit ?? 5} compact summaries</code></div>
+      <div><strong>RP Context Depth:</strong> <code>latest + ${report.promptInjectionTrackerLimit ?? 5} compact summaries setting</code></div>
       <div><strong>Raw Response Available:</strong> ${rawVal}</div>
       ${report.rawResponsePreview ? `<div><strong>Raw Response Preview:</strong> <code>${escapeHtml2(report.rawResponsePreview)}</code></div>` : ""}
       <div><strong>JSON Parse:</strong> ${parseVal}</div>
@@ -3552,8 +3566,15 @@ function renderInjectionReport(state2) {
     '<div class="sotl-injection-report">',
     `<div><strong>Status:</strong> ${enabled} - ${registered}</div>`,
     `<div><strong>Mode:</strong> <code>${escapeHtml2(report.mode)}</code></div>`,
+    `<div><strong>Latest tracker available:</strong> <code>${report.latestTrackerAvailable ?? report.available ? "yes" : "no"}</code></div>`,
+    report.activeMessageId ? `<div><strong>Active message / swipe:</strong> <code>${escapeHtml2(report.activeMessageId)}${typeof report.activeSwipeId === "number" ? ` - ${escapeHtml2(formatSwipeLabel(report.activeSwipeId))}` : ""}</code></div>` : "",
+    `<div><strong>Used current active swipe tracker:</strong> <code>${report.activeSwipeTrackerUsed ? "yes" : "no"}</code></div>`,
+    `<div><strong>Wrong-swipe fallback avoided:</strong> <code>${report.wrongSwipeFallbackAvoided ? "yes" : "not needed"}</code></div>`,
     `<div><strong>Estimated prompt cost:</strong> <span style="color:${tokenColor};font-weight:700;">~${report.estimatedTokens} tokens</span> / ${report.tokenBudget}</div>`,
-    `<div><strong>Trackers used:</strong> ${report.trackerCount} retained - ${report.historyCount} history summaries</div>`,
+    `<div><strong>Trackers included in RP context:</strong> ${report.latestTrackerAvailable ?? report.available ? 1 : 0} latest + ${report.historyCount} compact summaries</div>`,
+    `<div><strong>Tracker context depth setting:</strong> <code>latest + ${report.contextDepthSetting ?? state2.settings.promptInjectionTrackerLimit ?? 5}</code></div>`,
+    `<div><strong>Full tracker retention setting:</strong> <code>${(report.storageRetentionSetting ?? state2.settings.trackerHistoryLimit) === 0 ? "unlimited" : `last ${report.storageRetentionSetting ?? state2.settings.trackerHistoryLimit}`}</code></div>`,
+    `<div><strong>History format:</strong> <code>${report.historyCompactOnly === false ? "rich/full" : "compact summaries only"}</code></div>`,
     report.trackerPresetId ? `<div><strong>Latest preset:</strong> <code>${escapeHtml2(report.trackerPresetId)}</code></div>` : "",
     report.trackerGeneratedAt ? `<div><strong>Latest tracker:</strong> <code>${escapeHtml2(report.trackerGeneratedAt)}</code></div>` : "",
     report.truncated ? `<div><strong>Budget trim:</strong> <span style="color:${warningColor};font-weight:600;">Lower-priority details omitted</span></div>` : "",
@@ -3706,14 +3727,14 @@ function renderControlsPanel(state2, status, selectedConnection, disabledReason)
         '<label class="sotl-label">Token budget',
         `<select class="sotl-select" data-sotl-field="promptInjectionTokenBudget">${renderInjectionBudgetOptions(state2)}</select>`,
         "</label>",
-        '<label class="sotl-label">Trackers considered',
+        '<label class="sotl-label">Tracker context depth',
         `<select class="sotl-select" data-sotl-field="promptInjectionTrackerLimit">${renderInjectionLimitOptions(state2)}</select>`,
         "</label>",
         "</div>",
         '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeAppearance" ' + (state2.settings.promptInjectionIncludeAppearance !== false ? "checked" : "") + "> Include character appearance anchors</label>",
         '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeRules" ' + (state2.settings.promptInjectionIncludeRules !== false ? "checked" : "") + "> Include continuity rules and warnings</label>",
         '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeNextTurn" ' + (state2.settings.promptInjectionIncludeNextTurn !== false ? "checked" : "") + "> Include next-turn guidance</label>",
-        '<p class="sotl-note">Best setup: latest detailed tracker plus a few compact summaries. The full tracker stays stored and visible without flooding context.</p>',
+        '<p class="sotl-note">Best setup: latest detailed tracker plus a few compact summaries. This controls live RP context only; it does not delete stored tracker snapshots.</p>',
         renderInjectionReport(state2),
         "</div>"
       ].join(""),
@@ -3762,13 +3783,17 @@ function renderControlsPanel(state2, status, selectedConnection, disabledReason)
     renderSettingsSection(
       "storage-cleanup",
       "Storage & Cleanup",
-      `${state2.settings.trackerHistoryLimit === 0 ? "unlimited" : `last ${state2.settings.trackerHistoryLimit}`} trackers`,
+      `${state2.settings.trackerHistoryLimit === 0 ? "unlimited" : `last ${state2.settings.trackerHistoryLimit}`} full trackers`,
       [
         '<div class="sotl-fields">',
-        '<label class="sotl-label">Tracker history limit',
+        '<label class="sotl-label">Full tracker retention',
         `<select class="sotl-select" data-sotl-field="trackerHistoryLimit">${renderHistoryLimitOptions(state2)}</select>`,
         "</label>",
-        '<p class="sotl-note">Controls how many tracker snapshots are kept per chat. Latest tracker is always preserved.</p>',
+        '<p class="sotl-note">Controls how many complete tracker snapshots are stored and viewable per chat. This is separate from live prompt context.</p>',
+        '<label class="sotl-label">Tracker generation history',
+        `<select class="sotl-select" data-sotl-field="trackerGenerationHistoryLimit">${renderGenerationHistoryLimitOptions(state2)}</select>`,
+        "</label>",
+        '<p class="sotl-note">Controls what the sidecar tracker generator sees: the latest previous tracker as full JSON plus older compact summaries. This does not delete stored trackers.</p>',
         '<div class="sotl-actions">',
         button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
         "</div>",
@@ -3866,6 +3891,25 @@ function renderDrawer(state2, status = {}) {
   ].join("");
 }
 
+// src/frontend/icons.ts
+function bearPawSvg(className = "sotl-paw-svg") {
+  return [
+    `<svg class="${className}" viewBox="0 0 512 512" width="22" height="22" fill="currentColor" aria-hidden="true">`,
+    '  <path class="sotl-bear-claw sotl-bear-claw--1" d="M69 159c-12-35-7-68 21-103 13 43 14 78-3 105-7 11-14 12-18-2z"/>',
+    '  <path class="sotl-bear-claw sotl-bear-claw--2" d="M154 82c-7-38 8-70 43-96 7 44-3 77-27 99-9 8-14 7-16-3z"/>',
+    '  <path class="sotl-bear-claw sotl-bear-claw--3" d="M256 62c-5-38 6-72 32-103 19 41 22 76 8 105-7 13-34 13-40-2z"/>',
+    '  <path class="sotl-bear-claw sotl-bear-claw--4" d="M358 82c2-38-14-70-49-96-7 44 3 77 27 99 9 8 20 7 22-3z"/>',
+    '  <path class="sotl-bear-claw sotl-bear-claw--5" d="M443 159c12-35 7-68-21-103-13 43-14 78 3 105 7 11 14 12 18-2z"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--1" cx="87" cy="230" rx="48" ry="68" transform="rotate(-24 87 230)"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--2" cx="171" cy="176" rx="48" ry="74" transform="rotate(-10 171 176)"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--3" cx="256" cy="156" rx="51" ry="78"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--4" cx="341" cy="176" rx="48" ry="74" transform="rotate(10 341 176)"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--5" cx="425" cy="230" rx="48" ry="68" transform="rotate(24 425 230)"/>',
+    '  <path class="sotl-paw-main sotl-bear-main" d="M98 411c-2-63 42-111 91-128 26-9 45-10 67-10s41 1 67 10c49 17 93 65 91 128-1 38-25 67-62 73-32 5-58-5-91-5h-10c-33 0-59 10-91 5-37-6-61-35-62-73z"/>',
+    "</svg>"
+  ].join("");
+}
+
 // src/frontend/messageCards.ts
 var injectedWrappers = /* @__PURE__ */ new Map();
 var injectedMessagePaws = /* @__PURE__ */ new Map();
@@ -3888,17 +3932,6 @@ function escapeHtml3(value) {
 function escapeSelector(value) {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(value);
   return value.replace(/["\\]/g, "\\$&");
-}
-function pawSvg(className = "sotl-paw-svg") {
-  return [
-    `<svg class="${className}" viewBox="0 0 512 512" width="20" height="20" fill="currentColor" aria-hidden="true">`,
-    '  <circle class="sotl-paw-pad sotl-paw-pad--1" cx="80" cy="208" r="48"/>',
-    '  <circle class="sotl-paw-pad sotl-paw-pad--2" cx="144" cy="96" r="48"/>',
-    '  <circle class="sotl-paw-pad sotl-paw-pad--3" cx="272" cy="96" r="48"/>',
-    '  <circle class="sotl-paw-pad sotl-paw-pad--4" cx="336" cy="208" r="48"/>',
-    '  <path class="sotl-paw-main" d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5z"/>',
-    "</svg>"
-  ].join("");
 }
 function registerRerenderCallback(cb) {
   rerenderCallback = cb;
@@ -3971,62 +4004,103 @@ function isVisibleElement(element) {
   const style = typeof getComputedStyle === "function" ? getComputedStyle(element) : null;
   return style?.display !== "none" && style?.visibility !== "hidden" && style?.opacity !== "0";
 }
+function isLargeBlockingSurface(element) {
+  if (!isVisibleElement(element)) return false;
+  const rect = element.getBoundingClientRect();
+  const ariaModal = element.getAttribute("aria-modal") === "true";
+  const role = element.getAttribute("role");
+  if (ariaModal || role === "dialog" || role === "menu") return true;
+  return rect.width >= 160 && rect.height >= 140;
+}
+function hasVisibleBlockingSurface(doc) {
+  const selectors = [
+    ".lumiverse-drawer",
+    ".drawer",
+    "[data-drawer]",
+    "#drawer",
+    ".sotl-drawer",
+    ".sotl-root",
+    ".lumiverse-settings",
+    ".settings-modal",
+    "[data-settings]",
+    "#settings",
+    ".sotl-settings",
+    '[role="dialog"]',
+    '[aria-modal="true"]',
+    ".modal",
+    ".popover",
+    '[role="menu"]',
+    "[data-context-menu]",
+    "[data-lv-context-menu]",
+    ".context-menu",
+    ".lv-context-menu",
+    '[data-sotl-tracker-preview="true"]',
+    '[data-route*="branch" i]',
+    '[data-screen*="branch" i]',
+    '[class*="branch" i]',
+    '[data-route*="settings" i]',
+    '[data-screen*="settings" i]'
+  ].join(",");
+  return Array.from(doc.querySelectorAll(selectors)).some((candidate) => {
+    if (candidate.closest(".sotl-chat-panel-container")) return false;
+    return isLargeBlockingSurface(candidate);
+  });
+}
+function isInExtensionOrMenu(element) {
+  return Boolean(element.closest('.sotl-root, .sotl-chat-panel-container, [data-sotl-drawer-fallback], [data-sotl-tracker-preview], [role="dialog"], [role="menu"], .popover, .context-menu, .drawer, .lumiverse-drawer, .settings-modal'));
+}
+function hasVisibleComposer(doc) {
+  const selectors = [
+    "[data-chat-input]",
+    "[data-input-bar]",
+    "[data-composer]",
+    ".chat-input",
+    ".composer",
+    ".input-bar",
+    'textarea[placeholder*="message" i]',
+    'input[placeholder*="message" i]',
+    '[contenteditable="true"]'
+  ].join(",");
+  const viewportHeight = doc.defaultView?.innerHeight ?? 0;
+  return Array.from(doc.querySelectorAll(selectors)).some((candidate) => {
+    if (!isVisibleElement(candidate) || isInExtensionOrMenu(candidate)) return false;
+    const rect = candidate.getBoundingClientRect();
+    return rect.width >= 120 && rect.bottom >= viewportHeight * 0.55;
+  });
+}
+function hasVisibleChatContent(doc) {
+  const selectors = [
+    "[data-message-id]",
+    "[data-lumiverse-message-id]",
+    "[data-lv-message-id]",
+    "[data-chat-message-id]",
+    "[data-message_id]",
+    "[data-messageid]",
+    '[class*="message" i]',
+    '[class*="chat" i]'
+  ].join(",");
+  return Array.from(doc.querySelectorAll(selectors)).some((candidate) => {
+    if (!isVisibleElement(candidate) || isInExtensionOrMenu(candidate)) return false;
+    const rect = candidate.getBoundingClientRect();
+    return rect.width >= 160 && rect.height >= 40;
+  });
+}
+function shouldShowGlobalPaw(doc, state2) {
+  if (!state2?.settings.showChatHudLauncher) return false;
+  if (isDrawerOpen || isSettingsOpen) return false;
+  if (hasVisibleBlockingSurface(doc)) return false;
+  if (!hasVisibleComposer(doc)) return false;
+  if (!hasVisibleChatContent(doc) && !state2.activeChat.id) return false;
+  return true;
+}
 function visibleToolbarCandidate(element) {
   if (!isVisibleElement(element)) return false;
   if (element.querySelector('[data-sotl-message-paw="true"]')) return true;
   const controls = element.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]');
   return controls.length > 0;
 }
-function visibleToolbarClusterCandidate(element, hostElement) {
-  if (!isVisibleElement(element) || !isNearMessageHost(element, hostElement)) return false;
-  const rect = element.getBoundingClientRect();
-  if (rect.height > 72 || rect.width > 420) return false;
-  const controls = Array.from(element.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action], svg')).filter((control) => isVisibleElement(control));
-  if (controls.length < 3) return false;
-  const text = element.textContent?.trim() || "";
-  return text.length < 160;
-}
-function isNearMessageHost(candidate, hostElement) {
-  if (!(candidate instanceof HTMLElement) || !(hostElement instanceof HTMLElement)) return false;
-  const hostRect = hostElement.getBoundingClientRect();
-  const candidateRect = candidate.getBoundingClientRect();
-  if (hostRect.width <= 0 || hostRect.height <= 0 || candidateRect.width <= 0 || candidateRect.height <= 0) return false;
-  const verticalOverlap = candidateRect.bottom >= hostRect.top - 8 && candidateRect.top <= hostRect.bottom + 64;
-  const horizontalOverlap = candidateRect.right >= hostRect.left && candidateRect.left <= hostRect.right + 64;
-  return verticalOverlap && horizontalOverlap;
-}
-function findVisibleMessageToolbar(hostElement) {
-  const selectors = [
-    "[data-message-actions]",
-    "[data-lv-message-actions]",
-    "[data-message-action-bar]",
-    "[data-lumiverse-message-actions]",
-    '[role="toolbar"]',
-    ".message-actions",
-    ".message-action-buttons",
-    ".chat-message-actions",
-    ".lv-message-actions",
-    ".lv-message-action-bar",
-    ".message-controls"
-  ];
-  for (const selector of selectors) {
-    const direct = Array.from(hostElement.querySelectorAll(selector)).find(visibleToolbarCandidate);
-    if (direct) return direct;
-  }
-  const parent = hostElement.parentElement;
-  if (!parent) return null;
-  for (const selector of selectors) {
-    const nearby = Array.from(parent.querySelectorAll(selector)).find((candidate) => {
-      if (!visibleToolbarCandidate(candidate)) return false;
-      const closestMessage = candidate.closest("[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid]");
-      return closestMessage === hostElement || !closestMessage && isNearMessageHost(candidate, hostElement);
-    });
-    if (nearby instanceof HTMLElement) return nearby;
-  }
-  return null;
-}
-function findDocumentMessageToolbar(doc, hostElement) {
-  const selectors = [
+function findVisibleMessageToolbars(doc, state2) {
+  const selector = [
     "[data-message-actions]",
     "[data-lv-message-actions]",
     "[data-message-action-bar]",
@@ -4039,7 +4113,32 @@ function findDocumentMessageToolbar(doc, hostElement) {
     ".lv-message-action-bar",
     ".message-controls"
   ].join(",");
-  return Array.from(doc.querySelectorAll(selectors)).find((candidate) => visibleToolbarCandidate(candidate) && isNearMessageHost(candidate, hostElement)) ?? Array.from(doc.querySelectorAll("div, nav, section, menu")).find((candidate) => visibleToolbarClusterCandidate(candidate, hostElement)) ?? null;
+  const seen = /* @__PURE__ */ new Set();
+  const toolbars = [];
+  const candidates = [
+    ...Array.from(doc.querySelectorAll(selector)).filter(visibleToolbarCandidate),
+    ...Array.from(doc.querySelectorAll("div, nav, section, menu")).filter((candidate) => {
+      if (!isVisibleElement(candidate)) return false;
+      const rect = candidate.getBoundingClientRect();
+      if (rect.height > 72 || rect.width > 420) return false;
+      const controls = Array.from(candidate.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action], svg')).filter((control) => isVisibleElement(control));
+      const text = candidate.textContent?.trim() || "";
+      return controls.length >= 3 && text.length < 160;
+    })
+  ];
+  for (const candidate of candidates) {
+    if (seen.has(candidate) || candidate.closest('.sotl-chat-panel-container, [data-sotl-tracker-preview="true"]')) continue;
+    const messageId = messageIdFromElement(candidate) ?? findNearestTrackedMessageIdForElement(candidate, state2);
+    if (!messageId) continue;
+    if (!state2.messageTrackers.some((tracker) => tracker.messageId === messageId) && state2.latestTracker?.messageId !== messageId) continue;
+    seen.add(candidate);
+    toolbars.push({
+      toolbar: candidate,
+      messageId,
+      swipeId: state2.activeSwipeByMessageId[messageId]
+    });
+  }
+  return toolbars.slice(0, 2);
 }
 function cleanupDisconnectedMessagePaws() {
   for (const [key, button2] of injectedMessagePaws.entries()) {
@@ -4047,6 +4146,13 @@ function cleanupDisconnectedMessagePaws() {
   }
 }
 function cleanupMessageTrackerActions() {
+  const doc = documentRef2();
+  doc?.querySelectorAll('[data-sotl-message-paw="true"], [data-sotl-context-menu-item="true"]').forEach((node) => {
+    try {
+      node.remove();
+    } catch {
+    }
+  });
   for (const button2 of injectedMessagePaws.values()) {
     try {
       button2.remove();
@@ -4179,17 +4285,7 @@ function createMessagePawButton(doc, messageId, swipeId) {
   if (typeof swipeId === "number") button2.dataset.sotlSwipeId = String(swipeId);
   button2.title = typeof swipeId === "number" ? `Open Loom tracker for Swipe ${swipeId + 1}` : "Open Loom tracker for this message";
   button2.setAttribute("aria-label", button2.title);
-  button2.innerHTML = pawSvg("sotl-message-paw-svg");
-  return button2;
-}
-function mountAnchoredMessagePaw(doc, hostElement, messageId, swipeId) {
-  const button2 = createMessagePawButton(doc, messageId, swipeId);
-  button2.classList.add("sotl-message-paw-action--anchored");
-  const rect = hostElement.getBoundingClientRect();
-  button2.style.position = "fixed";
-  button2.style.right = `${Math.max(8, Math.round((doc.defaultView?.innerWidth ?? rect.right) - rect.right + 10))}px`;
-  button2.style.top = `${Math.max(72, Math.round(rect.top + 8))}px`;
-  doc.body.append(button2);
+  button2.innerHTML = bearPawSvg("sotl-message-paw-svg");
   return button2;
 }
 function visibleContextMenuCandidate(element) {
@@ -4216,10 +4312,9 @@ function mountContextMenuTrackerAction(doc, state2) {
     if (typeof target.swipeId === "number") item.dataset.sotlSwipeId = String(target.swipeId);
     item.setAttribute("role", reference?.getAttribute("role") || "menuitem");
     item.setAttribute("tabindex", "0");
-    item.innerHTML = `<span class="sotl-context-menu-item__icon">${pawSvg("sotl-message-paw-svg")}</span><span>Open Tracker</span>`;
+    item.innerHTML = `<span class="sotl-context-menu-item__icon">${bearPawSvg("sotl-message-paw-svg")}</span><span>Open Tracker</span>`;
     if (reference) syncNativeLikeButtonVariables(item, reference);
-    const deleteItem = Array.from(menu.children).find((child) => /\bDelete\b/i.test(child.textContent || ""));
-    menu.insertBefore(item, deleteItem ?? null);
+    menu.insertBefore(item, menu.firstChild);
     injectedContextMenuItems.add(item);
     mounted += 1;
   }
@@ -4356,13 +4451,12 @@ function mountMessageCards(ctx, state2) {
   };
 }
 function mountMessageTrackerActions(ctx, state2) {
+  void ctx;
   const doc = documentRef2();
   if (!doc) return { status: "Message tracker paw unavailable: no document." };
   cleanupDisconnectedMessagePaws();
   cleanupMessageTrackerActions();
   if (!state2) return { status: "Message tracker paw waiting for backend state." };
-  const domApi = ctx.dom && typeof ctx.dom === "object" ? ctx.dom : null;
-  const findMessageElement = domApi && typeof domApi.findMessageElement === "function" ? domApi.findMessageElement : null;
   const messageIds = /* @__PURE__ */ new Set();
   for (const tracker of state2.messageTrackers) {
     if (tracker.messageId) messageIds.add(tracker.messageId);
@@ -4370,33 +4464,15 @@ function mountMessageTrackerActions(ctx, state2) {
   if (state2.latestTracker?.messageId) messageIds.add(state2.latestTracker.messageId);
   if (messageIds.size === 0) return { status: "No message trackers available for message paw actions." };
   let mounted = 0;
-  let missingToolbar = 0;
-  let missingHost = 0;
-  for (const messageId of messageIds) {
-    const activeSwipe = state2.activeSwipeByMessageId[messageId];
-    const key = messageActionKey(messageId, activeSwipe);
-    const hostElement = findMessageElement?.(messageId) ?? findMessageHostById(doc, messageId);
-    if (!hostElement) {
-      missingHost += 1;
-      continue;
-    }
-    const toolbar = findVisibleMessageToolbar(hostElement) ?? findDocumentMessageToolbar(doc, hostElement);
-    if (!toolbar) {
-      if (lastMessageActionTarget?.messageId === messageId && hostElement instanceof HTMLElement) {
-        const anchored = mountAnchoredMessagePaw(doc, hostElement, messageId, activeSwipe);
-        injectedMessagePaws.set(key, anchored);
-        mounted += 1;
-        continue;
-      }
-      missingToolbar += 1;
-      continue;
-    }
-    const button2 = createMessagePawButton(doc, messageId, activeSwipe);
+  const toolbars = findVisibleMessageToolbars(doc, state2);
+  for (const { toolbar, messageId, swipeId } of toolbars) {
+    if (toolbar.querySelector('[data-sotl-message-paw="true"]')) continue;
+    const key = messageActionKey(messageId, swipeId);
+    const button2 = createMessagePawButton(doc, messageId, swipeId);
     const reference = Array.from(toolbar.querySelectorAll('button, [role="button"], a')).find((entry) => isVisibleElement(entry) && entry.dataset.sotlMessagePaw !== "true");
     if (reference) syncNativeLikeButtonVariables(button2, reference);
-    const deleteLike = Array.from(toolbar.children).find((child) => /\b(delete|trash)\b/i.test(child.getAttribute("aria-label") || child.getAttribute("title") || child.textContent || ""));
-    if (deleteLike) toolbar.insertBefore(button2, deleteLike);
-    else toolbar.append(button2);
+    const insertionTarget = reference?.parentElement === toolbar ? reference : toolbar.firstChild;
+    toolbar.insertBefore(button2, insertionTarget);
     injectedMessagePaws.set(key, button2);
     mounted += 1;
   }
@@ -4404,8 +4480,7 @@ function mountMessageTrackerActions(ctx, state2) {
   if (mounted > 0) reports.push(`Mounted ${mounted} message paw action${mounted === 1 ? "" : "s"}.`);
   const menuMounted = mountContextMenuTrackerAction(doc, state2);
   if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action${menuMounted === 1 ? "" : "s"}.`);
-  if (missingToolbar > 0) reports.push(`${missingToolbar} message toolbar${missingToolbar === 1 ? "" : "s"} not visible.`);
-  if (missingHost > 0) reports.push(`${missingHost} tracked message host${missingHost === 1 ? "" : "s"} not mounted.`);
+  if (toolbars.length === 0) reports.push("No visible native message toolbar found; using context-menu/history fallback.");
   return { status: reports.join(" ") || "No visible message toolbar found for paw actions." };
 }
 function renderCompactPanel(tracker, state2, missingSwipeId) {
@@ -4517,61 +4592,30 @@ function ensureChatLoomPanel(ctx, state2) {
   if (!doc) return;
   doc.querySelector(".sotl-chat-panel-container")?.remove();
   if (!state2) return;
-  const showPanel = state2.settings.showChatHudLauncher;
-  if (!showPanel) return;
-  const visibleDrawer = doc.querySelector(".lumiverse-drawer, .drawer, [data-drawer], #drawer, .sotl-drawer");
-  const visibleSettings = doc.querySelector(".lumiverse-settings, .settings-modal, [data-settings], #settings, .sotl-settings");
-  let softHide = false;
-  if (visibleDrawer) {
-    const rect = visibleDrawer.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) softHide = true;
-  }
-  if (visibleSettings) {
-    const rect = visibleSettings.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) softHide = true;
-  }
-  if (!visibleDrawer && isDrawerOpen) isDrawerOpen = false;
-  if (!visibleSettings && isSettingsOpen) isSettingsOpen = false;
-  if (isDrawerOpen || isSettingsOpen) softHide = true;
+  if (!shouldShowGlobalPaw(doc, state2)) return;
   const container = doc.createElement("div");
   container.className = "sotl-chat-panel-container";
   if (isChatLoomPanelExpanded) {
     container.classList.add("sotl-chat-panel-container--expanded");
   }
   container.dataset.sotlChatPanel = "true";
-  if (softHide) {
-    container.style.setProperty("display", "none", "important");
-  }
   if (!isChatLoomPanelExpanded) {
     const generatingClass = state2.generation.running ? " sotl-chat-pill--generating" : "";
     container.innerHTML = `
       <div class="sotl-chat-pill${generatingClass}" data-sotl-panel-action="expand" title="Open Loom HUD" role="button" aria-label="Open Loom HUD" tabindex="0">
-        ${pawSvg()}
+        ${bearPawSvg()}
       </div>
     `;
-    if (!isChatLoomPanelExpanded && !softHide && mountLauncherInNativeRail(doc, container)) {
+    if (mountLauncherInNativeRail(doc, container)) {
       attachContainerClickHandler(container, ctx, state2, doc);
       return;
     }
     if (false) {
-      const hostSelectors = [
-        ".chat-action-buttons",
-        ".chat-actions",
-        ".right-actions",
-        "[data-chat-actions]",
-        ".lv-chat-actions",
-        ".lv-action-strip"
-      ];
-      let hostContainer = null;
-      for (const sel of hostSelectors) {
-        hostContainer = doc.querySelector(sel);
-        if (hostContainer) break;
-      }
-      if (hostContainer) {
+      if (false) {
         container.style.removeProperty("position");
         container.style.setProperty("display", "block");
         container.style.setProperty("margin-top", "8px");
-        hostContainer.append(container);
+        container.remove();
         attachContainerClickHandler(container, ctx, state2, doc);
         return;
       }
@@ -4580,7 +4624,7 @@ function ensureChatLoomPanel(ctx, state2) {
     const resolution = resolveActiveTrackerForState(state2);
     container.innerHTML = renderCompactPanel(resolution.tracker, state2, resolution.missingSwipeId);
   }
-  if (!isChatLoomPanelExpanded && !softHide) {
+  if (!isChatLoomPanelExpanded) {
     syncFixedLauncherToStockIcon(doc, container);
   }
   attachContainerClickHandler(container, ctx, state2, doc);
@@ -5422,7 +5466,8 @@ var loomStyles = `
   overflow: visible;
 }
 .sotl-paw-pad,
-.sotl-paw-main {
+.sotl-paw-main,
+.sotl-bear-claw {
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -5436,17 +5481,32 @@ var loomStyles = `
   animation: sotl-paw-ring 1.35s ease-out infinite;
   pointer-events: none;
 }
-.sotl-chat-pill--generating .sotl-paw-pad {
+.sotl-chat-pill--generating .sotl-paw-pad,
+.sotl-chat-pill--generating .sotl-bear-claw {
   animation: sotl-paw-pad-bounce 1.1s ease-in-out infinite;
 }
-.sotl-chat-pill--generating .sotl-paw-pad--2 {
+.sotl-chat-pill--generating .sotl-bear-toe--1,
+.sotl-chat-pill--generating .sotl-bear-claw--1 {
+  animation-delay: 0s;
+}
+.sotl-chat-pill--generating .sotl-bear-toe--2,
+.sotl-chat-pill--generating .sotl-bear-claw--2 {
   animation-delay: 0.08s;
 }
-.sotl-chat-pill--generating .sotl-paw-pad--3 {
+.sotl-chat-pill--generating .sotl-bear-toe--3,
+.sotl-chat-pill--generating .sotl-bear-claw--3 {
   animation-delay: 0.16s;
 }
-.sotl-chat-pill--generating .sotl-paw-pad--4 {
+.sotl-chat-pill--generating .sotl-bear-toe--4,
+.sotl-chat-pill--generating .sotl-bear-claw--4 {
   animation-delay: 0.24s;
+}
+.sotl-chat-pill--generating .sotl-bear-toe--5,
+.sotl-chat-pill--generating .sotl-bear-claw--5 {
+  animation-delay: 0.32s;
+}
+.sotl-chat-pill--generating .sotl-paw-main {
+  animation: sotl-paw-main-pulse 1.35s ease-in-out infinite;
 }
 .sotl-chat-pill:hover {
   transform: scale(1.05);
@@ -5583,6 +5643,10 @@ var loomStyles = `
   0% { transform: scale(0.9); opacity: 0.45; }
   100% { transform: scale(1.35); opacity: 0; }
 }
+@keyframes sotl-paw-main-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(56, 100, 217, 0)); opacity: 0.9; }
+  45% { filter: drop-shadow(0 0 8px rgba(56, 100, 217, 0.65)); opacity: 1; }
+}
 .sotl-message-paw-action {
   display: inline-flex;
   align-items: center;
@@ -5598,7 +5662,8 @@ var loomStyles = `
   box-shadow: var(--sotl-native-shadow, none);
   opacity: var(--sotl-native-opacity, 1);
   padding: var(--sotl-native-padding, 0);
-  margin-left: 4px;
+  margin-left: 0;
+  margin-right: 4px;
   cursor: pointer;
   line-height: 1;
   vertical-align: middle;
@@ -5612,13 +5677,6 @@ var loomStyles = `
 .sotl-message-paw-action .sotl-message-paw-svg {
   width: var(--sotl-native-glyph-size, 16px);
   height: var(--sotl-native-glyph-size, 16px);
-}
-.sotl-message-paw-action--anchored {
-  z-index: 2147483646;
-  background: var(--sotl-native-bg, color-mix(in srgb, var(--lv-surface-raised, #111827) 92%, transparent));
-  backdrop-filter: var(--sotl-native-backdrop, blur(12px));
-  -webkit-backdrop-filter: var(--sotl-native-backdrop, blur(12px));
-  box-shadow: var(--sotl-native-shadow, 0 8px 18px rgba(0, 0, 0, 0.28));
 }
 .sotl-context-menu-item {
   display: flex;
@@ -5670,9 +5728,110 @@ var loomStyles = `
   border-color: var(--lv-accent, #3864d9);
   background: color-mix(in srgb, var(--lv-accent, #3864d9) 8%, transparent);
 }
+.sotl-tracker-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: max(14px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+.sotl-tracker-preview__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.sotl-tracker-preview {
+  position: relative;
+  z-index: 1;
+  width: min(720px, 100%);
+  max-height: min(80vh, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.28)));
+  background: var(--lumiverse-fill, var(--lv-surface-raised, rgba(10, 12, 18, 0.96)));
+  color: var(--lumiverse-text, var(--lv-text, #f3f5f8));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+  padding: 12px;
+}
+.sotl-tracker-preview__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.2)));
+}
+.sotl-tracker-preview__head h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.sotl-tracker-preview__eyebrow,
+.sotl-tracker-preview__meta {
+  margin: 0;
+  color: var(--lumiverse-text-muted, var(--lv-text-muted, #8f9baa));
+  font-size: 11px;
+}
+.sotl-tracker-preview__eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.sotl-tracker-preview__badge {
+  align-self: center;
+  border: 1px solid color-mix(in srgb, var(--lv-accent, #3864d9) 40%, transparent);
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--lv-accent, #3864d9);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sotl-tracker-preview__badge[data-status="missing"] {
+  color: var(--lv-warning-text, #d4aa72);
+  border-color: color-mix(in srgb, var(--lv-warning-text, #d4aa72) 45%, transparent);
+}
+.sotl-tracker-preview__close {
+  align-self: start;
+}
+.sotl-tracker-preview__body {
+  min-height: 120px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+.sotl-tracker-preview__body .sotl-preview,
+.sotl-tracker-preview__body [data-sotl-card="true"],
+.sotl-tracker-preview__body .sotl-card {
+  max-width: 100%;
+}
+.sotl-tracker-preview__missing {
+  border: 1px solid color-mix(in srgb, var(--lv-warning-text, #d4aa72) 35%, transparent);
+  border-radius: 8px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--lv-warning-text, #d4aa72) 10%, transparent);
+  color: var(--lumiverse-text, var(--lv-text, #f3f5f8));
+}
+.sotl-tracker-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.2)));
+}
 @media (prefers-reduced-motion: reduce) {
   .sotl-chat-pill--generating::after,
-  .sotl-chat-pill--generating .sotl-paw-pad {
+  .sotl-chat-pill--generating .sotl-paw-pad,
+  .sotl-chat-pill--generating .sotl-bear-claw,
+  .sotl-chat-pill--generating .sotl-paw-main {
     animation: none;
   }
   .sotl-chat-pill--generating::before {
@@ -5763,9 +5922,12 @@ var settingsSavedTimer;
 var ignoreMessageActionMutationsUntil = 0;
 var cleanupFns = [];
 var rootListenerCleanups = /* @__PURE__ */ new Map();
-var pawIconSvg = '<svg viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M226.5 282.7c-5.5-12.8-18-20.7-31.9-20.7h-.2c-14 0-26.6 7.9-32.1 20.7l-35.3 82.5c-4 9.4-3.5 20.2 1.3 29.1 4.8 8.9 14.1 14.4 24.2 14.4h149c10.1 0 19.4-5.5 24.2-14.4 4.8-8.9 5.3-19.7 1.3-29.1l-35.3-82.5zM128 208c0-26.5-21.5-48-48-48S32 181.5 32 208s21.5 48 48 48 48-21.5 48-48zm256 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48zM192 96c0-26.5-21.5-48-48-48S96 69.5 96 96s21.5 48 48 48 48-21.5 48-48zm128 0c0-26.5-21.5-48-48-48s-48 21.5-48 48 21.5 48 48 48 48-21.5 48-48z"/></svg>';
+var pawIconSvg = bearPawSvg("sotl-drawer-tab-paw");
 var swipeStateRefreshTimer;
 var swipeStateRefreshBurstTimers = [];
+var swipeDomPollTimer;
+var lastSwipeControlSignature = "";
+var trackerPreviewRef = null;
 function documentRef3() {
   return typeof document === "undefined" ? null : document;
 }
@@ -5857,15 +6019,37 @@ function scheduleSwipeStateRefreshBurst() {
 function looksLikeSwipeControl(target) {
   const control = target.closest('button, [role="button"], [data-action], [data-lv-action], [aria-label], [title]');
   if (!control) return false;
+  const clusterText = control.closest("div, nav, section, menu")?.textContent ?? "";
   const text = [
     control.getAttribute("aria-label"),
     control.getAttribute("title"),
     control.dataset.action,
     control.dataset.lvAction,
     control.dataset.swipeAction,
-    control.textContent
+    control.textContent,
+    clusterText
   ].filter(Boolean).join(" ");
-  return /\b(swipe|variant|alternate|previous response|next response|prev response|regenerate)\b/i.test(text);
+  return /\b(swipe|variant|alternate|previous response|next response|prev response|regenerate)\b/i.test(text) || /\b\d+\s*\/\s*\d+\b/.test(text) || /^[‹›<>←→]$/.test((control.textContent || "").trim());
+}
+function readSwipeControlSignature(doc) {
+  const candidates = Array.from(doc.querySelectorAll('button, [role="button"], [aria-label], [title], [data-action], [data-lv-action], div, span')).filter((candidate) => {
+    const rect = candidate.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || rect.width > 220 || rect.height > 80) return false;
+    const style = typeof getComputedStyle === "function" ? getComputedStyle(candidate) : null;
+    if (style?.display === "none" || style?.visibility === "hidden" || style?.opacity === "0") return false;
+    const text = [
+      candidate.getAttribute("aria-label"),
+      candidate.getAttribute("title"),
+      candidate.dataset.action,
+      candidate.dataset.lvAction,
+      candidate.textContent
+    ].filter(Boolean).join(" ");
+    return /\b(swipe|variant|alternate|previous response|next response)\b/i.test(text) || /\b\d+\s*\/\s*\d+\b/.test(text);
+  }).slice(0, 12).map((candidate) => {
+    const rect = candidate.getBoundingClientRect();
+    return `${Math.round(rect.left)},${Math.round(rect.top)}:${(candidate.textContent || candidate.getAttribute("aria-label") || candidate.getAttribute("title") || "").replace(/\s+/g, " ").trim()}`;
+  });
+  return candidates.join("|");
 }
 function resolveActiveJsonTracker() {
   if (!state) return null;
@@ -5878,27 +6062,29 @@ function datasetSwipeId(element) {
   return Number.isFinite(parsed) ? parsed : void 0;
 }
 function resolveTrackerForMessageSwipe(currentState, messageId, requestedSwipeId) {
-  if (!currentState || !messageId) return { swipeId: requestedSwipeId, notice: "Tracker state is not ready yet." };
+  if (!currentState || !messageId) return { tracker: null, swipeId: requestedSwipeId, notice: "Tracker state is not ready yet." };
   const trackers = currentState.messageTrackers.filter((tracker) => tracker.messageId === messageId);
   const activeSwipe = typeof requestedSwipeId === "number" ? requestedSwipeId : currentState.activeSwipeByMessageId[messageId];
   if (typeof activeSwipe === "number") {
     const exact = trackers.find((tracker) => tracker.swipeId === activeSwipe);
-    if (exact) return { swipeId: activeSwipe };
+    if (exact) return { tracker: exact, swipeId: activeSwipe };
     if (trackers.some((tracker) => typeof tracker.swipeId === "number")) {
       return {
+        tracker: null,
         swipeId: activeSwipe,
         notice: `No tracker is stored for Swipe ${activeSwipe + 1}. It may not have generated yet or may have been pruned by the tracker history limit.`
       };
     }
   }
   if (trackers.length === 0) {
-    return { swipeId: activeSwipe, notice: "No tracker is stored for this message." };
+    return { tracker: null, swipeId: activeSwipe, notice: "No tracker is stored for this message." };
   }
   const onlyTracker = trackers[0];
   if (trackers.length === 1 && onlyTracker && typeof onlyTracker.swipeId !== "number") {
-    return { swipeId: onlyTracker.swipeId };
+    return { tracker: onlyTracker, swipeId: onlyTracker.swipeId };
   }
   return {
+    tracker: null,
     swipeId: activeSwipe,
     notice: "The active swipe could not be determined clearly, so State of the Loom did not guess between stored swipe trackers."
   };
@@ -5921,6 +6107,86 @@ function installStyle(ctx) {
 }
 function renderInto(root, html) {
   if (root) root.innerHTML = html;
+}
+function formatShortId(value) {
+  if (!value) return "unknown";
+  return value.length > 12 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value;
+}
+function formatSwipeLabel2(swipeId) {
+  return typeof swipeId === "number" ? `Swipe ${swipeId + 1}` : "Main swipe";
+}
+function formatGeneratedAt(value) {
+  if (!value) return "unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+function isCurrentTracker(tracker, currentState) {
+  if (!tracker || !currentState) return false;
+  const current = resolveActiveTrackerForState(currentState).tracker;
+  return Boolean(current && current.messageId === tracker.messageId && current.swipeId === tracker.swipeId);
+}
+function closeTrackerPreview() {
+  trackerPreviewRef = null;
+  documentRef3()?.querySelector('[data-sotl-tracker-preview="true"]')?.remove();
+}
+function openTrackerPreview(messageId, swipeId) {
+  if (!messageId) return;
+  const resolved = resolveTrackerForMessageSwipe(state, messageId, swipeId);
+  trackerPreviewRef = {
+    messageId,
+    swipeId: resolved.swipeId,
+    notice: resolved.notice
+  };
+  renderTrackerPreviewOverlay();
+}
+function renderTrackerPreviewOverlay() {
+  const doc = documentRef3();
+  if (!doc) return;
+  doc.querySelector('[data-sotl-tracker-preview="true"]')?.remove();
+  if (!trackerPreviewRef) return;
+  const resolved = resolveTrackerForMessageSwipe(state, trackerPreviewRef.messageId, trackerPreviewRef.swipeId);
+  const tracker = resolved.tracker;
+  const overlay = doc.createElement("div");
+  overlay.className = "sotl-tracker-preview-overlay";
+  overlay.dataset.sotlTrackerPreview = "true";
+  const preset = tracker && state ? state.presets.find((candidate) => candidate.id === tracker.presetId) : void 0;
+  const current = isCurrentTracker(tracker, state);
+  const status = tracker ? current ? "current" : "previous retained" : "missing";
+  const jsonButton = tracker ? '<button class="sotl-button" type="button" data-sotl-action="preview-copy-json">Copy JSON</button>' : "";
+  const regenerateButton = tracker ? `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(tracker.messageId || trackerPreviewRef.messageId)}"${typeof tracker.swipeId === "number" ? ` data-sotl-swipe-id="${tracker.swipeId}"` : ""}>Regenerate</button>` : `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(trackerPreviewRef.messageId)}"${typeof resolved.swipeId === "number" ? ` data-sotl-swipe-id="${resolved.swipeId}"` : ""}>Generate This Swipe</button>`;
+  const drawerButton = tracker ? '<button class="sotl-button" type="button" data-sotl-action="preview-open-drawer">Open in Track drawer</button>' : "";
+  const body = tracker && state ? renderTrackerForState(tracker, state).html : `<div class="sotl-tracker-preview__missing">${escapeHtml2(resolved.notice || `No retained/generated tracker for ${formatSwipeLabel2(resolved.swipeId)}.`)}</div>`;
+  const meta = [
+    `Message ${formatShortId(tracker?.messageId || trackerPreviewRef.messageId)}`,
+    formatSwipeLabel2(resolved.swipeId ?? tracker?.swipeId),
+    tracker ? formatGeneratedAt(tracker.generatedAt) : "not retained",
+    tracker ? preset?.name || tracker.presetId : "no tracker",
+    tracker ? tracker.source : "missing"
+  ];
+  overlay.innerHTML = [
+    '<div class="sotl-tracker-preview__scrim" data-sotl-action="close-tracker-preview"></div>',
+    '<section class="sotl-tracker-preview" role="dialog" aria-modal="true" aria-label="State of the Loom tracker preview">',
+    '  <header class="sotl-tracker-preview__head">',
+    "    <div>",
+    '      <p class="sotl-tracker-preview__eyebrow">State of the Loom</p>',
+    `      <h3>${tracker ? escapeHtml2(tracker.compactSummary || preset?.name || "Retained tracker") : "No tracker retained"}</h3>`,
+    `      <p class="sotl-tracker-preview__meta">${meta.map(escapeHtml2).join(" - ")}</p>`,
+    "    </div>",
+    `    <span class="sotl-tracker-preview__badge" data-status="${escapeHtml2(status)}">${escapeHtml2(status)}</span>`,
+    '    <button class="sotl-icon-button sotl-tracker-preview__close" type="button" data-sotl-action="close-tracker-preview" aria-label="Close tracker preview">\xD7</button>',
+    "  </header>",
+    resolved.notice ? `<p class="sotl-note sotl-warning">${escapeHtml2(resolved.notice)}</p>` : "",
+    `  <div class="sotl-tracker-preview__body">${body}</div>`,
+    '  <footer class="sotl-tracker-preview__actions">',
+    '    <button class="sotl-button" type="button" data-sotl-action="close-tracker-preview">Close</button>',
+    drawerButton,
+    jsonButton,
+    regenerateButton,
+    "  </footer>",
+    "</section>"
+  ].filter(Boolean).join("\n");
+  doc.body.append(overlay);
 }
 function bindRootEvents(root) {
   if (rootListenerCleanups.has(root)) return;
@@ -6087,6 +6353,7 @@ function rerender() {
   const before = uiStatus();
   paint(before);
   updateMessageCardStatus();
+  renderTrackerPreviewOverlay();
   if (lastRenderStatus !== before.lastRenderStatus) paint(uiStatus());
 }
 function scheduleMessageCardRetry() {
@@ -6146,16 +6413,45 @@ function handleDrawerEvent(event) {
     if (action === "message-paw") {
       const messageId = actionButton.dataset.sotlMessageId;
       const actionSwipeId2 = datasetSwipeId(actionButton);
-      const resolved = resolveTrackerForMessageSwipe(state, messageId, actionSwipeId2);
-      if (messageId) {
+      openTrackerPreview(messageId, actionSwipeId2);
+      return;
+    }
+    if (action === "close-tracker-preview") {
+      closeTrackerPreview();
+      return;
+    }
+    if (action === "preview-open-drawer") {
+      if (trackerPreviewRef) {
+        const resolved = resolveTrackerForMessageSwipe(state, trackerPreviewRef.messageId, trackerPreviewRef.swipeId);
         setFocusedTrackerRef({
-          messageId,
+          messageId: trackerPreviewRef.messageId,
           swipeId: resolved.swipeId,
           notice: resolved.notice
         });
+        closeTrackerPreview();
+        rerender();
+        activateDrawer();
       }
-      rerender();
-      activateDrawer();
+      return;
+    }
+    if (action === "preview-copy-json") {
+      if (trackerPreviewRef) {
+        const resolved = resolveTrackerForMessageSwipe(state, trackerPreviewRef.messageId, trackerPreviewRef.swipeId);
+        if (resolved.tracker) {
+          const jsonText = JSON.stringify(resolved.tracker.data, null, 2);
+          if (typeof navigator !== "undefined" && navigator.clipboard) {
+            navigator.clipboard.writeText(jsonText).catch((err) => console.error("Failed to copy preview JSON:", err));
+          }
+        }
+      }
+      return;
+    }
+    if (action === "preview-regenerate") {
+      const messageId = actionButton.dataset.sotlMessageId || trackerPreviewRef?.messageId;
+      const actionSwipeId2 = datasetSwipeId(actionButton) ?? trackerPreviewRef?.swipeId;
+      postToBackend(contextRef, { type: "generate_tracker", messageId, swipeId: actionSwipeId2 });
+      closeTrackerPreview();
+      startBackendTimer();
       return;
     }
     if (action === "view-tracker") {
@@ -6614,6 +6910,10 @@ function handleDrawerEvent(event) {
     const val = parseInt(field.value, 10);
     if (!isNaN(val)) saveSettings({ trackerHistoryLimit: val });
   }
+  if (fieldName === "trackerGenerationHistoryLimit" && field instanceof HTMLSelectElement) {
+    const val = parseInt(field.value, 10);
+    if (!isNaN(val)) saveSettings({ trackerGenerationHistoryLimit: val });
+  }
   if (fieldName === "sidecarGenerationTimeoutMs" && field instanceof HTMLSelectElement) {
     const val = parseInt(field.value, 10);
     if (!isNaN(val)) saveSettings({ sidecarGenerationTimeoutMs: val });
@@ -6742,12 +7042,31 @@ function setup(ctx) {
   if (doc && typeof MutationObserver !== "undefined") {
     const observer = new MutationObserver((records) => {
       if (Date.now() < ignoreMessageActionMutationsUntil) return;
-      if (records.some((record) => {
+      const messageActionChanged = records.some((record) => {
         const target = record.target instanceof HTMLElement ? record.target : null;
         return Boolean(target?.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover'));
-      })) {
+      });
+      const swipeChanged = records.some((record) => {
+        const target = record.target instanceof HTMLElement ? record.target : null;
+        if (!target) return false;
+        const text = target.textContent || "";
+        const attrText = [
+          target.className,
+          target.getAttribute("aria-label"),
+          target.getAttribute("title"),
+          target.getAttribute("data-action"),
+          target.getAttribute("data-lv-action")
+        ].filter(Boolean).join(" ");
+        return /\b\d+\s*\/\s*\d+\b/.test(text) || /\b(swipe|variant|alternate)\b/i.test(attrText);
+      });
+      const surfaceChanged = records.some((record) => {
+        const target = record.target instanceof HTMLElement ? record.target : null;
+        return Boolean(target?.closest('.sotl-root, .lumiverse-drawer, .drawer, [data-drawer], .settings-modal, [role="dialog"], [role="menu"], .popover, .context-menu, [data-route*="branch" i], [data-screen*="branch" i]'));
+      });
+      if (messageActionChanged || surfaceChanged) {
         scheduleMessageCardRetry();
       }
+      if (swipeChanged) scheduleSwipeStateRefreshBurst();
     });
     observer.observe(doc.body, {
       childList: true,
@@ -6756,6 +7075,24 @@ function setup(ctx) {
       attributeFilter: ["class", "style", "aria-hidden", "data-state", "data-open"]
     });
     cleanupFns.push(() => observer.disconnect());
+  }
+  if (doc && typeof globalThis.setInterval === "function") {
+    lastSwipeControlSignature = readSwipeControlSignature(doc);
+    swipeDomPollTimer = globalThis.setInterval(() => {
+      const currentDoc = documentRef3();
+      if (!currentDoc) return;
+      const nextSignature = readSwipeControlSignature(currentDoc);
+      if (nextSignature && nextSignature !== lastSwipeControlSignature) {
+        lastSwipeControlSignature = nextSignature;
+        scheduleSwipeStateRefreshBurst();
+      }
+    }, 1e3);
+    cleanupFns.push(() => {
+      if (swipeDomPollTimer !== void 0 && typeof globalThis.clearInterval === "function") {
+        globalThis.clearInterval(swipeDomPollTimer);
+      }
+      swipeDomPollTimer = void 0;
+    });
   }
   postToBackend(ctx, { type: "ready" });
   startBackendTimer();
@@ -6777,6 +7114,7 @@ function setup(ctx) {
     fallbackRoot?.remove();
     documentRef3()?.querySelector('[data-sotl-dynamic-float="true"]')?.remove();
     documentRef3()?.querySelector(".sotl-chat-panel-container")?.remove();
+    closeTrackerPreview();
     cleanupMessageTrackerActions();
     documentRef3()?.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
     if (swipeStateRefreshTimer !== void 0 && typeof globalThis.clearTimeout === "function") globalThis.clearTimeout(swipeStateRefreshTimer);

@@ -218,7 +218,11 @@ export function buildContinuityInjection(input: {
     enabled: Boolean(input.settings.promptInjectionEnabled),
     registered: Boolean(input.registered),
     available: Boolean(input.latestTracker),
+    latestTrackerAvailable: Boolean(input.latestTracker),
     mode,
+    contextDepthSetting: trackerLimit,
+    storageRetentionSetting: input.settings.trackerHistoryLimit,
+    historyCompactOnly: true,
     trackerCount: input.trackers?.length ?? (input.latestTracker ? 1 : 0),
     historyCount: 0,
     estimatedTokens: 0,
@@ -306,7 +310,7 @@ export function buildContinuityInjection(input: {
   const history = mode === 'latest_plus_history'
     ? (input.trackers || [])
       .filter((tracker) => tracker.generatedAt !== latest.generatedAt || tracker.messageId !== latest.messageId)
-      .slice(0, Math.max(0, trackerLimit - 1))
+      .slice(0, Math.max(0, trackerLimit))
       .map((tracker) => `${tracker.generatedAt}: ${tracker.compactSummary}`)
       .filter(Boolean)
     : [];

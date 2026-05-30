@@ -86,6 +86,10 @@ export class LoomSettingsService {
     next.promptInjectionTokenBudget = Number.isFinite(injectionBudget)
       ? Math.max(200, Math.min(2000, Math.round(injectionBudget)))
       : defaultSettings.promptInjectionTokenBudget;
+    const generationHistoryLimit = Number(next.trackerGenerationHistoryLimit);
+    next.trackerGenerationHistoryLimit = Number.isFinite(generationHistoryLimit)
+      ? Math.max(0, Math.min(10, Math.round(generationHistoryLimit)))
+      : defaultSettings.trackerGenerationHistoryLimit;
     next.promptInjectionIncludeAppearance = next.promptInjectionIncludeAppearance !== false;
     next.promptInjectionIncludeRules = next.promptInjectionIncludeRules !== false;
     next.promptInjectionIncludeNextTurn = next.promptInjectionIncludeNextTurn !== false;

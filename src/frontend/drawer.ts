@@ -98,13 +98,12 @@ function renderTimeoutOptions(state: LoomFrontendState): string {
 }
 
 function renderHistoryLimitOptions(state: LoomFrontendState): string {
-  const limit = state.settings.trackerHistoryLimit ?? 5;
+  const limit = state.settings.trackerHistoryLimit ?? 20;
   return [
-    `<option value="1"${limit === 1 ? ' selected' : ''}>Last 1 tracker</option>`,
-    `<option value="3"${limit === 3 ? ' selected' : ''}>Last 3 trackers</option>`,
-    `<option value="5"${limit === 5 ? ' selected' : ''}>Last 5 trackers (default)</option>`,
-    `<option value="10"${limit === 10 ? ' selected' : ''}>Last 10 trackers</option>`,
-    `<option value="20"${limit === 20 ? ' selected' : ''}>Last 20 trackers</option>`,
+    `<option value="5"${limit === 5 ? ' selected' : ''}>Last 5 full trackers</option>`,
+    `<option value="10"${limit === 10 ? ' selected' : ''}>Last 10 full trackers</option>`,
+    `<option value="20"${limit === 20 ? ' selected' : ''}>Last 20 full trackers (default)</option>`,
+    `<option value="50"${limit === 50 ? ' selected' : ''}>Last 50 full trackers</option>`,
     `<option value="0"${limit === 0 ? ' selected' : ''}>Unlimited (manual cleanup)</option>`,
   ].join('');
 }
@@ -119,7 +118,14 @@ function renderInjectionBudgetOptions(state: LoomFrontendState): string {
 function renderInjectionLimitOptions(state: LoomFrontendState): string {
   const limit = state.settings.promptInjectionTrackerLimit ?? 5;
   return [1, 3, 5, 10].map((value) => (
-    `<option value="${value}"${limit === value ? ' selected' : ''}>Last ${value} tracker${value === 1 ? '' : 's'}</option>`
+    `<option value="${value}"${limit === value ? ' selected' : ''}>Latest + ${value} compact summar${value === 1 ? 'y' : 'ies'}</option>`
+  )).join('');
+}
+
+function renderGenerationHistoryLimitOptions(state: LoomFrontendState): string {
+  const limit = state.settings.trackerGenerationHistoryLimit ?? 5;
+  return [0, 3, 5, 10].map((value) => (
+    `<option value="${value}"${limit === value ? ' selected' : ''}>Previous full + ${value} compact summar${value === 1 ? 'y' : 'ies'}</option>`
   )).join('');
 }
 
@@ -367,6 +373,17 @@ function renderPipelineReport(state: LoomFrontendState): string {
       <div><strong>Generation Completed:</strong> <code>${escapeHtml(report.generationCompletedAt || 'n/a')}</code></div>
       <div><strong>Elapsed:</strong> <code>${report.elapsedMs !== undefined ? `${Math.round(report.elapsedMs / 100) / 10}s` : 'n/a'}</code></div>
       <div><strong>Timeout:</strong> <code>${report.timeoutMs === 0 ? 'manual cancel only' : report.timeoutMs ? `${Math.round(report.timeoutMs / 1000)}s` : 'n/a'}</code></div>
+      <div><strong>Previous Full Tracker JSON Included:</strong> <code>${report.previousFullTrackerIncluded ? 'yes' : 'no'}</code></div>
+      ${report.previousFullTrackerMessageId ? `<div><strong>Previous Full Tracker Source:</strong> <code>${escapeHtml(report.previousFullTrackerMessageId)}${typeof report.previousFullTrackerSwipeId === 'number' ? ` - ${escapeHtml(formatSwipeLabel(report.previousFullTrackerSwipeId))}` : ''}</code></div>` : ''}
+      <div><strong>Recent Tracker Summaries Included:</strong> <code>${report.recentTrackerSummariesIncluded ?? 0}</code></div>
+      <div><strong>Recent Summaries Compact Only:</strong> <code>${report.recentTrackerSummariesCompactOnly === false ? 'no' : 'yes'}</code></div>
+      <div><strong>Recent Chat Context Included:</strong> <code>${report.recentChatContextIncluded ? 'yes' : 'no'}${typeof report.recentChatContextMessageCount === 'number' ? ` - ${report.recentChatContextMessageCount} messages` : ''}</code></div>
+      <div><strong>Activated World Info / Lorebook Included:</strong> <code>${report.worldInfoIncluded ? 'yes' : 'no'}</code></div>
+      ${report.worldInfoStatus ? `<div><strong>World Info Status:</strong> <code>${escapeHtml(report.worldInfoStatus)}</code></div>` : ''}
+      <div><strong>Estimated Sidecar Prompt:</strong> <code>${typeof report.estimatedSidecarPromptTokens === 'number' ? `~${report.estimatedSidecarPromptTokens} tokens` : 'n/a'}</code></div>
+      <div><strong>Stored Snapshot Retention:</strong> <code>${report.storageRetentionLimit === 0 ? 'unlimited' : `last ${report.storageRetentionLimit ?? 'n/a'}`}</code></div>
+      <div><strong>Tracker Generation History:</strong> <code>previous full + ${report.trackerGenerationHistoryLimit ?? 5} compact summaries</code></div>
+      <div><strong>RP Context Depth:</strong> <code>latest + ${report.promptInjectionTrackerLimit ?? 5} compact summaries setting</code></div>
       <div><strong>Raw Response Available:</strong> ${rawVal}</div>
       ${report.rawResponsePreview ? `<div><strong>Raw Response Preview:</strong> <code>${escapeHtml(report.rawResponsePreview)}</code></div>` : ''}
       <div><strong>JSON Parse:</strong> ${parseVal}</div>
@@ -423,8 +440,15 @@ function renderInjectionReport(state: LoomFrontendState): string {
     '<div class="sotl-injection-report">',
     `<div><strong>Status:</strong> ${enabled} - ${registered}</div>`,
     `<div><strong>Mode:</strong> <code>${escapeHtml(report.mode)}</code></div>`,
+    `<div><strong>Latest tracker available:</strong> <code>${report.latestTrackerAvailable ?? report.available ? 'yes' : 'no'}</code></div>`,
+    report.activeMessageId ? `<div><strong>Active message / swipe:</strong> <code>${escapeHtml(report.activeMessageId)}${typeof report.activeSwipeId === 'number' ? ` - ${escapeHtml(formatSwipeLabel(report.activeSwipeId))}` : ''}</code></div>` : '',
+    `<div><strong>Used current active swipe tracker:</strong> <code>${report.activeSwipeTrackerUsed ? 'yes' : 'no'}</code></div>`,
+    `<div><strong>Wrong-swipe fallback avoided:</strong> <code>${report.wrongSwipeFallbackAvoided ? 'yes' : 'not needed'}</code></div>`,
     `<div><strong>Estimated prompt cost:</strong> <span style="color:${tokenColor};font-weight:700;">~${report.estimatedTokens} tokens</span> / ${report.tokenBudget}</div>`,
-    `<div><strong>Trackers used:</strong> ${report.trackerCount} retained - ${report.historyCount} history summaries</div>`,
+    `<div><strong>Trackers included in RP context:</strong> ${report.latestTrackerAvailable ?? report.available ? 1 : 0} latest + ${report.historyCount} compact summaries</div>`,
+    `<div><strong>Tracker context depth setting:</strong> <code>latest + ${report.contextDepthSetting ?? state.settings.promptInjectionTrackerLimit ?? 5}</code></div>`,
+    `<div><strong>Full tracker retention setting:</strong> <code>${(report.storageRetentionSetting ?? state.settings.trackerHistoryLimit) === 0 ? 'unlimited' : `last ${report.storageRetentionSetting ?? state.settings.trackerHistoryLimit}`}</code></div>`,
+    `<div><strong>History format:</strong> <code>${report.historyCompactOnly === false ? 'rich/full' : 'compact summaries only'}</code></div>`,
     report.trackerPresetId ? `<div><strong>Latest preset:</strong> <code>${escapeHtml(report.trackerPresetId)}</code></div>` : '',
     report.trackerGeneratedAt ? `<div><strong>Latest tracker:</strong> <code>${escapeHtml(report.trackerGeneratedAt)}</code></div>` : '',
     report.truncated ? `<div><strong>Budget trim:</strong> <span style="color:${warningColor};font-weight:600;">Lower-priority details omitted</span></div>` : '',
@@ -588,14 +612,14 @@ function renderControlsPanel(
         '<label class="sotl-label">Token budget',
         `<select class="sotl-select" data-sotl-field="promptInjectionTokenBudget">${renderInjectionBudgetOptions(state)}</select>`,
         '</label>',
-        '<label class="sotl-label">Trackers considered',
+        '<label class="sotl-label">Tracker context depth',
         `<select class="sotl-select" data-sotl-field="promptInjectionTrackerLimit">${renderInjectionLimitOptions(state)}</select>`,
         '</label>',
         '</div>',
         '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeAppearance" ' + (state.settings.promptInjectionIncludeAppearance !== false ? 'checked' : '') + '> Include character appearance anchors</label>',
         '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeRules" ' + (state.settings.promptInjectionIncludeRules !== false ? 'checked' : '') + '> Include continuity rules and warnings</label>',
         '<label class="sotl-toggle"><input type="checkbox" data-sotl-field="promptInjectionIncludeNextTurn" ' + (state.settings.promptInjectionIncludeNextTurn !== false ? 'checked' : '') + '> Include next-turn guidance</label>',
-        '<p class="sotl-note">Best setup: latest detailed tracker plus a few compact summaries. The full tracker stays stored and visible without flooding context.</p>',
+        '<p class="sotl-note">Best setup: latest detailed tracker plus a few compact summaries. This controls live RP context only; it does not delete stored tracker snapshots.</p>',
         renderInjectionReport(state),
         '</div>',
       ].join(''),
@@ -646,13 +670,17 @@ function renderControlsPanel(
     renderSettingsSection(
       'storage-cleanup',
       'Storage & Cleanup',
-      `${state.settings.trackerHistoryLimit === 0 ? 'unlimited' : `last ${state.settings.trackerHistoryLimit}`} trackers`,
+      `${state.settings.trackerHistoryLimit === 0 ? 'unlimited' : `last ${state.settings.trackerHistoryLimit}`} full trackers`,
       [
         '<div class="sotl-fields">',
-        '<label class="sotl-label">Tracker history limit',
+        '<label class="sotl-label">Full tracker retention',
         `<select class="sotl-select" data-sotl-field="trackerHistoryLimit">${renderHistoryLimitOptions(state)}</select>`,
         '</label>',
-        '<p class="sotl-note">Controls how many tracker snapshots are kept per chat. Latest tracker is always preserved.</p>',
+        '<p class="sotl-note">Controls how many complete tracker snapshots are stored and viewable per chat. This is separate from live prompt context.</p>',
+        '<label class="sotl-label">Tracker generation history',
+        `<select class="sotl-select" data-sotl-field="trackerGenerationHistoryLimit">${renderGenerationHistoryLimitOptions(state)}</select>`,
+        '</label>',
+        '<p class="sotl-note">Controls what the sidecar tracker generator sees: the latest previous tracker as full JSON plus older compact summaries. This does not delete stored trackers.</p>',
         '<div class="sotl-actions">',
         button('Reset Loom Storage', 'reset-storage', { title: 'Resets State of the Loom settings, presets, and trackers for this user.' }),
         '</div>',

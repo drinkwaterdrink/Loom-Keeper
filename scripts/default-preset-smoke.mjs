@@ -21,8 +21,11 @@ async function importBundled(entryPoint) {
 const defaults = await importBundled('src/shared/defaults.ts');
 const prompts = await importBundled('src/shared/prompts.ts');
 
-assert.equal(defaults.LOOM_VERSION, '1.0.19');
+assert.equal(defaults.LOOM_VERSION, '1.0.20');
 assert.equal(defaults.defaultSettings.activePresetId, 'grand_continuity_atlas');
+assert.equal(defaults.defaultSettings.trackerHistoryLimit, 20);
+assert.equal(defaults.defaultSettings.promptInjectionTrackerLimit, 5);
+assert.equal(defaults.defaultSettings.trackerGenerationHistoryLimit, 5);
 
 const atlas = defaults.builtInPresets.find((preset) => preset.id === 'grand_continuity_atlas');
 assert.ok(atlas, 'Grand Continuity Atlas should be a built-in preset');

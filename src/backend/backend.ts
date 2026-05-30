@@ -1,4 +1,4 @@
-import { buildContinuityInjection, describeInjectionStatus } from './injectionService.js';
+import { buildContinuityInjection, describeInjectionStatus, estimateTokens } from './injectionService.js';
 import { getCompanionMilestoneStatus } from './companionService.js';
 import { getEntityCaptureMilestoneStatus } from './entityCaptureService.js';
 import { LoomGenerationFailure, LoomGenerationService, type GenerationTarget } from './generationService.js';
@@ -277,6 +277,24 @@ class StateOfTheLoomBackend {
         registered: this.interceptorRegistered,
         injectedAt: new Date().toISOString(),
       });
+      report.latestTrackerAvailable = Boolean(latestTracker);
+      report.activeMessageId = activeInjectionMessage?.id;
+      report.activeSwipeId = activeInjectionMessage?.swipe_id;
+      report.activeSwipeTrackerUsed = Boolean(
+        latestTracker
+        && activeInjectionMessage?.id
+        && latestTracker.messageId === activeInjectionMessage.id
+        && (typeof activeInjectionMessage.swipe_id !== 'number' || latestTracker.swipeId === activeInjectionMessage.swipe_id),
+      );
+      report.wrongSwipeFallbackAvoided = Boolean(
+        activeInjectionMessage?.id
+        && typeof activeInjectionMessage.swipe_id === 'number'
+        && !latestTracker
+        && trackers.some((tracker) => tracker.messageId === activeInjectionMessage.id && typeof tracker.swipeId === 'number'),
+      );
+      report.contextDepthSetting = settings.promptInjectionTrackerLimit ?? 5;
+      report.storageRetentionSetting = settings.trackerHistoryLimit;
+      report.historyCompactOnly = true;
       this.diagnostics = {
         ...this.diagnostics,
         injectionReport: report,
@@ -349,6 +367,24 @@ class StateOfTheLoomBackend {
       registered: this.interceptorRegistered,
       skippedReason: this.interceptorRegistered ? undefined : 'Lumiverse interceptor API was not detected in this runtime.',
     }).report;
+    injectionPreview.latestTrackerAvailable = Boolean(latestTracker);
+    injectionPreview.activeMessageId = activeAssistant?.id;
+    injectionPreview.activeSwipeId = activeAssistant?.swipe_id;
+    injectionPreview.activeSwipeTrackerUsed = Boolean(
+      latestTracker
+      && activeAssistant?.id
+      && latestTracker.messageId === activeAssistant.id
+      && (typeof activeAssistant.swipe_id !== 'number' || latestTracker.swipeId === activeAssistant.swipe_id),
+    );
+    injectionPreview.wrongSwipeFallbackAvoided = Boolean(
+      activeAssistant?.id
+      && typeof activeAssistant.swipe_id === 'number'
+      && !latestTracker
+      && messageTrackers.some((tracker) => tracker.messageId === activeAssistant.id && typeof tracker.swipeId === 'number'),
+    );
+    injectionPreview.contextDepthSetting = settings.promptInjectionTrackerLimit ?? 5;
+    injectionPreview.storageRetentionSetting = settings.trackerHistoryLimit;
+    injectionPreview.historyCompactOnly = true;
     const baseGenerationStatus = this.generationService.getStatus();
     const disabledReason = this.generationService.getDisabledReason({
         settings,
@@ -608,10 +644,19 @@ class StateOfTheLoomBackend {
         await this.trackerService.listForChat(userId, target.chatId),
         state.activeSwipeByMessageId,
       );
-      const contextLimit = settings.trackerHistoryLimit > 0 ? settings.trackerHistoryLimit : 5;
+      const generationHistoryLimit = settings.trackerGenerationHistoryLimit ?? 5;
       const previousSummaries = recentTrackers
-        .slice(1, contextLimit)
+        .slice(1, 1 + Math.max(0, generationHistoryLimit))
         .map((t) => `${t.generatedAt}: ${t.compactSummary}`);
+      const previousFullTrackerIncluded = Boolean(state.latestTracker);
+      const estimatedSidecarPromptTokens = estimateTokens([
+        preset.promptInstructions,
+        JSON.stringify(preset.schemaJson),
+        state.latestTracker ? JSON.stringify(state.latestTracker.data) : '',
+        previousSummaries.join('\n'),
+        target.recentContext,
+        target.message.content || '',
+      ].join('\n'));
 
       const result = passive
         ?? await this.generationService.generateSidecar({
@@ -662,6 +707,19 @@ class StateOfTheLoomBackend {
         generationCompletedAt: completedAt,
         elapsedMs: result.elapsedMs,
         timeoutMs: result.timeoutMs ?? settings.sidecarGenerationTimeoutMs ?? 180000,
+        previousFullTrackerIncluded,
+        previousFullTrackerMessageId: state.latestTracker?.messageId,
+        previousFullTrackerSwipeId: state.latestTracker?.swipeId,
+        recentTrackerSummariesIncluded: previousSummaries.length,
+        recentTrackerSummariesCompactOnly: true,
+        recentChatContextIncluded: Boolean(target.recentContext),
+        recentChatContextMessageCount: target.recentContextMessageCount,
+        estimatedSidecarPromptTokens,
+        worldInfoIncluded: false,
+        worldInfoStatus: 'Not included: no stable Lumiverse world info/lorebook context API was detected in this runtime.',
+        storageRetentionLimit: settings.trackerHistoryLimit,
+        trackerGenerationHistoryLimit: generationHistoryLimit,
+        promptInjectionTrackerLimit: settings.promptInjectionTrackerLimit ?? 5,
         rawResponseAvailable: Boolean(result.tracker.rawOutput),
         rawResponsePreview: previewRawOutput(result.tracker.rawOutput),
         parseSuccess: true,
@@ -722,6 +780,7 @@ class StateOfTheLoomBackend {
         const recentTrackers = chatId ? await this.trackerService.listForChat(userId, chatId).catch(() => []) : [];
         const generationFailure = error instanceof LoomGenerationFailure ? error : null;
         const rawOutput = generationFailure?.rawOutput;
+        const generationHistoryLimit = state.settings.trackerGenerationHistoryLimit ?? 5;
         
         const report: LoomPipelineReport = {
           activePresetId: preset.id,
@@ -730,6 +789,19 @@ class StateOfTheLoomBackend {
           timestamp: new Date().toISOString(),
           generationCompletedAt: new Date().toISOString(),
           timeoutMs: state.settings.sidecarGenerationTimeoutMs ?? 180000,
+          previousFullTrackerIncluded: Boolean(state.latestTracker),
+          previousFullTrackerMessageId: state.latestTracker?.messageId,
+          previousFullTrackerSwipeId: state.latestTracker?.swipeId,
+          recentTrackerSummariesIncluded: Math.min(Math.max(0, recentTrackers.length - 1), Math.max(0, generationHistoryLimit)),
+          recentTrackerSummariesCompactOnly: true,
+          recentChatContextIncluded: false,
+          recentChatContextMessageCount: 0,
+          estimatedSidecarPromptTokens: undefined,
+          worldInfoIncluded: false,
+          worldInfoStatus: 'Not included: no stable Lumiverse world info/lorebook context API was detected in this runtime.',
+          storageRetentionLimit: state.settings.trackerHistoryLimit,
+          trackerGenerationHistoryLimit: generationHistoryLimit,
+          promptInjectionTrackerLimit: state.settings.promptInjectionTrackerLimit ?? 5,
           rawResponseAvailable: Boolean(rawOutput),
           rawResponsePreview: previewRawOutput(rawOutput),
           parseSuccess: false,
