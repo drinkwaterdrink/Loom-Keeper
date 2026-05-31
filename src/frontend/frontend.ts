@@ -1427,7 +1427,7 @@ export function setup(ctx: FrontendContext): () => void {
     const target = event.target as HTMLElement | null;
     if (!target) return;
     rememberMessageActionTarget(target, state);
-    if (target.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover')) {
+    if (target.closest('[id^="message-"], [data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover')) {
       scheduleMessageCardRetry();
     }
   };
@@ -1447,7 +1447,7 @@ export function setup(ctx: FrontendContext): () => void {
       if (Date.now() < ignoreMessageActionMutationsUntil) return;
       const messageActionChanged = records.some((record) => {
         const target = record.target instanceof HTMLElement ? record.target : null;
-        return Boolean(target?.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover'));
+        return Boolean(target?.closest('[id^="message-"], [data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover'));
       });
       const swipeChanged = records.some((record) => {
         const target = record.target instanceof HTMLElement ? record.target : null;

@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.30";
+var LOOM_VERSION = "1.0.31";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -7,7 +7,7 @@ var now = "2026-01-01T00:00:00.000Z";
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.26",
+  version: "1.0.27",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -380,7 +380,7 @@ var grandContinuityAtlasPreset = {
 var microLoomPreset = {
   id: "micro_loom",
   name: "Micro Loom",
-  version: "1.0.5",
+  version: "1.0.6",
   description: "Smallest, fastest tracker. Best for low token usage and fast models.",
   mode: "hybrid",
   schemaJson: {
@@ -478,7 +478,7 @@ var slimSceneSampleData = {
 var slimScenePreset = {
   id: SLIM_SCENE_PRESET_ID,
   name: "Slim Scene Loom",
-  version: "1.0.5",
+  version: "1.0.6",
   description: "A low-token continuity tracker for location, cast, mood, inventory, deltas, and active story anchors.",
   mode: "hybrid",
   schemaJson: {
@@ -566,7 +566,7 @@ var slimScenePreset = {
 var balancedStoryPreset = {
   id: "balanced_story_loom",
   name: "Balanced Story Loom",
-  version: "1.0.5",
+  version: "1.0.6",
   description: "Medium-detail continuity tracker. Monitors environment, relationships, and cast pockets.",
   mode: "hybrid",
   schemaJson: {
@@ -718,7 +718,7 @@ var balancedStoryPreset = {
 var castContinuityPreset = {
   id: "cast_continuity_loom",
   name: "Cast Continuity Loom",
-  version: "1.0.5",
+  version: "1.0.6",
   description: "Focuses entirely on character consistency: posture, proximity, intent, and speech traits.",
   mode: "hybrid",
   schemaJson: {
@@ -833,7 +833,7 @@ var castContinuityPreset = {
 var fullContinuityLedgerPreset = {
   id: "full_continuity_ledger",
   name: "Full Continuity Ledger",
-  version: "1.0.5",
+  version: "1.0.6",
   description: "Largest preset tracking weather, lighting, secrets, relationships, meters, and anchors.",
   mode: "hybrid",
   schemaJson: {
@@ -1011,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.26",
+  version: "1.0.27",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -4704,6 +4704,57 @@ function mountMessageHistoryBadges(ctx, state2) {
       console.warn("Loom Keeper: failed to mount history badge", err);
     }
   });
+  try {
+    const globalToolbars = findVisibleGlobalToolbars(doc, state2);
+    for (const match of globalToolbars) {
+      try {
+        const messageId = match.messageId;
+        const activeSwipe = match.swipeId;
+        const key = `global-badge::${messageId}::swipe:${typeof activeSwipe === "number" ? activeSwipe : "main"}`;
+        activeKeys.add(key);
+        let badge2 = match.toolbar.querySelector(".sotl-message-history-badge");
+        if (!badge2) {
+          badge2 = doc.createElement("button");
+          badge2.type = "button";
+          badge2.className = "sotl-message-history-badge";
+          badge2.classList.add("sotl-message-history-badge--toolbar");
+          const copyBtn = Array.from(match.toolbar.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-history-badge") && !btn.classList.contains("sotl-message-paw-btn") && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || ""));
+          const referenceBtn = copyBtn || Array.from(match.toolbar.querySelectorAll('button, [role="button"], a')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-history-badge") && !btn.classList.contains("sotl-message-paw-btn"));
+          if (referenceBtn) {
+            syncNativeLikeButtonVariables(badge2, referenceBtn);
+            match.toolbar.insertBefore(badge2, referenceBtn);
+          } else {
+            match.toolbar.insertBefore(badge2, match.toolbar.firstChild);
+          }
+        }
+        badge2.dataset.sotlAction = "message-paw";
+        badge2.dataset.sotlMessageId = messageId;
+        badge2.dataset.sotlMessageHistoryBadge = "true";
+        if (typeof activeSwipe === "number") {
+          badge2.dataset.sotlSwipeId = String(activeSwipe);
+        } else {
+          delete badge2.dataset.sotlSwipeId;
+        }
+        badge2.title = "Tracker History";
+        badge2.setAttribute("aria-label", "Open tracker history for this response");
+        const hasTracker = state2.messageTrackers.some(
+          (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== "number" || t.swipeId === activeSwipe)
+        );
+        badge2.classList.toggle("sotl-message-history-badge--has-tracker", hasTracker);
+        badge2.classList.toggle("sotl-message-history-badge--missing-tracker", !hasTracker);
+        badge2.classList.toggle("sotl-message-history-badge--generating", state2.generation.running);
+        if (!badge2.querySelector(".sotl-message-paw-svg")) {
+          badge2.innerHTML = bearPawSvg("sotl-message-paw-svg");
+        }
+        injectedHistoryBadges.set(key, badge2);
+        badgesMounted++;
+      } catch (err) {
+        console.warn("Loom Keeper: failed to mount message badge for global toolbar", err);
+      }
+    }
+  } catch (err) {
+    console.warn("Loom Keeper: global toolbar badge scan failed", err);
+  }
   for (const [key, badge2] of injectedHistoryBadges.entries()) {
     if (!badge2 || !badge2.isConnected || !activeKeys.has(key)) {
       try {
@@ -7927,7 +7978,7 @@ function setup(ctx) {
     const target = event.target;
     if (!target) return;
     rememberMessageActionTarget(target, state);
-    if (target.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover')) {
+    if (target.closest('[id^="message-"], [data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover')) {
       scheduleMessageCardRetry();
     }
   };
@@ -7947,7 +7998,7 @@ function setup(ctx) {
       if (Date.now() < ignoreMessageActionMutationsUntil) return;
       const messageActionChanged = records.some((record) => {
         const target = record.target instanceof HTMLElement ? record.target : null;
-        return Boolean(target?.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover'));
+        return Boolean(target?.closest('[id^="message-"], [data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message-actions], [data-lv-message-actions], .message-actions, .message-action-buttons, .lv-message-actions, [role="toolbar"], [role="menu"], .context-menu, .popover'));
       });
       const swipeChanged = records.some((record) => {
         const target = record.target instanceof HTMLElement ? record.target : null;

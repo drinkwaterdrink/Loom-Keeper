@@ -1144,6 +1144,70 @@ export function mountMessageHistoryBadges(ctx: FrontendContext, state: LoomFront
     }
   });
 
+  // ---- PATH B: Global/Portal Toolbar Scan for Badges ----
+  try {
+    const globalToolbars = findVisibleGlobalToolbars(doc, state);
+    for (const match of globalToolbars) {
+      try {
+        const messageId = match.messageId;
+        const activeSwipe = match.swipeId;
+        const key = `global-badge::${messageId}::swipe:${typeof activeSwipe === 'number' ? activeSwipe : 'main'}`;
+        activeKeys.add(key);
+
+        let badge = match.toolbar.querySelector<HTMLButtonElement>('.sotl-message-history-badge');
+        if (!badge) {
+          badge = doc.createElement('button');
+          badge.type = 'button';
+          badge.className = 'sotl-message-history-badge';
+          badge.classList.add('sotl-message-history-badge--toolbar');
+
+          const copyBtn = Array.from(match.toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action]'))
+            .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-history-badge') && !btn.classList.contains('sotl-message-paw-btn') && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || ''));
+          const referenceBtn = copyBtn || Array.from(match.toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))
+            .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-history-badge') && !btn.classList.contains('sotl-message-paw-btn'));
+          if (referenceBtn) {
+            // Sync size/style with native sibling button
+            syncNativeLikeButtonVariables(badge, referenceBtn);
+            match.toolbar.insertBefore(badge, referenceBtn);
+          } else {
+            match.toolbar.insertBefore(badge, match.toolbar.firstChild);
+          }
+        }
+
+        badge.dataset.sotlAction = 'message-paw';
+        badge.dataset.sotlMessageId = messageId;
+        badge.dataset.sotlMessageHistoryBadge = 'true';
+        if (typeof activeSwipe === 'number') {
+          badge.dataset.sotlSwipeId = String(activeSwipe);
+        } else {
+          delete badge.dataset.sotlSwipeId;
+        }
+
+        badge.title = 'Tracker History';
+        badge.setAttribute('aria-label', 'Open tracker history for this response');
+
+        const hasTracker = state.messageTrackers.some(
+          (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== 'number' || t.swipeId === activeSwipe)
+        );
+
+        badge.classList.toggle('sotl-message-history-badge--has-tracker', hasTracker);
+        badge.classList.toggle('sotl-message-history-badge--missing-tracker', !hasTracker);
+        badge.classList.toggle('sotl-message-history-badge--generating', state.generation.running);
+
+        if (!badge.querySelector('.sotl-message-paw-svg')) {
+          badge.innerHTML = bearPawSvg('sotl-message-paw-svg');
+        }
+
+        injectedHistoryBadges.set(key, badge);
+        badgesMounted++;
+      } catch (err) {
+        console.warn('Loom Keeper: failed to mount message badge for global toolbar', err);
+      }
+    }
+  } catch (err) {
+    console.warn('Loom Keeper: global toolbar badge scan failed', err);
+  }
+
   for (const [key, badge] of injectedHistoryBadges.entries()) {
     if (!badge || !badge.isConnected || !activeKeys.has(key)) {
       try {
