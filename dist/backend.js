@@ -279,7 +279,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.21";
+var LOOM_VERSION = "1.0.23";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -319,7 +319,7 @@ var defaultSettings = {
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.21",
+  version: "1.0.23",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -1323,7 +1323,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.21",
+  version: "1.0.23",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -2968,6 +2968,14 @@ function activeSwipeByMessageId(messages) {
   }
   return map;
 }
+function assistantMessageSummaries(messages) {
+  return messages.map((message, index) => ({ message, index })).filter(({ message }) => Boolean(message.id) && isAssistantMessage(message)).map(({ message, index }) => ({
+    id: message.id,
+    role: message.role || "assistant",
+    swipeId: typeof message.swipe_id === "number" ? message.swipe_id : void 0,
+    index
+  }));
+}
 function latestAssistantMessage(messages) {
   return [...messages].reverse().find(isAssistantMessage);
 }
@@ -3206,6 +3214,7 @@ var LoomKeeperBackend = class {
     if (activeChat.id) this.rememberUser(userId, activeChat.id);
     const activeSwipeMap = activeSwipeByMessageId(active.messages);
     const activeAssistant = latestAssistantMessage(active.messages);
+    const chatAssistantMessages = assistantMessageSummaries(active.messages);
     const connections = await this.generationService.listConnections(userId, permissions).catch((error) => {
       this.recordRuntimeError("Connection profile lookup failed", error);
       return [];
@@ -3314,6 +3323,7 @@ var LoomKeeperBackend = class {
       connections,
       latestTracker,
       messageTrackers,
+      chatAssistantMessages,
       activeSwipeByMessageId: activeSwipeMap,
       generation,
       diagnostics

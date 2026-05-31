@@ -21,6 +21,7 @@ import type {
   LoomFrontendMessage,
   LoomFrontendState,
   LoomChatMessage,
+  LoomChatMessageSummary,
   LoomPreset,
   LoomSettings,
   LoomTrackerState,
@@ -67,6 +68,18 @@ function activeSwipeByMessageId(messages: LoomChatMessage[]): Record<string, num
     }
   }
   return map;
+}
+
+function assistantMessageSummaries(messages: LoomChatMessage[]): LoomChatMessageSummary[] {
+  return messages
+    .map((message, index) => ({ message, index }))
+    .filter(({ message }) => Boolean(message.id) && isAssistantMessage(message))
+    .map(({ message, index }) => ({
+      id: message.id as string,
+      role: message.role || 'assistant',
+      swipeId: typeof message.swipe_id === 'number' ? message.swipe_id : undefined,
+      index,
+    }));
 }
 
 function latestAssistantMessage(messages: LoomChatMessage[]): LoomChatMessage | undefined {
@@ -345,6 +358,7 @@ class LoomKeeperBackend {
     if (activeChat.id) this.rememberUser(userId, activeChat.id);
     const activeSwipeMap = activeSwipeByMessageId(active.messages);
     const activeAssistant = latestAssistantMessage(active.messages);
+    const chatAssistantMessages = assistantMessageSummaries(active.messages);
     const connections = await this.generationService.listConnections(userId, permissions).catch((error) => {
       this.recordRuntimeError('Connection profile lookup failed', error);
       return [];
@@ -470,6 +484,7 @@ class LoomKeeperBackend {
       connections,
       latestTracker,
       messageTrackers,
+      chatAssistantMessages,
       activeSwipeByMessageId: activeSwipeMap,
       generation,
       diagnostics,

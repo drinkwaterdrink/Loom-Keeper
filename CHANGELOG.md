@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.23 - Reliable Message Tracker History Badges
+
+- Added lightweight assistant message summaries to frontend state so visible assistant responses can get tracker-history controls even before a tracker exists.
+- Added stable message-attached `sotl-message-history-badge` controls in a centered response slot that avoids native copy/edit/delete icons, opens exact message/swipe Tracker History, and shows a missing-state Generate Tracker flow when needed.
+- Kept native selected-toolbar and context-menu Tracker History actions as enhancements, with the message badge as the reliable fallback.
+- Separated the global HUD launcher from per-message history controls with distinct classes, labels, placement, and styling.
+
 ## v1.0.22 - Loom Keeper Icon, Toolbar, and Scroll Optimization
 
 - Replaced the bear paw icon concept with a sleek, 100% maskless, stroke-based diagonal needle and thread SVG design to ensure perfect rendering in WebKit-based mobile containers.

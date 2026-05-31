@@ -400,7 +400,7 @@ function renderTrackerPreviewOverlay(): void {
   const body = tracker && state
     ? renderTrackerForState(tracker, state).html
     : `<div class="sotl-tracker-preview__missing" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center;">
-         <p style="margin: 0 0 10px; font-weight: 500; font-size: 14px;">No tracker history exists for this message.</p>
+         <p style="margin: 0 0 10px; font-weight: 500; font-size: 14px;">No tracker exists for this message/swipe.</p>
          ${regenerateButton}
        </div>`;
   

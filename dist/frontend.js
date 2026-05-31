@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.21";
+var LOOM_VERSION = "1.0.23";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -7,7 +7,7 @@ var now = "2026-01-01T00:00:00.000Z";
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.21",
+  version: "1.0.23",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -1011,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.21",
+  version: "1.0.23",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -3863,6 +3863,8 @@ function bearPawSvg(className = "sotl-paw-svg") {
 // src/frontend/messageCards.ts
 var injectedWrappers = /* @__PURE__ */ new Map();
 var injectedMessagePaws = /* @__PURE__ */ new Map();
+var injectedMessageHistoryBadges = /* @__PURE__ */ new Map();
+var MESSAGE_HOST_SELECTOR = '[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]';
 var injectedContextMenuItems = /* @__PURE__ */ new Set();
 var lastMessageActionTarget = null;
 var isChatLoomPanelExpanded = false;
@@ -4077,7 +4079,7 @@ function cleanupDisconnectedMessagePaws() {
 }
 function cleanupMessageTrackerActions() {
   const doc = documentRef2();
-  doc?.querySelectorAll('[data-sotl-message-paw="true"], [data-sotl-context-menu-item="true"]').forEach((node) => {
+  doc?.querySelectorAll('[data-sotl-message-paw="true"], [data-sotl-message-history-badge="true"], [data-sotl-message-history-slot="true"], [data-sotl-context-menu-item="true"]').forEach((node) => {
     try {
       node.remove();
     } catch {
@@ -4090,6 +4092,13 @@ function cleanupMessageTrackerActions() {
     }
   }
   injectedMessagePaws.clear();
+  for (const button2 of injectedMessageHistoryBadges.values()) {
+    try {
+      button2.remove();
+    } catch {
+    }
+  }
+  injectedMessageHistoryBadges.clear();
   for (const item of injectedContextMenuItems) {
     try {
       item.remove();
@@ -4402,6 +4411,147 @@ function mountMessageCards(ctx, state2) {
     messageId: lastMissing
   };
 }
+function messageHistoryKey(messageId, swipeId) {
+  return `${messageId}::swipe:${typeof swipeId === "number" ? swipeId : "main"}`;
+}
+function assistantSummaryForMessage(state2, messageId) {
+  return (state2.chatAssistantMessages || []).find((summary) => summary.id === messageId);
+}
+function resolveMessageSwipeId(state2, messageId) {
+  const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
+  if (typeof activeSwipe === "number") return activeSwipe;
+  const summarySwipe = assistantSummaryForMessage(state2, messageId)?.swipeId;
+  return typeof summarySwipe === "number" ? summarySwipe : void 0;
+}
+function messageHasExactTracker(state2, messageId, swipeId) {
+  return state2.messageTrackers.some((tracker) => {
+    if (tracker.hidden || tracker.messageId !== messageId) return false;
+    return typeof swipeId === "number" ? tracker.swipeId === swipeId : typeof tracker.swipeId !== "number";
+  });
+}
+function assistantMessageIds(state2) {
+  return new Set((state2.chatAssistantMessages || []).map((summary) => summary.id));
+}
+function fallbackMessageIds(state2) {
+  const ids = /* @__PURE__ */ new Set();
+  for (const tracker of state2.messageTrackers) {
+    if (tracker.messageId) ids.add(tracker.messageId);
+  }
+  if (state2.latestTracker?.messageId) ids.add(state2.latestTracker.messageId);
+  for (const id of Object.keys(state2.activeSwipeByMessageId || {})) ids.add(id);
+  return ids;
+}
+function collectVisibleAssistantMessageHosts(doc, state2) {
+  const assistantIds = assistantMessageIds(state2);
+  const fallbackIds = fallbackMessageIds(state2);
+  const byId = /* @__PURE__ */ new Map();
+  const candidates = Array.from(doc.querySelectorAll(MESSAGE_HOST_SELECTOR));
+  for (const host of candidates) {
+    if (!isVisibleElement(host) || isInExtensionOrMenu(host)) continue;
+    const messageId = messageIdFromElement(host);
+    if (!messageId) continue;
+    if (assistantIds.size > 0 ? !assistantIds.has(messageId) : !fallbackIds.has(messageId)) continue;
+    const rect = host.getBoundingClientRect();
+    if (rect.width < 160 || rect.height < 48) continue;
+    const existing = byId.get(messageId);
+    if (!existing) {
+      byId.set(messageId, host);
+      continue;
+    }
+    const existingRect = existing.getBoundingClientRect();
+    if (rect.width * rect.height > existingRect.width * existingRect.height) byId.set(messageId, host);
+  }
+  return Array.from(byId.values()).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+}
+function findMessageHeader(host) {
+  const selectors = [
+    "[data-message-header]",
+    "[data-lv-message-header]",
+    "[data-lumiverse-message-header]",
+    "[data-message-meta]",
+    "[data-lv-message-meta]",
+    ".message-header",
+    ".chat-message-header",
+    ".message-meta",
+    ".chat-message-meta",
+    '[class*="header" i]',
+    '[class*="meta" i]'
+  ];
+  const hostTop = host.getBoundingClientRect().top;
+  for (const selector of selectors) {
+    const header = Array.from(host.querySelectorAll(selector)).find((candidate) => {
+      if (!isVisibleElement(candidate) || candidate.closest('[data-sotl-message-history-badge="true"], .sotl-message-card')) return false;
+      const rect = candidate.getBoundingClientRect();
+      return rect.width >= 100 && rect.height >= 16 && rect.height <= 120 && rect.top - hostTop <= 180;
+    });
+    if (header) return header;
+  }
+  return null;
+}
+function mountMessageHistoryBadges(doc, state2, hosts) {
+  const activeKeys = /* @__PURE__ */ new Set();
+  let mounted = 0;
+  for (const host of hosts) {
+    const messageId = messageIdFromElement(host);
+    if (!messageId) continue;
+    const swipeId = resolveMessageSwipeId(state2, messageId);
+    const key = messageHistoryKey(messageId, swipeId);
+    activeKeys.add(key);
+    const hasTracker = messageHasExactTracker(state2, messageId, swipeId);
+    let button2 = host.querySelector('[data-sotl-message-history-badge="true"]');
+    if (!button2) {
+      button2 = doc.createElement("button");
+      button2.type = "button";
+      button2.className = "sotl-message-history-badge";
+      button2.dataset.sotlMessageHistoryBadge = "true";
+      mounted += 1;
+    }
+    button2.dataset.sotlAction = "message-paw";
+    button2.dataset.sotlMessageId = messageId;
+    if (typeof swipeId === "number") button2.dataset.sotlSwipeId = String(swipeId);
+    else delete button2.dataset.sotlSwipeId;
+    button2.title = "Tracker History";
+    button2.setAttribute("aria-label", "Open tracker history for this response");
+    button2.innerHTML = bearPawSvg("sotl-message-paw-svg");
+    button2.classList.toggle("sotl-message-history-badge--has-tracker", hasTracker);
+    button2.classList.toggle("sotl-message-history-badge--missing-tracker", !hasTracker);
+    button2.classList.toggle("sotl-message-history-badge--generating", state2.generation.running);
+    let slot = host.querySelector('[data-sotl-message-history-slot="true"]');
+    if (!slot) {
+      slot = doc.createElement("div");
+      slot.className = "sotl-message-history-slot";
+      slot.dataset.sotlMessageHistorySlot = "true";
+    }
+    host.classList.add("sotl-message-history-host");
+    button2.classList.remove("sotl-message-history-badge--floating");
+    if (button2.parentElement !== slot) slot.append(button2);
+    const header = findMessageHeader(host);
+    if (header?.parentElement && slot.previousElementSibling !== header) {
+      header.insertAdjacentElement("afterend", slot);
+    } else if (!slot.isConnected || slot.parentElement !== host) {
+      host.insertBefore(slot, host.firstChild);
+    }
+    injectedMessageHistoryBadges.set(key, button2);
+  }
+  for (const [key, button2] of injectedMessageHistoryBadges.entries()) {
+    if (!button2.isConnected || !activeKeys.has(key)) {
+      button2.remove();
+      injectedMessageHistoryBadges.delete(key);
+    }
+  }
+  doc.querySelectorAll('[data-sotl-message-history-badge="true"]').forEach((button2) => {
+    const messageId = button2.dataset.sotlMessageId || "";
+    const rawSwipeId = button2.dataset.sotlSwipeId;
+    const parsedSwipeId = rawSwipeId === void 0 ? void 0 : Number(rawSwipeId);
+    const key = messageHistoryKey(messageId, Number.isFinite(parsedSwipeId) ? parsedSwipeId : void 0);
+    if (!activeKeys.has(key)) {
+      const slot = button2.closest('[data-sotl-message-history-slot="true"]');
+      button2.remove();
+      if (slot && !slot.querySelector('[data-sotl-message-history-badge="true"]')) slot.remove();
+    }
+  });
+  return mounted;
+}
 function findMessageToolbar(host) {
   const selector = [
     "[data-message-actions]",
@@ -4436,41 +4586,34 @@ function findMessageToolbar(host) {
 function mountMessageTrackerActions(ctx, state2) {
   void ctx;
   const doc = documentRef2();
-  if (!doc) return { status: "Message tracker paw unavailable: no document." };
+  if (!doc) return { status: "Message tracker history unavailable: no document." };
   cleanupDisconnectedMessagePaws();
   if (!state2) {
-    doc.querySelectorAll(".sotl-message-paw-btn").forEach((btn) => btn.remove());
+    doc.querySelectorAll('.sotl-message-paw-btn, [data-sotl-message-history-badge="true"]').forEach((btn) => btn.remove());
     injectedMessagePaws.clear();
-    return { status: "Message tracker paw waiting for backend state." };
+    injectedMessageHistoryBadges.clear();
+    return { status: "Message tracker history waiting for backend state." };
   }
-  const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
-  let inlineMounted = 0;
-  const activeKeys = /* @__PURE__ */ new Set();
-  hosts.forEach((host) => {
+  const hosts = collectVisibleAssistantMessageHosts(doc, state2);
+  const badgeMounted = mountMessageHistoryBadges(doc, state2, hosts);
+  let toolbarMounted = 0;
+  const activeToolbarKeys = /* @__PURE__ */ new Set();
+  for (const host of hosts) {
     try {
-      if (!(host instanceof HTMLElement)) return;
       const messageId = messageIdFromElement(host);
-      if (!messageId) return;
-      const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
-      const key = `${messageId}::swipe:${typeof activeSwipe === "number" ? activeSwipe : "main"}`;
+      if (!messageId) continue;
+      const activeSwipe = resolveMessageSwipeId(state2, messageId);
+      const key = messageHistoryKey(messageId, activeSwipe);
       const toolbar = findMessageToolbar(host);
-      if (!toolbar) {
-        const oldButton = host.querySelector(".sotl-message-paw-btn");
-        if (oldButton) {
-          oldButton.remove();
-          injectedMessagePaws.delete(key);
-        }
-        return;
-      }
-      activeKeys.add(key);
-      const hasTracker = state2.messageTrackers.some(
-        (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== "number" || t.swipeId === activeSwipe)
-      );
+      if (!toolbar) continue;
+      activeToolbarKeys.add(key);
+      const hasTracker = messageHasExactTracker(state2, messageId, activeSwipe);
       let button2 = toolbar.querySelector(".sotl-message-paw-btn");
       if (!button2) {
         button2 = doc.createElement("button");
         button2.type = "button";
         button2.className = "sotl-message-paw-btn";
+        button2.dataset.sotlMessagePaw = "true";
         const copyBtn = Array.from(toolbar.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn") && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || ""));
         const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll('button, [role="button"], a')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn"));
         if (referenceBtn) {
@@ -4479,39 +4622,35 @@ function mountMessageTrackerActions(ctx, state2) {
         } else {
           toolbar.insertBefore(button2, toolbar.firstChild);
         }
-        inlineMounted += 1;
+        toolbarMounted += 1;
       }
       button2.dataset.sotlAction = "message-paw";
       button2.dataset.sotlMessageId = messageId;
-      if (typeof activeSwipe === "number") {
-        button2.dataset.sotlSwipeId = String(activeSwipe);
-      } else {
-        delete button2.dataset.sotlSwipeId;
-      }
-      button2.title = hasTracker ? "View Continuity History" : "Generate Continuity State";
-      button2.setAttribute("aria-label", button2.title);
+      if (typeof activeSwipe === "number") button2.dataset.sotlSwipeId = String(activeSwipe);
+      else delete button2.dataset.sotlSwipeId;
+      button2.title = "Tracker History";
+      button2.setAttribute("aria-label", "Open tracker history for this response");
       button2.innerHTML = bearPawSvg("sotl-message-paw-svg");
       button2.classList.toggle("sotl-message-paw-btn--has-tracker", hasTracker);
       button2.classList.toggle("sotl-message-paw-btn--generating", state2.generation.running);
       injectedMessagePaws.set(key, button2);
     } catch (err) {
-      console.warn("Loom Keeper: failed to mount message paw for host", host, err);
+      console.warn("Loom Keeper: failed to mount native message tracker history action", host, err);
     }
-  });
+  }
   for (const [key, btn] of injectedMessagePaws.entries()) {
-    if (!btn.isConnected || !activeKeys.has(key)) {
-      try {
-        btn.remove();
-      } catch {
-      }
+    if (!btn.isConnected || !activeToolbarKeys.has(key)) {
+      btn.remove();
       injectedMessagePaws.delete(key);
     }
   }
   const menuMounted = mountContextMenuTrackerAction(doc, state2);
   const reports = [];
-  if (inlineMounted > 0) reports.push(`Injected ${inlineMounted} native toolbar button(s).`);
+  if (badgeMounted > 0) reports.push(`Mounted ${badgeMounted} message history badge(s).`);
+  if (toolbarMounted > 0) reports.push(`Injected ${toolbarMounted} native toolbar enhancement(s).`);
   if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action(s).`);
-  return { status: reports.join(" ") || "No active message toolbars found." };
+  if (hosts.length === 0) reports.push("No visible assistant message hosts found for history badges.");
+  return { status: reports.join(" ") || "Message history badges stable." };
 }
 function renderCompactPanel(tracker, state2, missingSwipeId) {
   const isGenerating = state2.generation.running;
@@ -6023,6 +6162,99 @@ var loomStyles = `
   filter: drop-shadow(0 0 4px var(--lv-accent-glow, rgba(56, 100, 217, 0.4)));
 }
 
+.sotl-message-history-host {
+  position: relative;
+}
+
+.sotl-message-history-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 28px;
+  padding: 2px 0 4px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.sotl-message-history-badge-host {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sotl-message-history-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  flex: 0 0 auto;
+  border-radius: var(--lv-radius-sm, 7px);
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(104, 119, 140, 0.28)));
+  background: color-mix(in srgb, var(--lv-surface-raised, rgba(12, 16, 24, 0.88)) 88%, transparent);
+  color: var(--lv-accent, #3864d9);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+  opacity: 0.68;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 3;
+  pointer-events: auto;
+  box-sizing: border-box;
+  transition: opacity 0.16s ease, transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+
+.sotl-message-history-badge .sotl-message-paw-svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+  color: var(--lv-accent, #3864d9);
+}
+
+.sotl-message-history-badge:hover,
+.sotl-message-history-badge:focus-visible {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lv-accent, #3864d9) 70%, transparent);
+  background: color-mix(in srgb, var(--lv-accent, #3864d9) 12%, var(--lv-surface-raised, rgba(12, 16, 24, 0.92)));
+  outline: none;
+}
+
+.sotl-message-history-badge--has-tracker {
+  opacity: 0.86;
+  border-color: color-mix(in srgb, var(--lv-accent, #3864d9) 46%, transparent);
+}
+
+.sotl-message-history-badge--missing-tracker {
+  opacity: 0.58;
+}
+
+.sotl-message-history-badge--generating::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid var(--lv-accent, #3864d9);
+  opacity: 0.5;
+  animation: sotl-paw-ring 1.35s ease-out infinite;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (min-width: 721px) {
+  .sotl-message-history-badge {
+    opacity: 0.48;
+  }
+
+  .sotl-message-history-slot:hover .sotl-message-history-badge,
+  .sotl-message-history-host:hover .sotl-message-history-badge,
+  .sotl-message-history-badge:focus-visible {
+    opacity: 0.96;
+  }
+}
 `;
 
 // src/frontend/frontend.ts
@@ -6341,7 +6573,7 @@ function renderTrackerPreviewOverlay() {
   const regenerateButton = tracker ? `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(tracker.messageId || trackerPreviewRef.messageId)}"${typeof tracker.swipeId === "number" ? ` data-sotl-swipe-id="${tracker.swipeId}"` : ""}>${isGenerating ? "Stop Generation" : "Regenerate"}</button>` : `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(trackerPreviewRef.messageId)}"${typeof resolved.swipeId === "number" ? ` data-sotl-swipe-id="${resolved.swipeId}"` : ""} style="margin-top: 10px; width: 100%; justify-content: center;">${isGenerating ? "Stop Generation" : "Generate Tracker"}</button>`;
   const drawerButton = tracker && !isMobileViewport() ? '<button class="sotl-button" type="button" data-sotl-action="preview-open-drawer">Open in Track drawer</button>' : "";
   const body = tracker && state ? renderTrackerForState(tracker, state).html : `<div class="sotl-tracker-preview__missing" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center;">
-         <p style="margin: 0 0 10px; font-weight: 500; font-size: 14px;">No tracker history exists for this message.</p>
+         <p style="margin: 0 0 10px; font-weight: 500; font-size: 14px;">No tracker exists for this message/swipe.</p>
          ${regenerateButton}
        </div>`;
   const meta = [

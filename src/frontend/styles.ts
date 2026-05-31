@@ -1267,4 +1267,97 @@ export const loomStyles = `
   filter: drop-shadow(0 0 4px var(--lv-accent-glow, rgba(56, 100, 217, 0.4)));
 }
 
+.sotl-message-history-host {
+  position: relative;
+}
+
+.sotl-message-history-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 28px;
+  padding: 2px 0 4px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.sotl-message-history-badge-host {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sotl-message-history-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  flex: 0 0 auto;
+  border-radius: var(--lv-radius-sm, 7px);
+  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(104, 119, 140, 0.28)));
+  background: color-mix(in srgb, var(--lv-surface-raised, rgba(12, 16, 24, 0.88)) 88%, transparent);
+  color: var(--lv-accent, #3864d9);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+  opacity: 0.68;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 3;
+  pointer-events: auto;
+  box-sizing: border-box;
+  transition: opacity 0.16s ease, transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+
+.sotl-message-history-badge .sotl-message-paw-svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+  color: var(--lv-accent, #3864d9);
+}
+
+.sotl-message-history-badge:hover,
+.sotl-message-history-badge:focus-visible {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lv-accent, #3864d9) 70%, transparent);
+  background: color-mix(in srgb, var(--lv-accent, #3864d9) 12%, var(--lv-surface-raised, rgba(12, 16, 24, 0.92)));
+  outline: none;
+}
+
+.sotl-message-history-badge--has-tracker {
+  opacity: 0.86;
+  border-color: color-mix(in srgb, var(--lv-accent, #3864d9) 46%, transparent);
+}
+
+.sotl-message-history-badge--missing-tracker {
+  opacity: 0.58;
+}
+
+.sotl-message-history-badge--generating::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid var(--lv-accent, #3864d9);
+  opacity: 0.5;
+  animation: sotl-paw-ring 1.35s ease-out infinite;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (min-width: 721px) {
+  .sotl-message-history-badge {
+    opacity: 0.48;
+  }
+
+  .sotl-message-history-slot:hover .sotl-message-history-badge,
+  .sotl-message-history-host:hover .sotl-message-history-badge,
+  .sotl-message-history-badge:focus-visible {
+    opacity: 0.96;
+  }
+}
 `;

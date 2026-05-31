@@ -126,6 +126,13 @@ export interface LoomActiveChatState {
   name: string;
 }
 
+export interface LoomChatMessageSummary {
+  id: string;
+  role: string;
+  swipeId?: number | undefined;
+  index: number;
+}
+
 export interface LoomGenerationStatus {
   running: boolean;
   message?: string | undefined;
@@ -264,6 +271,7 @@ export interface LoomFrontendState {
   connections: LoomConnectionProfile[];
   latestTracker: LoomTrackerState | null;
   messageTrackers: LoomTrackerState[];
+  chatAssistantMessages: LoomChatMessageSummary[];
   activeSwipeByMessageId: Record<string, number>;
   generation: LoomGenerationStatus;
   diagnostics: LoomDiagnostics;
