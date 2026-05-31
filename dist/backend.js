@@ -179,7 +179,7 @@ function buildContinuityInjection(input) {
   }
   const data = latest.data || {};
   const output = [
-    "STATE OF THE LOOM CONTINUITY BRIEF",
+    "LOOM KEEPER CONTINUITY BRIEF",
     "Use this as compact continuity reference for the next roleplay response. Do not mention the tracker. Do not reveal hidden facts or secrets unless the scene makes them discoverable."
   ];
   const truncated = { value: false };
@@ -2117,7 +2117,7 @@ async function runSidecarGeneration(spindle2, userId, messages, connectionId) {
   const payload = {
     messages,
     internal: true,
-    source: "state_of_the_loom",
+    source: "loom_keeper",
     reasoning: "off",
     userId
   };
@@ -2866,7 +2866,7 @@ function activeSwipeTrackers(trackers, swipeMap) {
   }
   return passthrough.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
 }
-var StateOfTheLoomBackend = class {
+var LoomKeeperBackend = class {
   constructor(spindle2) {
     this.spindle = spindle2;
     this.knownUsers = /* @__PURE__ */ new Set();
@@ -2924,7 +2924,7 @@ var StateOfTheLoomBackend = class {
         }
       };
     }
-    this.spindle.log?.info?.("State of the Loom backend loaded.");
+    this.spindle.log?.info?.("Loom Keeper backend loaded.");
   }
   rememberUser(userId, chatId) {
     this.knownUsers.add(userId);
@@ -2938,7 +2938,7 @@ var StateOfTheLoomBackend = class {
     const detail = error instanceof Error ? error.message : error ? String(error) : "";
     const text = detail ? `${message}: ${detail}` : message;
     this.diagnostics = { ...this.diagnostics, lastError: text };
-    this.spindle.log?.warn?.(`State of the Loom: ${text}`);
+    this.spindle.log?.warn?.(`Loom Keeper: ${text}`);
   }
   async notifyPermissionsChanged() {
     try {
@@ -2958,7 +2958,7 @@ var StateOfTheLoomBackend = class {
       const source = context?.source ?? context?.extensionId ?? context?.extension_id;
       const generationType = context?.generationType ?? context?.generation_type;
       const internal = context?.internal;
-      if (source === "state_of_the_loom" || generationType === "quiet" || internal === true) return messages;
+      if (source === "loom_keeper" || generationType === "quiet" || internal === true) return messages;
       const looksLikeTrackerSidecar = messages.some((message) => {
         const content2 = typeof message.content === "string" ? message.content : "";
         return content2.includes("Latest assistant message to track:") && content2.includes("Return JSON only. No markdown.");
@@ -3028,7 +3028,7 @@ var StateOfTheLoomBackend = class {
       const injectionMessage = {
         role: "system",
         content,
-        source: "state_of_the_loom"
+        source: "loom_keeper"
       };
       const firstNonSystem = messages.findIndex((message) => String(message.role || "").toLowerCase() !== "system");
       if (firstNonSystem <= 0) return [injectionMessage, ...messages];
@@ -3192,10 +3192,10 @@ var StateOfTheLoomBackend = class {
           this.presetService.reset(userId),
           this.trackerService.reset(userId)
         ]);
-        this.recordStorageWarning("State of the Loom storage was reset to defaults.");
+        this.recordStorageWarning("Loom Keeper storage was reset to defaults.");
         const state = await this.buildState(userId);
         await this.send(userId, { type: "storage_reset", state });
-        await this.send(userId, { type: "toast", level: "success", message: "State of the Loom storage was reset." });
+        await this.send(userId, { type: "toast", level: "success", message: "Loom Keeper storage was reset." });
         return;
       }
       if (message.type === "save_settings") {
@@ -3539,7 +3539,7 @@ var StateOfTheLoomBackend = class {
       if (!isRecord3(payload)) return;
       const source = payload.source ?? payload.extensionId ?? payload.extension_id;
       const generationType = payload.generationType ?? payload.generation_type;
-      if (source === "state_of_the_loom" || generationType === "quiet") return;
+      if (source === "loom_keeper" || generationType === "quiet") return;
       const chatId = this.payloadString(payload.chatId ?? payload.chat_id);
       const messageId = this.payloadString(payload.messageId ?? payload.message_id ?? payload.targetMessageId ?? payload.target_message_id) ?? void 0;
       const content = this.payloadString(payload.content) ?? void 0;
@@ -3597,5 +3597,5 @@ var StateOfTheLoomBackend = class {
     return null;
   }
 };
-var backend = new StateOfTheLoomBackend(getGlobalSpindle());
+var backend = new LoomKeeperBackend(getGlobalSpindle());
 backend.setup();

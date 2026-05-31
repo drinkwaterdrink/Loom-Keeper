@@ -172,7 +172,7 @@ function resolveFocusedTracker(state: LoomFrontendState, ref: FocusedTrackerRef)
   }
   return {
     swipeId: activeSwipe,
-    notice: ref.notice || 'State of the Loom did not guess between multiple stored swipe trackers because the active swipe is unclear.',
+    notice: ref.notice || 'Loom Keeper did not guess between multiple stored swipe trackers because the active swipe is unclear.',
   };
 }
 
@@ -225,7 +225,7 @@ function renderLatestTracker(state: LoomFrontendState): string {
   const tracker = activeResolution.tracker;
   if (!tracker) {
     if (activeResolution.missingMessageId && typeof activeResolution.missingSwipeId === 'number') {
-      return `<p class="sotl-note sotl-warning">No tracker retained/generated for ${escapeHtml(formatSwipeLabel(activeResolution.missingSwipeId))} on the currently selected response. State of the Loom will not show another swipe's tracker here.</p>`;
+      return `<p class="sotl-note sotl-warning">No tracker retained/generated for ${escapeHtml(formatSwipeLabel(activeResolution.missingSwipeId))} on the currently selected response. Loom Keeper will not show another swipe's tracker here.</p>`;
     }
     const activeMessageId = state.diagnostics.swipeReport?.activeMessageId;
     const activeSwipeId = state.diagnostics.swipeReport?.activeSwipeId;
@@ -683,7 +683,7 @@ function renderControlsPanel(
         '</label>',
         '<p class="sotl-note">Controls what the sidecar tracker generator sees: the latest previous tracker as full JSON plus older compact summaries. This does not delete stored trackers.</p>',
         '<div class="sotl-actions">',
-        button('Reset Loom Storage', 'reset-storage', { title: 'Resets State of the Loom settings, presets, and trackers for this user.' }),
+        button('Reset Loom Storage', 'reset-storage', { title: 'Resets Loom Keeper settings, presets, and trackers for this user.' }),
         '</div>',
         '</div>',
       ].join(''),
@@ -743,12 +743,12 @@ export function renderDrawer(state: LoomFrontendState | null, status: LoomUiStat
     return [
       '<div class="sotl-root">',
       '<section class="sotl-panel">',
-      '<h2>State of the Loom</h2>',
+      '<h2>Loom Keeper</h2>',
       `<p class="sotl-note">${escapeHtml(offlineText)}</p>`,
       status.lastFrontendError ? `<p class="sotl-note sotl-warning">${escapeHtml(status.lastFrontendError)}</p>` : '',
       '<div class="sotl-actions">',
       button('Refresh', 'refresh'),
-      button('Reset Loom Storage', 'reset-storage', { title: 'Resets State of the Loom settings, presets, and trackers for this user.' }),
+      button('Reset Loom Storage', 'reset-storage', { title: 'Resets Loom Keeper settings, presets, and trackers for this user.' }),
       '</div>',
       '</section>',
       renderFeatureBreakdown(true),

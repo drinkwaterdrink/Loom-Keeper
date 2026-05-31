@@ -241,7 +241,7 @@ export function buildContinuityInjection(input: {
 
   const data = latest.data || {};
   const output: string[] = [
-    'STATE OF THE LOOM CONTINUITY BRIEF',
+    'LOOM KEEPER CONTINUITY BRIEF',
     'Use this as compact continuity reference for the next roleplay response. Do not mention the tracker. Do not reveal hidden facts or secrets unless the scene makes them discoverable.',
   ];
   const truncated = { value: false };

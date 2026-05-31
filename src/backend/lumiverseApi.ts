@@ -294,7 +294,7 @@ export async function runSidecarGeneration(
   const payload: AnyRecord = {
     messages,
     internal: true,
-    source: 'state_of_the_loom',
+    source: 'loom_keeper',
     reasoning: 'off',
     userId,
   };

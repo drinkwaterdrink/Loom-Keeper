@@ -54,7 +54,7 @@ globalThis.spindle = {
   },
   generate: {
     async quiet(payload) {
-      assert.equal(payload.source, 'state_of_the_loom');
+      assert.equal(payload.source, 'loom_keeper');
       assert.ok(payload.messages.some((message) => message.content.includes('blue lantern')));
       return {
         content: JSON.stringify({

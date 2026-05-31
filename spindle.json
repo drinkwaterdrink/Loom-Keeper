@@ -1,10 +1,10 @@
 {
   "version": "1.0.21",
-  "name": "State of the Loom",
-  "identifier": "state_of_the_loom",
+  "name": "Loom Keeper",
+  "identifier": "loom_keeper",
   "author": "Loom Architect",
-  "github": "https://github.com/drinkwaterdrink/State-Of-The-Loom",
-  "homepage": "https://github.com/drinkwaterdrink/State-Of-The-Loom",
+  "github": "https://github.com/drinkwaterdrink/Loom-Keeper",
+  "homepage": "https://github.com/drinkwaterdrink/Loom-Keeper",
   "description": "A Lumiverse-native continuity tracker, visual state HUD, and optional narrative simulation engine for roleplay chats.",
   "permissions": [
     "chats",

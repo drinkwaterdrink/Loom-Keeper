@@ -61,7 +61,7 @@ const state = {
       estimatedTokens: 420,
       tokenBudget: 700,
       truncated: false,
-      preview: 'STATE OF THE LOOM CONTINUITY BRIEF',
+      preview: 'LOOM KEEPER CONTINUITY BRIEF',
     },
   },
 };

@@ -1,7 +1,7 @@
 import type { LoomFrontendState, LoomTrackerState } from '../shared/types.js';
 import { getFallbackField } from '../shared/renderer.js';
 import { bearPawSvg } from './icons.js';
-import { renderCompactTrackerForState, renderTrackerForState, resolveActiveTrackerForState } from './rendering.js';
+import { renderTrackerForState, resolveActiveTrackerForState } from './rendering.js';
 import { iconButton } from './ui.js';
 
 type FrontendContext = Record<string, unknown>;
@@ -762,7 +762,6 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
   const closeIcon = `
     <button class="sotl-chat-panel__action-btn sotl-chat-panel__action-btn--close" data-sotl-panel-action="collapse" title="Close Panel" aria-label="Close Panel">✕</button>
   `;
-
   const header = `
     <header class="sotl-chat-panel__head">
       <span class="sotl-chat-panel__title">Loom HUD</span>
@@ -777,7 +776,7 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
 
   if (!tracker) {
     const missingText = typeof missingSwipeId === 'number'
-      ? `No tracker retained/generated for Swipe ${missingSwipeId + 1}. State of the Loom will not show a sibling swipe's tracker here.`
+      ? `No tracker retained/generated for Swipe ${missingSwipeId + 1}. Loom Keeper will not show a sibling swipe's tracker here.`
       : 'No tracker has been stored for this chat yet.';
     return [
       '<div class="sotl-chat-panel">',
@@ -785,22 +784,6 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
       '  <div class="sotl-chat-panel__body">',
       `    <p class="sotl-chat-panel__desc">${escapeHtml(missingText)}</p>`,
       `    <button class="sotl-button" data-sotl-panel-action="generate" ${!isGenerating && state.generation.disabledReason ? 'disabled' : ''} style="margin-top: 6px; width: 100%; justify-content: center;">${isGenerating ? 'Stop Generation' : 'Generate Tracker'}</button>`,
-      '  </div>',
-      '</div>'
-    ].join('\n');
-  }
-
-  if (isCompact) {
-    const bodyContent = renderCompactTrackerForState(tracker, state);
-    const swipeChip = typeof tracker.swipeId === 'number'
-      ? `<span class="sotl-swipe-chip" title="Active assistant swipe">Swipe ${tracker.swipeId + 1}</span>`
-      : '';
-    return [
-      '<div class="sotl-chat-panel">',
-      header,
-      '  <div class="sotl-chat-panel__body">',
-      swipeChip,
-      bodyContent,
       '  </div>',
       '</div>'
     ].join('\n');
@@ -965,7 +948,7 @@ function attachContainerClickHandler(
           const ui = ctx.ui && typeof ctx.ui === 'object' ? ctx.ui as Record<string, unknown> : {};
           const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
           if (typeof openDrawer === 'function') {
-            (openDrawer as (id: string) => void)('state_of_the_loom');
+            (openDrawer as (id: string) => void)('loom_keeper');
           } else {
             // Fallback clicking
             const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]') as HTMLElement | null;
@@ -1003,13 +986,13 @@ export function ensureFloatingButton(ctx: FrontendContext, state: LoomFrontendSt
   button.className = 'sotl-float';
   button.type = 'button';
   button.dataset.sotlDynamicFloat = 'true';
-  button.title = 'State of the Loom (Experimental)';
+  button.title = 'Loom Keeper (Experimental)';
   button.textContent = 'L';
   button.addEventListener('click', () => {
     const ui = ctx.ui && typeof ctx.ui === 'object' ? ctx.ui as Record<string, unknown> : {};
     const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel;
     if (typeof openDrawer === 'function') {
-      (openDrawer as (id: string) => void)('state_of_the_loom');
+      (openDrawer as (id: string) => void)('loom_keeper');
     }
   });
   doc.body.append(button);

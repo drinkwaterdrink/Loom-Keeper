@@ -102,7 +102,7 @@ const { content, report } = injection.buildContinuityInjection({
   injectedAt: '2026-05-29T12:04:00.000Z',
 });
 
-assert.match(content, /STATE OF THE LOOM CONTINUITY BRIEF/);
+assert.match(content, /LOOM KEEPER CONTINUITY BRIEF/);
 assert.match(content, /Josh/);
 assert.match(content, /brass cellar key/);
 assert.match(content, /Diane is close enough/);

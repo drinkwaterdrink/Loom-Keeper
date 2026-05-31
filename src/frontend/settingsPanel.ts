@@ -44,13 +44,13 @@ export function renderSettingsPanel(state: LoomFrontendState | null, status: Loo
     return [
       '<div class="sotl-root sotl-settings" data-sotl-settings="true">',
       '<section class="sotl-panel">',
-      '<h2>State of the Loom</h2>',
+      '<h2>Loom Keeper</h2>',
       `<p class="sotl-note">${escapeHtml(offlineText)}</p>`,
       status.lastFrontendError ? `<p class="sotl-note sotl-warning">${escapeHtml(status.lastFrontendError)}</p>` : '',
       '<div class="sotl-actions">',
       button('Refresh', 'refresh'),
       button('Open Loom Drawer', 'open-drawer'),
-      button('Reset Loom Storage', 'reset-storage', { title: 'Resets State of the Loom settings, presets, and trackers for this user.' }),
+      button('Reset Loom Storage', 'reset-storage', { title: 'Resets Loom Keeper settings, presets, and trackers for this user.' }),
       '</div>',
       '</section>',
       '</div>',
@@ -59,7 +59,7 @@ export function renderSettingsPanel(state: LoomFrontendState | null, status: Loo
   return [
     '<div class="sotl-root sotl-settings" data-sotl-settings="true">',
     '<section class="sotl-panel">',
-    '<h2>State of the Loom</h2>',
+    '<h2>Loom Keeper</h2>',
     `<p class="sotl-note">Active chat: ${escapeHtml(state.activeChat.name || state.activeChat.id || 'None')}</p>`,
     '<div class="sotl-status">',
     badge('Backend ready', state.backendReady),
@@ -70,7 +70,7 @@ export function renderSettingsPanel(state: LoomFrontendState | null, status: Loo
     '</div>',
     '<div class="sotl-actions">',
     button('Open Loom Drawer', 'open-drawer', { primary: true }),
-    button('Reset Loom Storage', 'reset-storage', { title: 'Resets State of the Loom settings, presets, and trackers for this user.' }),
+    button('Reset Loom Storage', 'reset-storage', { title: 'Resets Loom Keeper settings, presets, and trackers for this user.' }),
     '</div>',
     status.lastToast 
       ? `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid ${

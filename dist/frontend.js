@@ -2193,59 +2193,6 @@ function resolveActiveTrackerForState(state2) {
   }
   return { tracker: latest };
 }
-function compactValue(value) {
-  if (value === null || value === void 0 || value === "") return "";
-  if (typeof value !== "object") return String(value);
-  if (Array.isArray(value)) {
-    return value.slice(0, 3).map(compactValue).filter(Boolean).join(", ");
-  }
-  const record = value;
-  for (const key of ["name", "title", "label", "summary", "description", "value", "text"]) {
-    if (record[key] !== void 0 && record[key] !== null && typeof record[key] !== "object") return String(record[key]);
-  }
-  return Object.entries(record).filter(([, entryValue]) => entryValue !== null && entryValue !== void 0 && entryValue !== "").slice(0, 3).map(([key, entryValue]) => `${key}: ${compactValue(entryValue)}`).filter(Boolean).join("; ");
-}
-function collectCompactFields(data) {
-  const characters = getFallbackField(data, ["characters", "cast", "present"]);
-  const preferred = [
-    { key: "Location", value: compactValue(getFallbackField(data, ["sceneIdentity.location", "location", "current_location", "place"])) },
-    { key: "Time", value: compactValue(getFallbackField(data, ["sceneIdentity.time", "time", "timeOfDay", "scene_time"])) },
-    { key: "Weather", value: compactValue(getFallbackField(data, ["sceneIdentity.weather", "weather"])) },
-    { key: "Characters", value: Array.isArray(characters) ? characters.slice(0, 4).map(compactValue).filter(Boolean).join(", ") : "" }
-  ].filter((entry) => entry.value);
-  const skip = /* @__PURE__ */ new Set(["schemaversion", "schema_version", "scenetitle", "title", "name", "scene", "scenename", "sceneidentity", "narrativedelta", "characters", "cast", "present"]);
-  const remaining = Object.entries(data).filter(([key, value]) => !skip.has(key.toLowerCase()) && value !== null && value !== void 0 && value !== "").map(([key, value]) => ({ key, value: compactValue(value) })).filter((entry) => entry.value).slice(0, 5);
-  return [...preferred, ...remaining].slice(0, 5);
-}
-function renderCompactTrackerForState(tracker, state2) {
-  const { preset, missing } = resolvePresetForTracker(state2, tracker);
-  const title = String(getFallbackField(tracker.data, [
-    "sceneIdentity.title",
-    "sceneTitle",
-    "title",
-    "name",
-    "sceneName",
-    "scene"
-  ]) || tracker.compactSummary || "Continuity State");
-  const fields = collectCompactFields(tracker.data);
-  const summary = String(getFallbackField(tracker.data, [
-    "narrativeDelta.whatChangedThisTurn",
-    "narrativeDelta.summary",
-    "delta",
-    "summary",
-    "compactSummary"
-  ]) || (tracker.compactSummary && tracker.compactSummary !== title ? tracker.compactSummary : fields[0]?.value) || "No compact summary recorded.");
-  const chips = fields.slice(1, 5).map((field) => {
-    return `<span class="sotl-chip" style="font-size: 11px; padding: 1px 6px;">${escapeHtml2(field.key)}: ${escapeHtml2(field.value)}</span>`;
-  }).join("");
-  return [
-    `    <p class="sotl-chat-panel__scene">${escapeHtml2(title)}</p>`,
-    `    <div class="sotl-chat-panel__meta">Preset: ${escapeHtml2(preset.name)}${missing ? " (missing original preset)" : ""}</div>`,
-    `    <p class="sotl-chat-panel__desc">${escapeHtml2(summary)}</p>`,
-    chips ? `    <div class="sotl-cast-grid" style="margin-top: 4px;">${chips}</div>` : "",
-    tracker.validation.ok ? "" : '    <p class="sotl-chat-panel__desc sotl-warning">Tracker JSON has validation warnings. Open the drawer for details.</p>'
-  ].filter(Boolean).join("\n");
-}
 
 // src/shared/validation.ts
 var VALID_ORIGINS = /* @__PURE__ */ new Set(["built-in", "custom", "imported", "duplicated"]);
@@ -3148,13 +3095,13 @@ function renderSettingsPanel(state2, status = {}) {
     return [
       '<div class="sotl-root sotl-settings" data-sotl-settings="true">',
       '<section class="sotl-panel">',
-      "<h2>State of the Loom</h2>",
+      "<h2>Loom Keeper</h2>",
       `<p class="sotl-note">${escapeHtml2(offlineText)}</p>`,
       status.lastFrontendError ? `<p class="sotl-note sotl-warning">${escapeHtml2(status.lastFrontendError)}</p>` : "",
       '<div class="sotl-actions">',
       button("Refresh", "refresh"),
       button("Open Loom Drawer", "open-drawer"),
-      button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
+      button("Reset Loom Storage", "reset-storage", { title: "Resets Loom Keeper settings, presets, and trackers for this user." }),
       "</div>",
       "</section>",
       "</div>"
@@ -3163,7 +3110,7 @@ function renderSettingsPanel(state2, status = {}) {
   return [
     '<div class="sotl-root sotl-settings" data-sotl-settings="true">',
     '<section class="sotl-panel">',
-    "<h2>State of the Loom</h2>",
+    "<h2>Loom Keeper</h2>",
     `<p class="sotl-note">Active chat: ${escapeHtml2(state2.activeChat.name || state2.activeChat.id || "None")}</p>`,
     '<div class="sotl-status">',
     badge("Backend ready", state2.backendReady),
@@ -3174,7 +3121,7 @@ function renderSettingsPanel(state2, status = {}) {
     "</div>",
     '<div class="sotl-actions">',
     button("Open Loom Drawer", "open-drawer", { primary: true }),
-    button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
+    button("Reset Loom Storage", "reset-storage", { title: "Resets Loom Keeper settings, presets, and trackers for this user." }),
     "</div>",
     status.lastToast ? `<div style="margin-top: 10px; padding: 8px 12px; border-radius: 6px; border-left: 4px solid ${status.lastToast.level === "success" ? "#176b43" : status.lastToast.level === "error" ? "#bd2130" : "#b06800"}; background: ${status.lastToast.level === "success" ? "rgba(27,126,80,0.07)" : status.lastToast.level === "error" ? "rgba(220,53,69,0.08)" : "rgba(255,193,7,0.08)"}; display: flex; align-items: center; gap: 8px; font-size: 12px;">
           <strong>${escapeHtml2(status.lastToast.level)}</strong>
@@ -3338,7 +3285,7 @@ function resolveFocusedTracker(state2, ref) {
   }
   return {
     swipeId: activeSwipe,
-    notice: ref.notice || "State of the Loom did not guess between multiple stored swipe trackers because the active swipe is unclear."
+    notice: ref.notice || "Loom Keeper did not guess between multiple stored swipe trackers because the active swipe is unclear."
   };
 }
 function renderFocusedTracker(state2) {
@@ -3385,7 +3332,7 @@ function renderLatestTracker(state2) {
   const tracker = activeResolution.tracker;
   if (!tracker) {
     if (activeResolution.missingMessageId && typeof activeResolution.missingSwipeId === "number") {
-      return `<p class="sotl-note sotl-warning">No tracker retained/generated for ${escapeHtml2(formatSwipeLabel(activeResolution.missingSwipeId))} on the currently selected response. State of the Loom will not show another swipe's tracker here.</p>`;
+      return `<p class="sotl-note sotl-warning">No tracker retained/generated for ${escapeHtml2(formatSwipeLabel(activeResolution.missingSwipeId))} on the currently selected response. Loom Keeper will not show another swipe's tracker here.</p>`;
     }
     const activeMessageId = state2.diagnostics.swipeReport?.activeMessageId;
     const activeSwipeId = state2.diagnostics.swipeReport?.activeSwipeId;
@@ -3794,7 +3741,7 @@ function renderControlsPanel(state2, status, selectedConnection, disabledReason)
         "</label>",
         '<p class="sotl-note">Controls what the sidecar tracker generator sees: the latest previous tracker as full JSON plus older compact summaries. This does not delete stored trackers.</p>',
         '<div class="sotl-actions">',
-        button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
+        button("Reset Loom Storage", "reset-storage", { title: "Resets Loom Keeper settings, presets, and trackers for this user." }),
         "</div>",
         "</div>"
       ].join("")
@@ -3851,12 +3798,12 @@ function renderDrawer(state2, status = {}) {
     return [
       '<div class="sotl-root">',
       '<section class="sotl-panel">',
-      "<h2>State of the Loom</h2>",
+      "<h2>Loom Keeper</h2>",
       `<p class="sotl-note">${escapeHtml2(offlineText)}</p>`,
       status.lastFrontendError ? `<p class="sotl-note sotl-warning">${escapeHtml2(status.lastFrontendError)}</p>` : "",
       '<div class="sotl-actions">',
       button("Refresh", "refresh"),
-      button("Reset Loom Storage", "reset-storage", { title: "Resets State of the Loom settings, presets, and trackers for this user." }),
+      button("Reset Loom Storage", "reset-storage", { title: "Resets Loom Keeper settings, presets, and trackers for this user." }),
       "</div>",
       "</section>",
       renderFeatureBreakdown(true),
@@ -4542,26 +4489,13 @@ function renderCompactPanel(tracker, state2, missingSwipeId) {
     </header>
   `;
   if (!tracker) {
-    const missingText = typeof missingSwipeId === "number" ? `No tracker retained/generated for Swipe ${missingSwipeId + 1}. State of the Loom will not show a sibling swipe's tracker here.` : "No tracker has been stored for this chat yet.";
+    const missingText = typeof missingSwipeId === "number" ? `No tracker retained/generated for Swipe ${missingSwipeId + 1}. Loom Keeper will not show a sibling swipe's tracker here.` : "No tracker has been stored for this chat yet.";
     return [
       '<div class="sotl-chat-panel">',
       header,
       '  <div class="sotl-chat-panel__body">',
       `    <p class="sotl-chat-panel__desc">${escapeHtml3(missingText)}</p>`,
       `    <button class="sotl-button" data-sotl-panel-action="generate" ${!isGenerating && state2.generation.disabledReason ? "disabled" : ""} style="margin-top: 6px; width: 100%; justify-content: center;">${isGenerating ? "Stop Generation" : "Generate Tracker"}</button>`,
-      "  </div>",
-      "</div>"
-    ].join("\n");
-  }
-  if (isCompact) {
-    const bodyContent2 = renderCompactTrackerForState(tracker, state2);
-    const swipeChip = typeof tracker.swipeId === "number" ? `<span class="sotl-swipe-chip" title="Active assistant swipe">Swipe ${tracker.swipeId + 1}</span>` : "";
-    return [
-      '<div class="sotl-chat-panel">',
-      header,
-      '  <div class="sotl-chat-panel__body">',
-      swipeChip,
-      bodyContent2,
       "  </div>",
       "</div>"
     ].join("\n");
@@ -4691,7 +4625,7 @@ function attachContainerClickHandler(container, ctx, state2, doc) {
           const ui = ctx.ui && typeof ctx.ui === "object" ? ctx.ui : {};
           const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel ?? ui.activateDrawer;
           if (typeof openDrawer === "function") {
-            openDrawer("state_of_the_loom");
+            openDrawer("loom_keeper");
           } else {
             const openBtn = doc.querySelector('[data-sotl-action="open-drawer"]');
             openBtn?.click();
@@ -4720,13 +4654,13 @@ function ensureFloatingButton(ctx, state2) {
   button2.className = "sotl-float";
   button2.type = "button";
   button2.dataset.sotlDynamicFloat = "true";
-  button2.title = "State of the Loom (Experimental)";
+  button2.title = "Loom Keeper (Experimental)";
   button2.textContent = "L";
   button2.addEventListener("click", () => {
     const ui = ctx.ui && typeof ctx.ui === "object" ? ctx.ui : {};
     const openDrawer = ui.openDrawer ?? ui.showDrawer ?? ui.openPanel;
     if (typeof openDrawer === "function") {
-      openDrawer("state_of_the_loom");
+      openDrawer("loom_keeper");
     }
   });
   doc.body.append(button2);
@@ -5416,7 +5350,7 @@ var loomStyles = `
   border-color: var(--lv-accent, #3864d9) !important;
 }
 /*
- * State of the Loom Collapsed Paw Print HUD Launcher Position.
+ * Loom Keeper Collapsed Paw Print HUD Launcher Position.
  * Easily tune the placement coordinates by changing these CSS variables.
  * They are designed as a safe compatibility overlay, isolated from host DOM.
  */
@@ -6118,21 +6052,21 @@ function resolveTrackerForMessageSwipe(currentState, messageId, requestedSwipeId
   return {
     tracker: null,
     swipeId: activeSwipe,
-    notice: "The active swipe could not be determined clearly, so State of the Loom did not guess between stored swipe trackers."
+    notice: "The active swipe could not be determined clearly, so Loom Keeper did not guess between stored swipe trackers."
   };
 }
 function installStyle(ctx) {
   const dom = ctx.dom && typeof ctx.dom === "object" ? ctx.dom : {};
   const addStyle = dom.addStyle ?? getUi(ctx).addStyle ?? ctx.addStyle;
   if (typeof addStyle === "function") {
-    const cleanup = addStyle(loomStyles, "state-of-the-loom-styles");
+    const cleanup = addStyle(loomStyles, "loom-keeper-styles");
     if (typeof cleanup === "function") cleanupFns.push(cleanup);
     return;
   }
   const doc = documentRef3();
-  if (!doc || doc.getElementById("state-of-the-loom-styles")) return;
+  if (!doc || doc.getElementById("loom-keeper-styles")) return;
   const style = doc.createElement("style");
-  style.id = "state-of-the-loom-styles";
+  style.id = "loom-keeper-styles";
   style.textContent = loomStyles;
   doc.head.append(style);
   cleanupFns.push(() => style.remove());
@@ -6226,10 +6160,10 @@ function renderTrackerPreviewOverlay() {
   ];
   overlay.innerHTML = [
     '<div class="sotl-tracker-preview__scrim" data-sotl-action="close-tracker-preview"></div>',
-    '<section class="sotl-tracker-preview" role="dialog" aria-modal="true" aria-label="State of the Loom tracker preview">',
+    '<section class="sotl-tracker-preview" role="dialog" aria-modal="true" aria-label="Loom Keeper tracker preview">',
     '  <header class="sotl-tracker-preview__head">',
     "    <div>",
-    '      <p class="sotl-tracker-preview__eyebrow">State of the Loom</p>',
+    '      <p class="sotl-tracker-preview__eyebrow">Loom Keeper</p>',
     `      <h3>${tracker ? escapeHtml2(tracker.compactSummary || preset?.name || "Retained tracker") : "No tracker retained"}</h3>`,
     `      <p class="sotl-tracker-preview__meta">${meta.map(escapeHtml2).join(" - ")}</p>`,
     "    </div>",
@@ -6273,11 +6207,11 @@ function registerDrawer(ctx) {
   if (typeof register === "function") {
     try {
       const result = register({
-        id: "state_of_the_loom",
+        id: "loom_keeper",
         title: "Track",
         shortName: "Track",
         headerTitle: "Track",
-        description: "Open the State of the Loom tracker HUD",
+        description: "Open the Loom Keeper tracker HUD",
         keywords: ["state", "loom", "tracker", "continuity", "roleplay"],
         iconSvg: pawIconSvg
       });
@@ -6292,7 +6226,7 @@ function registerDrawer(ctx) {
       return;
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
-      console.warn?.(`State of the Loom drawer registration failed: ${text}`);
+      console.warn?.(`Loom Keeper drawer registration failed: ${text}`);
     }
   }
   const doc = documentRef3();
@@ -6555,7 +6489,7 @@ function handleDrawerEvent(event) {
     if (action === "refresh") requestBackendState({ type: "refresh_state" });
     if (action === "reset-storage") {
       const confirmFn = typeof globalThis.confirm === "function" ? globalThis.confirm : null;
-      if (confirmFn && !confirmFn("Reset State of the Loom settings, presets, and trackers for this user?")) return;
+      if (confirmFn && !confirmFn("Reset Loom Keeper settings, presets, and trackers for this user?")) return;
       postToBackend(contextRef, { type: "reset_storage" });
       startBackendTimer();
     }
@@ -6603,7 +6537,7 @@ function handleDrawerEvent(event) {
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
         const alertFn = typeof globalThis.alert === "function" ? globalThis.alert : null;
-        alertFn?.(`State of the Loom JSON edit failed: ${text}`);
+        alertFn?.(`Loom Keeper JSON edit failed: ${text}`);
       }
     }
     if (action === "copy-json" && activeJsonTracker) {

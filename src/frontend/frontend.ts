@@ -237,7 +237,7 @@ function resolveTrackerForMessageSwipe(
   return {
     tracker: null,
     swipeId: activeSwipe,
-    notice: 'The active swipe could not be determined clearly, so State of the Loom did not guess between stored swipe trackers.',
+    notice: 'The active swipe could not be determined clearly, so Loom Keeper did not guess between stored swipe trackers.',
   };
 }
 
@@ -245,14 +245,14 @@ function installStyle(ctx: FrontendContext): void {
   const dom = ctx.dom && typeof ctx.dom === 'object' ? ctx.dom as Record<string, unknown> : {};
   const addStyle = dom.addStyle ?? getUi(ctx).addStyle ?? ctx.addStyle;
   if (typeof addStyle === 'function') {
-    const cleanup = (addStyle as (css: string, id?: string) => void | (() => void))(loomStyles, 'state-of-the-loom-styles');
+    const cleanup = (addStyle as (css: string, id?: string) => void | (() => void))(loomStyles, 'loom-keeper-styles');
     if (typeof cleanup === 'function') cleanupFns.push(cleanup);
     return;
   }
   const doc = documentRef();
-  if (!doc || doc.getElementById('state-of-the-loom-styles')) return;
+  if (!doc || doc.getElementById('loom-keeper-styles')) return;
   const style = doc.createElement('style');
-  style.id = 'state-of-the-loom-styles';
+  style.id = 'loom-keeper-styles';
   style.textContent = loomStyles;
   doc.head.append(style);
   cleanupFns.push(() => style.remove());
@@ -366,10 +366,10 @@ function renderTrackerPreviewOverlay(): void {
 
   overlay.innerHTML = [
     '<div class="sotl-tracker-preview__scrim" data-sotl-action="close-tracker-preview"></div>',
-    '<section class="sotl-tracker-preview" role="dialog" aria-modal="true" aria-label="State of the Loom tracker preview">',
+    '<section class="sotl-tracker-preview" role="dialog" aria-modal="true" aria-label="Loom Keeper tracker preview">',
     '  <header class="sotl-tracker-preview__head">',
     '    <div>',
-    '      <p class="sotl-tracker-preview__eyebrow">State of the Loom</p>',
+    '      <p class="sotl-tracker-preview__eyebrow">Loom Keeper</p>',
     `      <h3>${tracker ? escapeHtml(tracker.compactSummary || preset?.name || 'Retained tracker') : 'No tracker retained'}</h3>`,
     `      <p class="sotl-tracker-preview__meta">${meta.map(escapeHtml).join(' - ')}</p>`,
     '    </div>',
@@ -416,11 +416,11 @@ function registerDrawer(ctx: FrontendContext): void {
   if (typeof register === 'function') {
     try {
     const result = (register as (definition: Record<string, unknown>) => PlacementHandle | void)({
-      id: 'state_of_the_loom',
+      id: 'loom_keeper',
       title: 'Track',
       shortName: 'Track',
       headerTitle: 'Track',
-      description: 'Open the State of the Loom tracker HUD',
+      description: 'Open the Loom Keeper tracker HUD',
       keywords: ['state', 'loom', 'tracker', 'continuity', 'roleplay'],
       iconSvg: pawIconSvg,
     });
@@ -435,7 +435,7 @@ function registerDrawer(ctx: FrontendContext): void {
     return;
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
-      console.warn?.(`State of the Loom drawer registration failed: ${text}`);
+      console.warn?.(`Loom Keeper drawer registration failed: ${text}`);
     }
   }
   const doc = documentRef();
@@ -471,7 +471,7 @@ function registerSettingsMount(ctx: FrontendContext): void {
 
 function registerInputActions(ctx: FrontendContext): void {
   void ctx;
-  // v1.0.21 stability pass: keep State of the Loom out of the composer/input bar.
+  // v1.0.21 stability pass: keep Loom Keeper out of the composer/input bar.
 }
 
 function activateDrawer(): void {
@@ -718,7 +718,7 @@ function handleDrawerEvent(event: Event): void {
     if (action === 'refresh') requestBackendState({ type: 'refresh_state' });
     if (action === 'reset-storage') {
       const confirmFn = typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
-      if (confirmFn && !confirmFn('Reset State of the Loom settings, presets, and trackers for this user?')) return;
+      if (confirmFn && !confirmFn('Reset Loom Keeper settings, presets, and trackers for this user?')) return;
       postToBackend(contextRef, { type: 'reset_storage' });
       startBackendTimer();
     }
@@ -766,7 +766,7 @@ function handleDrawerEvent(event: Event): void {
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
         const alertFn = typeof globalThis.alert === 'function' ? globalThis.alert : null;
-        alertFn?.(`State of the Loom JSON edit failed: ${text}`);
+        alertFn?.(`Loom Keeper JSON edit failed: ${text}`);
       }
     }
 

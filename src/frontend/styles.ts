@@ -681,7 +681,7 @@ export const loomStyles = `
   border-color: var(--lv-accent, #3864d9) !important;
 }
 /*
- * State of the Loom Collapsed Paw Print HUD Launcher Position.
+ * Loom Keeper Collapsed Paw Print HUD Launcher Position.
  * Easily tune the placement coordinates by changing these CSS variables.
  * They are designed as a safe compatibility overlay, isolated from host DOM.
  */
