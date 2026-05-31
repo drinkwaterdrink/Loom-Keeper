@@ -1029,6 +1029,14 @@ export function mountMessageHistoryBadges(ctx: FrontendContext, state: LoomFront
     return { status: 'Message history badge waiting for state.' };
   }
 
+  // Aggressively purge any stray badges not inside a visible native action bar
+  doc.querySelectorAll<HTMLElement>('.sotl-message-history-badge').forEach((el) => {
+    const toolbar = el.closest('[data-message-actions], [data-lv-message-actions], [data-message-action-bar], [data-lumiverse-message-actions], [role="toolbar"], .message-actions, .message-action-buttons, .chat-message-actions, .lv-message-actions, .lv-message-action-bar, .message-controls');
+    if (!toolbar) {
+      el.remove();
+    }
+  });
+
   const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
   let assistantHostsFound = 0;
   let badgesMounted = 0;
@@ -1054,26 +1062,23 @@ export function mountMessageHistoryBadges(ctx: FrontendContext, state: LoomFront
       const toolbar = findMessageToolbar(host);
 
       if (badge) {
-        // Badge already exists — check if it needs to be relocated
-        // If toolbar appeared and badge is NOT in the toolbar, move it there
-        if (toolbar && !toolbar.contains(badge)) {
+        // Badge already exists — check if it needs to be relocated or removed
+        // If there's no toolbar, remove the badge immediately (zero-layout impact fallback)
+        if (!toolbar || !toolbar.contains(badge)) {
           badge.remove();
-          badge = null; // Force re-creation in the toolbar
-        }
-        // If toolbar disappeared and badge WAS in a toolbar, it may be disconnected
-        if (badge && !badge.isConnected) {
-          badge = null; // Force re-creation
+          badge = null;
+        } else if (!badge.isConnected) {
+          badge = null;
         }
       }
 
       if (!badge) {
-        badge = doc.createElement('button');
-        badge.type = 'button';
-        badge.className = 'sotl-message-history-badge';
-
         if (toolbar) {
-          // ---- PRIMARY: inject into native toolbar before Copy icon ----
+          badge = doc.createElement('button');
+          badge.type = 'button';
+          badge.className = 'sotl-message-history-badge';
           badge.classList.add('sotl-message-history-badge--toolbar');
+          
           const copyBtn = Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action]'))
             .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-history-badge') && !btn.classList.contains('sotl-message-paw-btn') && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || ''));
           const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))

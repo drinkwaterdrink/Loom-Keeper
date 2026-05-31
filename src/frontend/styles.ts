@@ -1205,24 +1205,15 @@ export const loomStyles = `
   }
 }
 
-/*
- * Loom Keeper Inline Message Paw (Needle/Thread) Button.
- * Injected natively inside the selected message toolbar.
- * Adapts 100% to the native theme borders, paddings, sizing, and transitions.
- */
 .sotl-message-paw-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   outline: none;
-  
-  /* Reset absolute coordinates to flow cleanly in toolbars */
   position: relative;
   top: auto;
   right: auto;
-  
-  /* Layout variables synced from native sibling actions */
   width: var(--sotl-native-width, var(--sotl-native-size, 28px));
   height: var(--sotl-native-height, var(--sotl-native-size, 28px));
   border-radius: var(--sotl-native-radius, 6px);
@@ -1232,7 +1223,8 @@ export const loomStyles = `
   opacity: var(--sotl-native-opacity, 0.75);
   box-shadow: var(--sotl-native-shadow, none);
   color: var(--sotl-native-color, inherit);
-  
+  margin: 0 !important;
+  flex-shrink: 0;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
 }
@@ -1245,7 +1237,6 @@ export const loomStyles = `
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
-/* Hover effects */
 .sotl-message-paw-btn:hover {
   opacity: 1 !important;
   transform: scale(1.08);
@@ -1256,7 +1247,6 @@ export const loomStyles = `
   color: var(--lv-accent, #3864d9) !important;
 }
 
-/* Premium indicator when message already has a stored tracker */
 .sotl-message-paw-btn--has-tracker {
   opacity: 0.95;
   color: var(--lv-accent, #3864d9) !important;
@@ -1274,7 +1264,6 @@ export const loomStyles = `
   justify-content: center;
   cursor: pointer;
   outline: none;
-  
   position: relative;
   width: 24px;
   height: 24px;
@@ -1284,9 +1273,8 @@ export const loomStyles = `
   padding: 0;
   opacity: 0.65;
   color: inherit;
-  margin: 0;
+  margin: 0 !important;
   flex-shrink: 0;
-  
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
 }
@@ -1299,7 +1287,6 @@ export const loomStyles = `
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
-/* Toolbar variant: syncs with native toolbar button sizing */
 .sotl-message-history-badge--toolbar {
   width: var(--sotl-native-width, var(--sotl-native-size, 28px));
   height: var(--sotl-native-height, var(--sotl-native-size, 28px));

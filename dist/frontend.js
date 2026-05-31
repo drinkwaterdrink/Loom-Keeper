@@ -4642,6 +4642,12 @@ function mountMessageHistoryBadges(ctx, state2) {
     lastBadgesMounted = 0;
     return { status: "Message history badge waiting for state." };
   }
+  doc.querySelectorAll(".sotl-message-history-badge").forEach((el) => {
+    const toolbar = el.closest('[data-message-actions], [data-lv-message-actions], [data-message-action-bar], [data-lumiverse-message-actions], [role="toolbar"], .message-actions, .message-action-buttons, .chat-message-actions, .lv-message-actions, .lv-message-action-bar, .message-controls');
+    if (!toolbar) {
+      el.remove();
+    }
+  });
   const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
   let assistantHostsFound = 0;
   let badgesMounted = 0;
@@ -4660,19 +4666,18 @@ function mountMessageHistoryBadges(ctx, state2) {
       let badge2 = host.querySelector(".sotl-message-history-badge");
       const toolbar = findMessageToolbar(host);
       if (badge2) {
-        if (toolbar && !toolbar.contains(badge2)) {
+        if (!toolbar || !toolbar.contains(badge2)) {
           badge2.remove();
           badge2 = null;
-        }
-        if (badge2 && !badge2.isConnected) {
+        } else if (!badge2.isConnected) {
           badge2 = null;
         }
       }
       if (!badge2) {
-        badge2 = doc.createElement("button");
-        badge2.type = "button";
-        badge2.className = "sotl-message-history-badge";
         if (toolbar) {
+          badge2 = doc.createElement("button");
+          badge2.type = "button";
+          badge2.className = "sotl-message-history-badge";
           badge2.classList.add("sotl-message-history-badge--toolbar");
           const copyBtn = Array.from(toolbar.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-history-badge") && !btn.classList.contains("sotl-message-paw-btn") && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || ""));
           const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll('button, [role="button"], a')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-history-badge") && !btn.classList.contains("sotl-message-paw-btn"));
@@ -6303,24 +6308,15 @@ var loomStyles = `
   }
 }
 
-/*
- * Loom Keeper Inline Message Paw (Needle/Thread) Button.
- * Injected natively inside the selected message toolbar.
- * Adapts 100% to the native theme borders, paddings, sizing, and transitions.
- */
 .sotl-message-paw-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   outline: none;
-  
-  /* Reset absolute coordinates to flow cleanly in toolbars */
   position: relative;
   top: auto;
   right: auto;
-  
-  /* Layout variables synced from native sibling actions */
   width: var(--sotl-native-width, var(--sotl-native-size, 28px));
   height: var(--sotl-native-height, var(--sotl-native-size, 28px));
   border-radius: var(--sotl-native-radius, 6px);
@@ -6330,7 +6326,8 @@ var loomStyles = `
   opacity: var(--sotl-native-opacity, 0.75);
   box-shadow: var(--sotl-native-shadow, none);
   color: var(--sotl-native-color, inherit);
-  
+  margin: 0 !important;
+  flex-shrink: 0;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
 }
@@ -6343,7 +6340,6 @@ var loomStyles = `
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
-/* Hover effects */
 .sotl-message-paw-btn:hover {
   opacity: 1 !important;
   transform: scale(1.08);
@@ -6354,7 +6350,6 @@ var loomStyles = `
   color: var(--lv-accent, #3864d9) !important;
 }
 
-/* Premium indicator when message already has a stored tracker */
 .sotl-message-paw-btn--has-tracker {
   opacity: 0.95;
   color: var(--lv-accent, #3864d9) !important;
@@ -6372,7 +6367,6 @@ var loomStyles = `
   justify-content: center;
   cursor: pointer;
   outline: none;
-  
   position: relative;
   width: 24px;
   height: 24px;
@@ -6382,9 +6376,8 @@ var loomStyles = `
   padding: 0;
   opacity: 0.65;
   color: inherit;
-  margin: 0;
+  margin: 0 !important;
   flex-shrink: 0;
-  
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
 }
@@ -6397,7 +6390,6 @@ var loomStyles = `
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
-/* Toolbar variant: syncs with native toolbar button sizing */
 .sotl-message-history-badge--toolbar {
   width: var(--sotl-native-width, var(--sotl-native-size, 28px));
   height: var(--sotl-native-height, var(--sotl-native-size, 28px));
