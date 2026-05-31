@@ -279,7 +279,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.21";
+var LOOM_VERSION = "1.0.23";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -3304,6 +3304,13 @@ var LoomKeeperBackend = class {
       entityNote,
       companionNote
     ].filter(Boolean).join(" ");
+    const chatAssistantMessages = [];
+    for (let i = 0; i < active.messages.length; i++) {
+      const m = active.messages[i];
+      if (m.id && (m.role === "assistant" || m.role === "model")) {
+        chatAssistantMessages.push({ id: m.id, role: m.role, swipeId: m.swipe_id, index: i });
+      }
+    }
     return {
       backendReady: true,
       settings,
@@ -3315,6 +3322,7 @@ var LoomKeeperBackend = class {
       latestTracker,
       messageTrackers,
       activeSwipeByMessageId: activeSwipeMap,
+      chatAssistantMessages,
       generation,
       diagnostics
     };

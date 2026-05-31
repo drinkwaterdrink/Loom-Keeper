@@ -21,6 +21,7 @@ import type {
   LoomFrontendMessage,
   LoomFrontendState,
   LoomChatMessage,
+  LoomChatMessageSummary,
   LoomPreset,
   LoomSettings,
   LoomTrackerState,
@@ -460,6 +461,14 @@ class LoomKeeperBackend {
       companionNote,
     ].filter(Boolean).join(' ');
 
+    const chatAssistantMessages: LoomChatMessageSummary[] = [];
+    for (let i = 0; i < active.messages.length; i++) {
+      const m = active.messages[i];
+      if (m.id && (m.role === 'assistant' || m.role === 'model')) {
+        chatAssistantMessages.push({ id: m.id, role: m.role, swipeId: m.swipe_id, index: i });
+      }
+    }
+
     return {
       backendReady: true,
       settings,
@@ -471,6 +480,7 @@ class LoomKeeperBackend {
       latestTracker,
       messageTrackers,
       activeSwipeByMessageId: activeSwipeMap,
+      chatAssistantMessages,
       generation,
       diagnostics,
     };

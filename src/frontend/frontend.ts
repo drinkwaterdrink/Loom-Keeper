@@ -1,6 +1,6 @@
 import type { LoomBackendMessage, LoomFrontendMessage, LoomFrontendState, LoomSettings, LoomTrackerState } from '../shared/types.js';
 import { renderDrawer } from './drawer.js';
-import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, mountMessageTrackerActions, cleanupMessageTrackerActions, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback, rememberMessageActionTarget } from './messageCards.js';
+import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, mountMessageTrackerActions, cleanupMessageTrackerActions, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback, rememberMessageActionTarget, getMessageActionDiagnostics } from './messageCards.js';
 import { bearPawSvg } from './icons.js';
 import { renderTrackerForState, resolveActiveTrackerForState } from './rendering.js';
 import { renderSettingsPanel } from './settingsPanel.js';
@@ -635,6 +635,16 @@ function updateMessageCardStatus(): void {
     }
 
     lastRenderStatus = [cardStatus, pawStatus].filter(Boolean).join(' ');
+
+    // Capture message action diagnostics for debugging
+    try {
+      const diag = getMessageActionDiagnostics();
+      if (diag.buttonsInjected > 0 || diag.globalPortalToolbarsFound > 0) {
+        lastRenderStatus += ` [msg-action: hosts=${diag.messageHostsFound}, inHost=${diag.inHostToolbarsFound}, portal=${diag.globalPortalToolbarsFound}, btns=${diag.buttonsInjected}, reason=${diag.lastMountReason}]`;
+      }
+    } catch {
+      // Diagnostics are optional
+    }
 
     try {
       ensureFloatingButton(contextRef, state);

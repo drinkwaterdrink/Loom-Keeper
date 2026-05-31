@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.23 - Per-Message Tracker History Architectural Fix
+
+- Added `chatAssistantMessages` to the frontend state so the UI can identify all assistant messages, not just those with existing trackers.
+- Implemented a dual-path toolbar scanner: **Path A** (in-host) scans toolbars inside `[data-message-id]` containers, **Path B** (global/portal) scans visible toolbar clusters rendered outside message containers (portals, overlays, floating action layers).
+- Added `SelectedMessageTarget` model with source/confidence tracking across 4 strategies: direct DOM attribute (high), closest ancestor (high), geometric nearest (medium), and chat message list (medium). Backend-last-message fallback is low-confidence only.
+- Extracted `injectPawButtonIntoToolbar()` as shared injection logic used by both scanning paths, ensuring consistent positioning (before Copy button), idempotent duplicate prevention, and correct data attributes.
+- Added `getMessageActionDiagnostics()` export with `hostsFound`, `inHostToolbars`, `globalPortalToolbars`, `buttonsInjected`, `selectedTarget`, and `lastMountReason` fields. Console debug output emitted on each successful injection cycle.
+- Unified context menu label to consistently say "Tracker History" regardless of whether a tracker exists for the selected message.
+- Added comprehensive DOM simulation smoke tests using linkedom: in-host toolbar injection, portal/global toolbar injection, hidden toolbar exclusion, untracked message support, tracked message title, idempotency (5× repeated mounts), multiple hosts, mobile floating toolbar, swipe-aware attributes, and diagnostics validation.
+
 ## v1.0.22 - Loom Keeper Icon, Toolbar, and Scroll Optimization
 
 - Replaced the bear paw icon concept with a sleek, 100% maskless, stroke-based diagonal needle and thread SVG design to ensure perfect rendering in WebKit-based mobile containers.

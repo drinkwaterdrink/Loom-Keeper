@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.21";
+var LOOM_VERSION = "1.0.23";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -3864,7 +3864,16 @@ function bearPawSvg(className = "sotl-paw-svg") {
 var injectedWrappers = /* @__PURE__ */ new Map();
 var injectedMessagePaws = /* @__PURE__ */ new Map();
 var injectedContextMenuItems = /* @__PURE__ */ new Set();
-var lastMessageActionTarget = null;
+var lastSelectedMessageTarget = null;
+var lastDiagnostics = {
+  messageHostsFound: 0,
+  inHostToolbarsFound: 0,
+  globalPortalToolbarsFound: 0,
+  buttonsInjected: 0,
+  contextMenuItemsInjected: 0,
+  selectedMessageTarget: null,
+  lastMountReason: "not-yet-run"
+};
 var isChatLoomPanelExpanded = false;
 var isDrawerOpen = false;
 var isSettingsOpen = false;
@@ -3936,13 +3945,177 @@ function findNearestTrackedMessageIdForElement(element, state2) {
 }
 function rememberMessageActionTarget(target, state2) {
   if (!target || !state2) return;
-  const messageId = messageIdFromElement(target) ?? findNearestTrackedMessageIdForElement(target, state2);
-  if (!messageId) return;
-  lastMessageActionTarget = {
-    messageId,
-    swipeId: state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0,
-    seenAt: Date.now()
-  };
+  const directId = messageIdFromElement(target);
+  if (directId) {
+    lastSelectedMessageTarget = {
+      chatId: state2.activeChat.id,
+      messageId: directId,
+      swipeId: state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[directId] : void 0,
+      source: "dom-attribute",
+      confidence: "high",
+      seenAt: Date.now()
+    };
+    return;
+  }
+  const ancestor = target.closest?.("[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid]");
+  if (ancestor instanceof HTMLElement) {
+    const ancestorId = messageIdFromElement(ancestor);
+    if (ancestorId) {
+      lastSelectedMessageTarget = {
+        chatId: state2.activeChat.id,
+        messageId: ancestorId,
+        swipeId: state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[ancestorId] : void 0,
+        source: "closest-ancestor",
+        confidence: "high",
+        seenAt: Date.now()
+      };
+      return;
+    }
+  }
+  const nearestId = findNearestTrackedMessageIdForElement(target, state2);
+  if (nearestId) {
+    lastSelectedMessageTarget = {
+      chatId: state2.activeChat.id,
+      messageId: nearestId,
+      swipeId: state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[nearestId] : void 0,
+      source: "toolbar-geometric",
+      confidence: "medium",
+      seenAt: Date.now()
+    };
+    return;
+  }
+  const nearestChatMsgId = findNearestChatMessageIdForElement(target, state2);
+  if (nearestChatMsgId) {
+    lastSelectedMessageTarget = {
+      chatId: state2.activeChat.id,
+      messageId: nearestChatMsgId,
+      swipeId: state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[nearestChatMsgId] : void 0,
+      source: "chat-message-list",
+      confidence: "medium",
+      seenAt: Date.now()
+    };
+    return;
+  }
+}
+function findNearestChatMessageIdForElement(element, state2) {
+  const doc = element.ownerDocument || documentRef2();
+  if (!doc || !state2.chatAssistantMessages?.length) return void 0;
+  const rect = element.getBoundingClientRect();
+  let best;
+  for (const msg of state2.chatAssistantMessages) {
+    const host = findMessageHostById(doc, msg.id);
+    if (!(host instanceof HTMLElement) || !isVisibleElement(host)) continue;
+    const hostRect = host.getBoundingClientRect();
+    const verticalGap = rect.top > hostRect.bottom ? rect.top - hostRect.bottom : hostRect.top > rect.bottom ? hostRect.top - rect.bottom : 0;
+    const horizontalGap = rect.left > hostRect.right ? rect.left - hostRect.right : hostRect.left > rect.right ? hostRect.left - rect.right : 0;
+    const score = verticalGap + horizontalGap;
+    if (score <= 200 && (!best || score < best.score)) {
+      best = { id: msg.id, score };
+    }
+  }
+  return best?.id;
+}
+function getMessageActionDiagnostics() {
+  return { ...lastDiagnostics, selectedMessageTarget: lastSelectedMessageTarget };
+}
+function isToolbarLikeCluster(candidate) {
+  if (!isVisibleElement(candidate)) return false;
+  const rect = candidate.getBoundingClientRect();
+  if (rect.height > 72 || rect.width > 420) return false;
+  const buttons = Array.from(candidate.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action], svg'));
+  if (buttons.length < 2) return false;
+  return buttons.some((btn) => {
+    const text = (btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || "").trim();
+    return /\b(Copy|Edit|Delete|Hide|Fork|Breakdown|trash|pencil|clone)\b/i.test(text);
+  });
+}
+function isInsideMessageHost(el) {
+  return Boolean(el.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]'));
+}
+function findVisibleGlobalToolbars(doc, state2) {
+  const results = [];
+  const toolbarSelectors = [
+    "[data-message-actions]",
+    "[data-lv-message-actions]",
+    "[data-message-action-bar]",
+    "[data-lumiverse-message-actions]",
+    '[role="toolbar"]',
+    ".message-actions",
+    ".message-action-buttons",
+    ".chat-message-actions",
+    ".lv-message-actions",
+    ".lv-message-action-bar",
+    ".message-controls"
+  ].join(",");
+  const selectorMatches = Array.from(doc.querySelectorAll(toolbarSelectors)).filter(
+    (el) => isVisibleElement(el) && !isInsideMessageHost(el) && !el.closest(".sotl-chat-panel-container, .sotl-root, [data-sotl-tracker-preview]")
+  );
+  const heuristicCandidates = Array.from(doc.querySelectorAll("div, nav, section, menu, span")).filter(
+    (el) => !isInsideMessageHost(el) && !el.closest(".sotl-chat-panel-container, .sotl-root, [data-sotl-tracker-preview]") && isToolbarLikeCluster(el)
+  );
+  const seen = /* @__PURE__ */ new Set();
+  const allToolbars = [];
+  for (const t of [...selectorMatches, ...heuristicCandidates]) {
+    if (seen.has(t)) continue;
+    if ([...seen].some((s) => s.contains(t) || t.contains(s))) continue;
+    seen.add(t);
+    allToolbars.push(t);
+  }
+  for (const toolbar of allToolbars) {
+    if (toolbar.querySelector(".sotl-message-paw-btn")) continue;
+    const messageId = resolveMessageIdForToolbar(toolbar, doc, state2);
+    if (!messageId) continue;
+    const swipeId = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
+    results.push({ toolbar, messageId, swipeId, source: "global-toolbar" });
+  }
+  return results;
+}
+function resolveMessageIdForToolbar(toolbar, doc, state2) {
+  const directAttr = toolbar.getAttribute("data-message-id") || toolbar.getAttribute("data-for-message") || toolbar.getAttribute("data-target-message") || toolbar.getAttribute("data-lv-message-id") || toolbar.closest("[data-message-id]")?.getAttribute("data-message-id") || toolbar.closest("[data-for-message-id]")?.getAttribute("data-for-message-id");
+  if (directAttr) return directAttr;
+  if (lastSelectedMessageTarget && Date.now() - lastSelectedMessageTarget.seenAt < 1e4 && lastSelectedMessageTarget.confidence !== "low") {
+    return lastSelectedMessageTarget.messageId;
+  }
+  const toolbarRect = toolbar.getBoundingClientRect();
+  const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
+  let bestId;
+  let bestScore = Infinity;
+  hosts.forEach((host) => {
+    if (!(host instanceof HTMLElement) || !isVisibleElement(host)) return;
+    const id = messageIdFromElement(host);
+    if (!id) return;
+    const hostRect = host.getBoundingClientRect();
+    const vGap = toolbarRect.top > hostRect.bottom ? toolbarRect.top - hostRect.bottom : hostRect.top > toolbarRect.bottom ? hostRect.top - toolbarRect.bottom : 0;
+    const hGap = toolbarRect.left > hostRect.right ? toolbarRect.left - hostRect.right : hostRect.left > toolbarRect.right ? hostRect.left - toolbarRect.right : 0;
+    const score = vGap + hGap;
+    if (score < bestScore) {
+      bestScore = score;
+      bestId = id;
+    }
+  });
+  if (bestId && bestScore <= 200) return bestId;
+  if (state2.chatAssistantMessages?.length) {
+    let chatBestId;
+    let chatBestScore = Infinity;
+    for (const msg of state2.chatAssistantMessages) {
+      const host = findMessageHostById(doc, msg.id);
+      if (!(host instanceof HTMLElement) || !isVisibleElement(host)) continue;
+      const hostRect = host.getBoundingClientRect();
+      const vGap = toolbarRect.top > hostRect.bottom ? toolbarRect.top - hostRect.bottom : hostRect.top > toolbarRect.bottom ? hostRect.top - toolbarRect.bottom : 0;
+      const hGap = toolbarRect.left > hostRect.right ? toolbarRect.left - hostRect.right : hostRect.left > toolbarRect.right ? hostRect.left - toolbarRect.right : 0;
+      const score = vGap + hGap;
+      if (score < chatBestScore) {
+        chatBestScore = score;
+        chatBestId = msg.id;
+      }
+    }
+    if (chatBestId && chatBestScore <= 200) return chatBestId;
+  }
+  if (!lastSelectedMessageTarget || Date.now() - lastSelectedMessageTarget.seenAt > 15e3) {
+    const assistants = state2.chatAssistantMessages;
+    if (assistants?.length) return assistants[assistants.length - 1].id;
+  }
+  return void 0;
 }
 function findMessageHost(doc, tracker) {
   if (!tracker.messageId) return null;
@@ -4230,7 +4403,7 @@ function visibleContextMenuCandidate(element) {
 }
 function mountContextMenuTrackerAction(doc, state2) {
   void state2;
-  const target = lastMessageActionTarget;
+  const target = lastSelectedMessageTarget;
   doc.querySelectorAll('[data-sotl-context-menu-item="true"]').forEach((item) => {
     if (!target || Date.now() - target.seenAt > 3e4 || item.dataset.sotlMessageId !== target.messageId) {
       item.remove();
@@ -4252,6 +4425,7 @@ function mountContextMenuTrackerAction(doc, state2) {
     item.className = "sotl-context-menu-item " + (reference?.className || "");
     item.dataset.sotlContextMenuItem = "true";
     item.dataset.sotlAction = "message-paw";
+    item.dataset.sotlMessagePaw = "true";
     item.dataset.sotlMessageId = target.messageId;
     if (typeof target.swipeId === "number") item.dataset.sotlSwipeId = String(target.swipeId);
     item.setAttribute("role", reference?.getAttribute("role") || "menuitem");
@@ -4441,10 +4615,12 @@ function mountMessageTrackerActions(ctx, state2) {
   if (!state2) {
     doc.querySelectorAll(".sotl-message-paw-btn").forEach((btn) => btn.remove());
     injectedMessagePaws.clear();
+    lastDiagnostics = { ...lastDiagnostics, messageHostsFound: 0, inHostToolbarsFound: 0, globalPortalToolbarsFound: 0, buttonsInjected: 0, contextMenuItemsInjected: 0, lastMountReason: "no-state" };
     return { status: "Message tracker paw waiting for backend state." };
   }
   const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
   let inlineMounted = 0;
+  let inHostToolbarsFound = 0;
   const activeKeys = /* @__PURE__ */ new Set();
   hosts.forEach((host) => {
     try {
@@ -4462,42 +4638,34 @@ function mountMessageTrackerActions(ctx, state2) {
         }
         return;
       }
+      inHostToolbarsFound++;
       activeKeys.add(key);
-      const hasTracker = state2.messageTrackers.some(
-        (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== "number" || t.swipeId === activeSwipe)
-      );
-      let button2 = toolbar.querySelector(".sotl-message-paw-btn");
-      if (!button2) {
-        button2 = doc.createElement("button");
-        button2.type = "button";
-        button2.className = "sotl-message-paw-btn";
-        const copyBtn = Array.from(toolbar.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn") && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || ""));
-        const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll('button, [role="button"], a')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn"));
-        if (referenceBtn) {
-          syncNativeLikeButtonVariables(button2, referenceBtn);
-          toolbar.insertBefore(button2, referenceBtn);
-        } else {
-          toolbar.insertBefore(button2, toolbar.firstChild);
-        }
-        inlineMounted += 1;
-      }
-      button2.dataset.sotlAction = "message-paw";
-      button2.dataset.sotlMessageId = messageId;
-      if (typeof activeSwipe === "number") {
-        button2.dataset.sotlSwipeId = String(activeSwipe);
-      } else {
-        delete button2.dataset.sotlSwipeId;
-      }
-      button2.title = hasTracker ? "View Continuity History" : "Generate Continuity State";
-      button2.setAttribute("aria-label", button2.title);
-      button2.innerHTML = bearPawSvg("sotl-message-paw-svg");
-      button2.classList.toggle("sotl-message-paw-btn--has-tracker", hasTracker);
-      button2.classList.toggle("sotl-message-paw-btn--generating", state2.generation.running);
-      injectedMessagePaws.set(key, button2);
+      inlineMounted += injectPawButtonIntoToolbar(doc, toolbar, messageId, activeSwipe, state2, "in-host");
+      const existingBtn = toolbar.querySelector(".sotl-message-paw-btn");
+      if (existingBtn) injectedMessagePaws.set(key, existingBtn);
     } catch (err) {
       console.warn("Loom Keeper: failed to mount message paw for host", host, err);
     }
   });
+  let globalToolbarCount = 0;
+  try {
+    const globalToolbars = findVisibleGlobalToolbars(doc, state2);
+    globalToolbarCount = globalToolbars.length;
+    for (const match of globalToolbars) {
+      try {
+        const activeSwipe = match.swipeId;
+        const key = `global::${match.messageId}::swipe:${typeof activeSwipe === "number" ? activeSwipe : "main"}`;
+        activeKeys.add(key);
+        inlineMounted += injectPawButtonIntoToolbar(doc, match.toolbar, match.messageId, activeSwipe, state2, "portal");
+        const existingBtn = match.toolbar.querySelector(".sotl-message-paw-btn");
+        if (existingBtn) injectedMessagePaws.set(key, existingBtn);
+      } catch (err) {
+        console.warn("Loom Keeper: failed to mount message paw for global toolbar", err);
+      }
+    }
+  } catch (err) {
+    console.warn("Loom Keeper: global toolbar scan failed", err);
+  }
   for (const [key, btn] of injectedMessagePaws.entries()) {
     if (!btn.isConnected || !activeKeys.has(key)) {
       try {
@@ -4508,10 +4676,64 @@ function mountMessageTrackerActions(ctx, state2) {
     }
   }
   const menuMounted = mountContextMenuTrackerAction(doc, state2);
+  const mountReason = inlineMounted > 0 ? globalToolbarCount > 0 ? "mounted-in-host-and-portal" : "mounted-in-host" : globalToolbarCount > 0 ? "mounted-portal-only" : hosts.length > 0 ? "no-visible-toolbars" : "no-message-hosts";
+  lastDiagnostics = {
+    messageHostsFound: hosts.length,
+    inHostToolbarsFound,
+    globalPortalToolbarsFound: globalToolbarCount,
+    buttonsInjected: inlineMounted,
+    contextMenuItemsInjected: menuMounted,
+    selectedMessageTarget: lastSelectedMessageTarget,
+    lastMountReason: mountReason
+  };
+  if (inlineMounted > 0 || globalToolbarCount > 0 || menuMounted > 0) {
+    const tgt = lastSelectedMessageTarget;
+    const tgtStr = tgt ? `${tgt.messageId} via ${tgt.source}/${tgt.confidence}` : "none";
+    console.debug(
+      `[Loom Keeper] hostsFound=${hosts.length}, inHostToolbars=${inHostToolbarsFound}, globalPortalToolbars=${globalToolbarCount}, selectedTarget=${tgtStr}, buttonsInjected=${inlineMounted}, menuItems=${menuMounted}, lastMountReason=${mountReason}`
+    );
+  }
   const reports = [];
   if (inlineMounted > 0) reports.push(`Injected ${inlineMounted} native toolbar button(s).`);
+  if (globalToolbarCount > 0) reports.push(`Scanned ${globalToolbarCount} global/portal toolbar(s).`);
   if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action(s).`);
   return { status: reports.join(" ") || "No active message toolbars found." };
+}
+function injectPawButtonIntoToolbar(doc, toolbar, messageId, activeSwipe, state2, source) {
+  let button2 = toolbar.querySelector(".sotl-message-paw-btn");
+  let created = 0;
+  if (!button2) {
+    button2 = doc.createElement("button");
+    button2.type = "button";
+    button2.className = "sotl-message-paw-btn";
+    const copyBtn = Array.from(toolbar.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn") && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || ""));
+    const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll('button, [role="button"], a')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn"));
+    if (referenceBtn) {
+      syncNativeLikeButtonVariables(button2, referenceBtn);
+      toolbar.insertBefore(button2, referenceBtn);
+    } else {
+      toolbar.insertBefore(button2, toolbar.firstChild);
+    }
+    created = 1;
+  }
+  const hasTracker = state2.messageTrackers.some(
+    (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== "number" || t.swipeId === activeSwipe)
+  );
+  button2.dataset.sotlAction = "message-paw";
+  button2.dataset.sotlMessagePaw = "true";
+  button2.dataset.sotlMessageId = messageId;
+  button2.dataset.sotlMountSource = source;
+  if (typeof activeSwipe === "number") {
+    button2.dataset.sotlSwipeId = String(activeSwipe);
+  } else {
+    delete button2.dataset.sotlSwipeId;
+  }
+  button2.title = hasTracker ? "View Continuity History" : "Generate Continuity State";
+  button2.setAttribute("aria-label", button2.title);
+  button2.innerHTML = bearPawSvg("sotl-message-paw-svg");
+  button2.classList.toggle("sotl-message-paw-btn--has-tracker", hasTracker);
+  button2.classList.toggle("sotl-message-paw-btn--generating", state2.generation.running);
+  return created;
 }
 function renderCompactPanel(tracker, state2, missingSwipeId) {
   const isGenerating = state2.generation.running;
@@ -6551,6 +6773,13 @@ function updateMessageCardStatus() {
       pawStatus = "Tracker actions failed to mount";
     }
     lastRenderStatus = [cardStatus, pawStatus].filter(Boolean).join(" ");
+    try {
+      const diag = getMessageActionDiagnostics();
+      if (diag.buttonsInjected > 0 || diag.globalPortalToolbarsFound > 0) {
+        lastRenderStatus += ` [msg-action: hosts=${diag.messageHostsFound}, inHost=${diag.inHostToolbarsFound}, portal=${diag.globalPortalToolbarsFound}, btns=${diag.buttonsInjected}, reason=${diag.lastMountReason}]`;
+      }
+    } catch {
+    }
     try {
       ensureFloatingButton(contextRef, state);
     } catch (err) {

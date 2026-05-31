@@ -254,6 +254,14 @@ export interface LoomDiagnostics {
   swipeReport?: LoomSwipeReport | undefined;
 }
 
+/** Compact message summary for frontend message identification — no content exposed. */
+export interface LoomChatMessageSummary {
+  id: string;
+  role: string;
+  swipeId?: number | undefined;
+  index: number;
+}
+
 export interface LoomFrontendState {
   backendReady: boolean;
   settings: LoomSettings;
@@ -265,6 +273,7 @@ export interface LoomFrontendState {
   latestTracker: LoomTrackerState | null;
   messageTrackers: LoomTrackerState[];
   activeSwipeByMessageId: Record<string, number>;
+  chatAssistantMessages: LoomChatMessageSummary[];
   generation: LoomGenerationStatus;
   diagnostics: LoomDiagnostics;
 }

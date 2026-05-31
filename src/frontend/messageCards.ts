@@ -11,10 +11,38 @@ export interface MessageCardMountStatus {
   messageId?: string | undefined;
 }
 
+export interface SelectedMessageTarget {
+  chatId: string | null;
+  messageId: string;
+  swipeId?: number | undefined;
+  source: 'dom-attribute' | 'closest-ancestor' | 'toolbar-geometric' | 'chat-message-list' | 'backend-fallback';
+  confidence: 'high' | 'medium' | 'low';
+  seenAt: number;
+}
+
+export interface MessageActionDiagnostics {
+  messageHostsFound: number;
+  inHostToolbarsFound: number;
+  globalPortalToolbarsFound: number;
+  buttonsInjected: number;
+  contextMenuItemsInjected: number;
+  selectedMessageTarget: SelectedMessageTarget | null;
+  lastMountReason: string;
+}
+
 const injectedWrappers = new Map<string, HTMLElement>();
 const injectedMessagePaws = new Map<string, HTMLElement>();
 const injectedContextMenuItems = new Set<HTMLElement>();
-let lastMessageActionTarget: { messageId: string; swipeId?: number | undefined; seenAt: number } | null = null;
+let lastSelectedMessageTarget: SelectedMessageTarget | null = null;
+let lastDiagnostics: MessageActionDiagnostics = {
+  messageHostsFound: 0,
+  inHostToolbarsFound: 0,
+  globalPortalToolbarsFound: 0,
+  buttonsInjected: 0,
+  contextMenuItemsInjected: 0,
+  selectedMessageTarget: null,
+  lastMountReason: 'not-yet-run',
+};
 let isChatLoomPanelExpanded = false;
 let isDrawerOpen = false;
 let isSettingsOpen = false;
@@ -124,13 +152,241 @@ function findNearestTrackedMessageIdForElement(element: HTMLElement, state: Loom
 
 export function rememberMessageActionTarget(target: HTMLElement | null, state: LoomFrontendState | null): void {
   if (!target || !state) return;
-  const messageId = messageIdFromElement(target) ?? findNearestTrackedMessageIdForElement(target, state);
-  if (!messageId) return;
-  lastMessageActionTarget = {
-    messageId,
-    swipeId: state.activeSwipeByMessageId ? state.activeSwipeByMessageId[messageId] : undefined,
-    seenAt: Date.now(),
-  };
+
+  // Strategy 1: Direct DOM attribute (high confidence)
+  const directId = messageIdFromElement(target);
+  if (directId) {
+    lastSelectedMessageTarget = {
+      chatId: state.activeChat.id,
+      messageId: directId,
+      swipeId: state.activeSwipeByMessageId ? state.activeSwipeByMessageId[directId] : undefined,
+      source: 'dom-attribute',
+      confidence: 'high',
+      seenAt: Date.now(),
+    };
+    return;
+  }
+
+  // Strategy 2: Closest ancestor with message ID (high confidence)
+  const ancestor = target.closest?.('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid]');
+  if (ancestor instanceof HTMLElement) {
+    const ancestorId = messageIdFromElement(ancestor);
+    if (ancestorId) {
+      lastSelectedMessageTarget = {
+        chatId: state.activeChat.id,
+        messageId: ancestorId,
+        swipeId: state.activeSwipeByMessageId ? state.activeSwipeByMessageId[ancestorId] : undefined,
+        source: 'closest-ancestor',
+        confidence: 'high',
+        seenAt: Date.now(),
+      };
+      return;
+    }
+  }
+
+  // Strategy 3: Geometric nearest tracked message (medium confidence)
+  const nearestId = findNearestTrackedMessageIdForElement(target, state);
+  if (nearestId) {
+    lastSelectedMessageTarget = {
+      chatId: state.activeChat.id,
+      messageId: nearestId,
+      swipeId: state.activeSwipeByMessageId ? state.activeSwipeByMessageId[nearestId] : undefined,
+      source: 'toolbar-geometric',
+      confidence: 'medium',
+      seenAt: Date.now(),
+    };
+    return;
+  }
+
+  // Strategy 4: Geometric nearest from chatAssistantMessages (medium confidence)
+  const nearestChatMsgId = findNearestChatMessageIdForElement(target, state);
+  if (nearestChatMsgId) {
+    lastSelectedMessageTarget = {
+      chatId: state.activeChat.id,
+      messageId: nearestChatMsgId,
+      swipeId: state.activeSwipeByMessageId ? state.activeSwipeByMessageId[nearestChatMsgId] : undefined,
+      source: 'chat-message-list',
+      confidence: 'medium',
+      seenAt: Date.now(),
+    };
+    return;
+  }
+}
+
+function findNearestChatMessageIdForElement(element: HTMLElement, state: LoomFrontendState): string | undefined {
+  const doc = element.ownerDocument || documentRef();
+  if (!doc || !state.chatAssistantMessages?.length) return undefined;
+  const rect = element.getBoundingClientRect();
+  let best: { id: string; score: number } | undefined;
+  for (const msg of state.chatAssistantMessages) {
+    const host = findMessageHostById(doc, msg.id);
+    if (!(host instanceof HTMLElement) || !isVisibleElement(host)) continue;
+    const hostRect = host.getBoundingClientRect();
+    const verticalGap = rect.top > hostRect.bottom
+      ? rect.top - hostRect.bottom
+      : hostRect.top > rect.bottom
+        ? hostRect.top - rect.bottom
+        : 0;
+    const horizontalGap = rect.left > hostRect.right
+      ? rect.left - hostRect.right
+      : hostRect.left > rect.right
+        ? hostRect.left - rect.right
+        : 0;
+    const score = verticalGap + horizontalGap;
+    if (score <= 200 && (!best || score < best.score)) {
+      best = { id: msg.id, score };
+    }
+  }
+  return best?.id;
+}
+
+export function getSelectedMessageTarget(): SelectedMessageTarget | null {
+  return lastSelectedMessageTarget;
+}
+
+export function getMessageActionDiagnostics(): MessageActionDiagnostics {
+  return { ...lastDiagnostics, selectedMessageTarget: lastSelectedMessageTarget };
+}
+
+// ---- Global/Portal Toolbar Scanner ----
+
+interface GlobalToolbarMatch {
+  toolbar: HTMLElement;
+  messageId: string;
+  swipeId?: number | undefined;
+  source: string;
+}
+
+function isToolbarLikeCluster(candidate: HTMLElement): boolean {
+  if (!isVisibleElement(candidate)) return false;
+  const rect = candidate.getBoundingClientRect();
+  if (rect.height > 72 || rect.width > 420) return false;
+  const buttons = Array.from(candidate.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action], svg'));
+  if (buttons.length < 2) return false;
+  return buttons.some((btn) => {
+    const text = (btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || '').trim();
+    return /\b(Copy|Edit|Delete|Hide|Fork|Breakdown|trash|pencil|clone)\b/i.test(text);
+  });
+}
+
+function isInsideMessageHost(el: HTMLElement): boolean {
+  return Boolean(el.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]'));
+}
+
+export function findVisibleGlobalToolbars(doc: Document, state: LoomFrontendState): GlobalToolbarMatch[] {
+  const results: GlobalToolbarMatch[] = [];
+
+  // First: look for toolbars using known selectors outside message hosts
+  const toolbarSelectors = [
+    '[data-message-actions]',
+    '[data-lv-message-actions]',
+    '[data-message-action-bar]',
+    '[data-lumiverse-message-actions]',
+    '[role="toolbar"]',
+    '.message-actions',
+    '.message-action-buttons',
+    '.chat-message-actions',
+    '.lv-message-actions',
+    '.lv-message-action-bar',
+    '.message-controls',
+  ].join(',');
+
+  const selectorMatches = Array.from(doc.querySelectorAll<HTMLElement>(toolbarSelectors)).filter(
+    (el) => isVisibleElement(el) && !isInsideMessageHost(el) && !el.closest('.sotl-chat-panel-container, .sotl-root, [data-sotl-tracker-preview]')
+  );
+
+  // Second: broad heuristic scan for button clusters outside message hosts
+  const heuristicCandidates = Array.from(doc.querySelectorAll<HTMLElement>('div, nav, section, menu, span')).filter(
+    (el) => !isInsideMessageHost(el) && !el.closest('.sotl-chat-panel-container, .sotl-root, [data-sotl-tracker-preview]') && isToolbarLikeCluster(el)
+  );
+
+  // Deduplicate: prefer selector matches, then heuristics not already covered
+  const seen = new Set<HTMLElement>();
+  const allToolbars: HTMLElement[] = [];
+  for (const t of [...selectorMatches, ...heuristicCandidates]) {
+    if (seen.has(t)) continue;
+    // Skip if this toolbar is a descendant/ancestor of one we already have
+    if ([...seen].some((s) => s.contains(t) || t.contains(s))) continue;
+    seen.add(t);
+    allToolbars.push(t);
+  }
+
+  for (const toolbar of allToolbars) {
+    // Already has our button? Skip
+    if (toolbar.querySelector('.sotl-message-paw-btn')) continue;
+
+    // Try to resolve the message ID
+    const messageId = resolveMessageIdForToolbar(toolbar, doc, state);
+    if (!messageId) continue;
+
+    const swipeId = state.activeSwipeByMessageId ? state.activeSwipeByMessageId[messageId] : undefined;
+    results.push({ toolbar, messageId, swipeId, source: 'global-toolbar' });
+  }
+
+  return results;
+}
+
+function resolveMessageIdForToolbar(toolbar: HTMLElement, doc: Document, state: LoomFrontendState): string | undefined {
+  // 1. Check for direct message ID attributes on toolbar or ancestors
+  const directAttr = toolbar.getAttribute('data-message-id')
+    || toolbar.getAttribute('data-for-message')
+    || toolbar.getAttribute('data-target-message')
+    || toolbar.getAttribute('data-lv-message-id')
+    || toolbar.closest('[data-message-id]')?.getAttribute('data-message-id')
+    || toolbar.closest('[data-for-message-id]')?.getAttribute('data-for-message-id');
+  if (directAttr) return directAttr;
+
+  // 2. Use recently selected message target (< 10s, medium+ confidence)
+  if (lastSelectedMessageTarget && Date.now() - lastSelectedMessageTarget.seenAt < 10000 && lastSelectedMessageTarget.confidence !== 'low') {
+    return lastSelectedMessageTarget.messageId;
+  }
+
+  // 3. Geometric nearest: find closest visible message host
+  const toolbarRect = toolbar.getBoundingClientRect();
+  const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
+  let bestId: string | undefined;
+  let bestScore = Infinity;
+  hosts.forEach((host) => {
+    if (!(host instanceof HTMLElement) || !isVisibleElement(host)) return;
+    const id = messageIdFromElement(host);
+    if (!id) return;
+    const hostRect = host.getBoundingClientRect();
+    const vGap = toolbarRect.top > hostRect.bottom ? toolbarRect.top - hostRect.bottom : hostRect.top > toolbarRect.bottom ? hostRect.top - toolbarRect.bottom : 0;
+    const hGap = toolbarRect.left > hostRect.right ? toolbarRect.left - hostRect.right : hostRect.left > toolbarRect.right ? hostRect.left - toolbarRect.right : 0;
+    const score = vGap + hGap;
+    if (score < bestScore) {
+      bestScore = score;
+      bestId = id;
+    }
+  });
+  if (bestId && bestScore <= 200) return bestId;
+
+  // 4. Geometric nearest from chatAssistantMessages (for untracked messages)
+  if (state.chatAssistantMessages?.length) {
+    let chatBestId: string | undefined;
+    let chatBestScore = Infinity;
+    for (const msg of state.chatAssistantMessages) {
+      const host = findMessageHostById(doc, msg.id);
+      if (!(host instanceof HTMLElement) || !isVisibleElement(host)) continue;
+      const hostRect = host.getBoundingClientRect();
+      const vGap = toolbarRect.top > hostRect.bottom ? toolbarRect.top - hostRect.bottom : hostRect.top > toolbarRect.bottom ? hostRect.top - toolbarRect.bottom : 0;
+      const hGap = toolbarRect.left > hostRect.right ? toolbarRect.left - hostRect.right : hostRect.left > toolbarRect.right ? hostRect.left - toolbarRect.right : 0;
+      const score = vGap + hGap;
+      if (score < chatBestScore) {
+        chatBestScore = score;
+        chatBestId = msg.id;
+      }
+    }
+    if (chatBestId && chatBestScore <= 200) return chatBestId;
+  }
+
+  // 5. Backend fallback: last assistant message (low confidence — only if no recent target)
+  if (!lastSelectedMessageTarget || Date.now() - lastSelectedMessageTarget.seenAt > 15000) {
+    const assistants = state.chatAssistantMessages;
+    if (assistants?.length) return assistants[assistants.length - 1].id;
+  }
+
+  return undefined;
 }
 
 function findMessageHost(doc: Document, tracker: LoomTrackerState): Element | null {
@@ -479,7 +735,7 @@ function visibleContextMenuCandidate(element: Element): element is HTMLElement {
 
 function mountContextMenuTrackerAction(doc: Document, state: LoomFrontendState): number {
   void state;
-  const target = lastMessageActionTarget;
+  const target = lastSelectedMessageTarget;
   doc.querySelectorAll<HTMLElement>('[data-sotl-context-menu-item="true"]').forEach((item) => {
     if (!target || Date.now() - target.seenAt > 30000 || item.dataset.sotlMessageId !== target.messageId) {
       item.remove();
@@ -506,10 +762,12 @@ function mountContextMenuTrackerAction(doc: Document, state: LoomFrontendState):
     item.className = 'sotl-context-menu-item ' + (reference?.className || '');
     item.dataset.sotlContextMenuItem = 'true';
     item.dataset.sotlAction = 'message-paw';
+    item.dataset.sotlMessagePaw = 'true';
     item.dataset.sotlMessageId = target.messageId;
     if (typeof target.swipeId === 'number') item.dataset.sotlSwipeId = String(target.swipeId);
     item.setAttribute('role', reference?.getAttribute('role') || 'menuitem');
     item.setAttribute('tabindex', '0');
+    // Open Tracker — context menu always says "Tracker History" regardless of tracker existence
     item.innerHTML = `<span class="sotl-context-menu-item__icon">${bearPawSvg('sotl-message-paw-svg')}</span><span>Tracker History</span>`;
     if (reference) syncNativeLikeButtonVariables(item, reference);
 
@@ -731,13 +989,16 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
   if (!state) {
     doc.querySelectorAll<HTMLElement>('.sotl-message-paw-btn').forEach((btn) => btn.remove());
     injectedMessagePaws.clear();
+    lastDiagnostics = { ...lastDiagnostics, messageHostsFound: 0, inHostToolbarsFound: 0, globalPortalToolbarsFound: 0, buttonsInjected: 0, contextMenuItemsInjected: 0, lastMountReason: 'no-state' };
     return { status: 'Message tracker paw waiting for backend state.' };
   }
 
   const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
   let inlineMounted = 0;
+  let inHostToolbarsFound = 0;
   const activeKeys = new Set<string>();
 
+  // ---- PATH A: In-Host Toolbar Scan ----
   hosts.forEach((host) => {
     try {
       if (!(host instanceof HTMLElement)) return;
@@ -758,57 +1019,36 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
         return;
       }
 
+      inHostToolbarsFound++;
       activeKeys.add(key);
-
-      const hasTracker = state.messageTrackers.some(
-        (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== 'number' || t.swipeId === activeSwipe)
-      );
-
-      let button = toolbar.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
-      if (!button) {
-        button = doc.createElement('button');
-        button.type = 'button';
-        button.className = 'sotl-message-paw-btn';
-        
-        // Inject just to the left of the Copy button inside the toolbar
-        const copyBtn = Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action]'))
-          .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn') && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || ''));
-        
-        const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))
-          .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn'));
-
-        if (referenceBtn) {
-          syncNativeLikeButtonVariables(button, referenceBtn);
-          toolbar.insertBefore(button, referenceBtn);
-        } else {
-          toolbar.insertBefore(button, toolbar.firstChild);
-        }
-        inlineMounted += 1;
-      }
-
-      button.dataset.sotlAction = 'message-paw';
-      button.dataset.sotlMessageId = messageId;
-      if (typeof activeSwipe === 'number') {
-        button.dataset.sotlSwipeId = String(activeSwipe);
-      } else {
-        delete button.dataset.sotlSwipeId;
-      }
-
-      button.title = hasTracker ? 'View Continuity History' : 'Generate Continuity State';
-      button.setAttribute('aria-label', button.title);
-      
-      // Inject the Needle & Thread SVG
-      button.innerHTML = bearPawSvg('sotl-message-paw-svg');
-
-      // Toggle styling classes
-      button.classList.toggle('sotl-message-paw-btn--has-tracker', hasTracker);
-      button.classList.toggle('sotl-message-paw-btn--generating', state.generation.running);
-
-      injectedMessagePaws.set(key, button);
+      inlineMounted += injectPawButtonIntoToolbar(doc, toolbar, messageId, activeSwipe, state, 'in-host');
+      const existingBtn = toolbar.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
+      if (existingBtn) injectedMessagePaws.set(key, existingBtn);
     } catch (err) {
       console.warn('Loom Keeper: failed to mount message paw for host', host, err);
     }
   });
+
+  // ---- PATH B: Global/Portal Toolbar Scan ----
+  let globalToolbarCount = 0;
+  try {
+    const globalToolbars = findVisibleGlobalToolbars(doc, state);
+    globalToolbarCount = globalToolbars.length;
+    for (const match of globalToolbars) {
+      try {
+        const activeSwipe = match.swipeId;
+        const key = `global::${match.messageId}::swipe:${typeof activeSwipe === 'number' ? activeSwipe : 'main'}`;
+        activeKeys.add(key);
+        inlineMounted += injectPawButtonIntoToolbar(doc, match.toolbar, match.messageId, activeSwipe, state, 'portal');
+        const existingBtn = match.toolbar.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
+        if (existingBtn) injectedMessagePaws.set(key, existingBtn);
+      } catch (err) {
+        console.warn('Loom Keeper: failed to mount message paw for global toolbar', err);
+      }
+    }
+  } catch (err) {
+    console.warn('Loom Keeper: global toolbar scan failed', err);
+  }
 
   // Cleanup old buttons that are no longer in the DOM or whose swipe keys are stale
   for (const [key, btn] of injectedMessagePaws.entries()) {
@@ -823,10 +1063,89 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
   }
 
   const menuMounted = mountContextMenuTrackerAction(doc, state);
+
+  // Update diagnostics
+  const mountReason = inlineMounted > 0
+    ? (globalToolbarCount > 0 ? 'mounted-in-host-and-portal' : 'mounted-in-host')
+    : (globalToolbarCount > 0 ? 'mounted-portal-only' : (hosts.length > 0 ? 'no-visible-toolbars' : 'no-message-hosts'));
+
+  lastDiagnostics = {
+    messageHostsFound: hosts.length,
+    inHostToolbarsFound,
+    globalPortalToolbarsFound: globalToolbarCount,
+    buttonsInjected: inlineMounted,
+    contextMenuItemsInjected: menuMounted,
+    selectedMessageTarget: lastSelectedMessageTarget,
+    lastMountReason: mountReason,
+  };
+
+  // Console diagnostics for debugging
+  if (inlineMounted > 0 || globalToolbarCount > 0 || menuMounted > 0) {
+    const tgt = lastSelectedMessageTarget;
+    const tgtStr = tgt ? `${tgt.messageId} via ${tgt.source}/${tgt.confidence}` : 'none';
+    console.debug(
+      `[Loom Keeper] hostsFound=${hosts.length}, inHostToolbars=${inHostToolbarsFound}, globalPortalToolbars=${globalToolbarCount}, selectedTarget=${tgtStr}, buttonsInjected=${inlineMounted}, menuItems=${menuMounted}, lastMountReason=${mountReason}`
+    );
+  }
+
   const reports: string[] = [];
   if (inlineMounted > 0) reports.push(`Injected ${inlineMounted} native toolbar button(s).`);
+  if (globalToolbarCount > 0) reports.push(`Scanned ${globalToolbarCount} global/portal toolbar(s).`);
   if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action(s).`);
   return { status: reports.join(' ') || 'No active message toolbars found.' };
+}
+
+/** Shared button injection logic used by both Path A and Path B. Returns 1 if a new button was created, 0 if one already existed. */
+function injectPawButtonIntoToolbar(doc: Document, toolbar: HTMLElement, messageId: string, activeSwipe: number | undefined, state: LoomFrontendState, source: string): number {
+  // Idempotent: don't create duplicates
+  let button = toolbar.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
+  let created = 0;
+  if (!button) {
+    button = doc.createElement('button');
+    button.type = 'button';
+    button.className = 'sotl-message-paw-btn';
+    
+    // Inject just to the left of the Copy button inside the toolbar
+    const copyBtn = Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action]'))
+      .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn') && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || ''));
+    
+    const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))
+      .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn'));
+
+    if (referenceBtn) {
+      syncNativeLikeButtonVariables(button, referenceBtn);
+      toolbar.insertBefore(button, referenceBtn);
+    } else {
+      toolbar.insertBefore(button, toolbar.firstChild);
+    }
+    created = 1;
+  }
+
+  const hasTracker = state.messageTrackers.some(
+    (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== 'number' || t.swipeId === activeSwipe)
+  );
+
+  button.dataset.sotlAction = 'message-paw';
+  button.dataset.sotlMessagePaw = 'true';
+  button.dataset.sotlMessageId = messageId;
+  button.dataset.sotlMountSource = source;
+  if (typeof activeSwipe === 'number') {
+    button.dataset.sotlSwipeId = String(activeSwipe);
+  } else {
+    delete button.dataset.sotlSwipeId;
+  }
+
+  button.title = hasTracker ? 'View Continuity History' : 'Generate Continuity State';
+  button.setAttribute('aria-label', button.title);
+  
+  // Inject the Needle & Thread SVG
+  button.innerHTML = bearPawSvg('sotl-message-paw-svg');
+
+  // Toggle styling classes
+  button.classList.toggle('sotl-message-paw-btn--has-tracker', hasTracker);
+  button.classList.toggle('sotl-message-paw-btn--generating', state.generation.running);
+
+  return created;
 }
 
 function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFrontendState, missingSwipeId?: number | undefined): string {
