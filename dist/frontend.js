@@ -4321,42 +4321,10 @@ function syncNativeLikeButtonVariables(target, reference) {
   } catch {
   }
 }
-function findNativeSideRail(doc) {
-  const selectors = [
-    "[data-lv-side-rail]",
-    "[data-lumiverse-side-rail]",
-    "[data-chat-side-actions]",
-    "[data-lv-chat-actions]",
-    ".lv-side-rail",
-    ".lumiverse-side-rail",
-    ".chat-side-rail",
-    ".chat-side-actions",
-    ".right-side-actions",
-    ".floating-actions"
-  ];
-  for (const selector of selectors) {
-    const candidate = doc.querySelector(selector);
-    if (isVisibleElement(candidate)) return candidate;
-  }
-  return null;
-}
 function mountLauncherInNativeRail(doc, container) {
-  const rail = findNativeSideRail(doc);
-  if (!rail) return false;
-  const pill = container.querySelector(".sotl-chat-pill");
-  const stockReference = findStockSideIcon(doc);
-  const reference = stockReference && rail.contains(stockReference) ? stockReference : Array.from(rail.querySelectorAll('button, [role="button"], a, [tabindex]')).find((entry) => isVisibleElement(entry));
-  if (pill && reference) syncNativeLikeButtonVariables(pill, reference);
-  container.dataset.sotlNativeMounted = "true";
-  container.style.removeProperty("position");
-  container.style.removeProperty("right");
-  container.style.removeProperty("top");
-  if (reference?.parentElement === rail) {
-    reference.insertAdjacentElement("afterend", container);
-  } else {
-    rail.append(container);
-  }
-  return true;
+  void doc;
+  void container;
+  return false;
 }
 function isStockSideIconCandidate(doc, candidate) {
   if (!isVisibleElement(candidate) || candidate.closest(".sotl-chat-panel-container")) return false;
