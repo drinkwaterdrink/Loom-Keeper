@@ -4818,17 +4818,17 @@ function injectMessageTrackerLinks(ctx, state2) {
       }
     }
     if (!msgEl) continue;
-    const btnHtml = `<div style="display:flex;justify-content:flex-end;padding:2px 4px;margin:0;"><span style="display:inline-block;padding:2px 8px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;color:#fff;background:var(--lv-accent,#3864d9);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.15);letter-spacing:0.3px;">Tracker</span></div>`;
+    const linkHtml = '<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 8px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;color:#fff;background:var(--lv-accent,#3864d9);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.15);">Tracker</span>';
     try {
       let injected = null;
       if (inject) {
-        injected = inject(msgEl, btnHtml, "afterend");
+        injected = inject(msgEl, linkHtml, "afterbegin");
       } else {
-        const temp = doc.createElement("div");
-        temp.innerHTML = btnHtml;
+        const temp = doc.createElement("span");
+        temp.innerHTML = linkHtml;
         const child = temp.firstElementChild;
         if (child instanceof HTMLElement) {
-          msgEl.insertAdjacentElement("afterend", child);
+          msgEl.insertAdjacentElement("afterbegin", child);
           injected = child;
         }
       }
@@ -7415,6 +7415,11 @@ function handleDrawerEvent(event) {
       const messageId = actionButton.dataset.sotlMessageId;
       const actionSwipeId2 = datasetSwipeId(actionButton);
       openTrackerPreview(messageId, actionSwipeId2);
+      return;
+    }
+    if (action === "context-tracker-history") {
+      const messageId = actionButton.dataset.sotlMessageId;
+      openTrackerPreview(messageId);
       return;
     }
     if (action === "close-tracker-preview") {

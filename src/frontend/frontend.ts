@@ -746,6 +746,11 @@ function handleDrawerEvent(event: Event): void {
       openTrackerPreview(messageId, actionSwipeId);
       return;
     }
+    if (action === 'context-tracker-history') {
+      const messageId = actionButton.dataset.sotlMessageId;
+      openTrackerPreview(messageId);
+      return;
+    }
     if (action === 'close-tracker-preview') {
       closeTrackerPreview();
       return;
