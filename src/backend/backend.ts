@@ -28,7 +28,7 @@ import type {
   LoomSwipeReport,
 } from '../shared/types.js';
 import { makeCompactSummary } from '../shared/renderer.js';
-import { getPresetOrigin, validateAgainstSchema } from '../shared/validation.js';
+import { getPresetOrigin, validateAgainstSchema, checkPresetReadiness } from '../shared/validation.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -609,18 +609,35 @@ class LoomKeeperBackend {
       const state = await this.buildState(userId);
       const target = targetOverride ?? await this.generationService.findLatestAssistantTarget(userId, chatId, messageId, swipeId);
       if (state.generation.disabledReason && state.generation.disabledReason !== 'No assistant message is available to track.') {
+        await this.send(userId, { type: 'toast', level: 'error', message: `Generation blocked: ${state.generation.disabledReason}` });
         await this.send(userId, { type: 'tracker_error', message: state.generation.disabledReason, state });
         return;
       }
 
       if (!target) {
         const latestState = await this.buildState(userId);
+        await this.send(userId, { type: 'toast', level: 'warning', message: 'No assistant message is available to track.' });
         await this.send(userId, { type: 'tracker_error', message: 'No assistant message is available to track.', state: latestState });
         return;
       }
 
       const settings = state.settings;
       const preset = state.activePreset;
+      
+      // Perform preset readiness checks before attempting generation
+      const readiness = checkPresetReadiness(preset);
+      if (!readiness.ready) {
+        const blockerMsg = `Template '${preset.name}' (${preset.origin}) is not ready for generation: ${readiness.reasons.join(', ')}.`;
+        await this.send(userId, { type: 'toast', level: 'error', message: blockerMsg });
+        await this.send(userId, { type: 'tracker_error', message: blockerMsg, state });
+        return;
+      }
+
+      // Send starting notification indicating backend received request and active preset details
+      const swipeNum = target.message.swipe_id !== undefined ? target.message.swipe_id + 1 : 1;
+      const startMsg = `Backend received generation request for Swipe ${swipeNum}. Active preset: '${preset.name}' (${preset.origin}). Schema: ${readiness.schemaValid ? 'Valid' : 'Invalid'}, Template: ${readiness.templateSafe ? 'Safe' : 'Unsafe'}.`;
+      await this.send(userId, { type: 'toast', level: 'info', message: startMsg });
+
       const passive = preset.mode !== 'sidecar_generate'
         ? this.generationService.tryPassiveExtract({ preset, settings, chatId: target.chatId, message: target.message })
         : null;
@@ -771,6 +788,9 @@ class LoomKeeperBackend {
         ...this.diagnostics,
         lastGenerationError: message,
       };
+
+      await this.send(userId, { type: 'toast', level: 'error', message: `Generation failed: ${message}` });
+      await this.send(userId, { type: 'tracker_error', message: `Generation failed: ${message}`, state: await this.buildState(userId) });
       
       // Attempt to build a failed pipeline report to expose diagnostics
       try {

@@ -6957,6 +6957,10 @@ function handleBackendMessage(message) {
   if (message.type === "tracker_generated" || message.type === "tracker_updated" || message.type === "tracker_deleted" || message.type === "tracker_error" || message.type === "permissions_changed" || message.type === "storage_reset") {
     state = message.state;
   }
+  if (message.type === "tracker_error") {
+    lastToast = { level: "error", message: message.message };
+    lastFrontendError = message.message;
+  }
   if (message.type === "storage_reset") clearImportStatus();
   if (message.type === "settings_saved" && state) {
     state = { ...state, settings: message.settings };

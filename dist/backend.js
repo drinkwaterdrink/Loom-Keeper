@@ -1863,6 +1863,100 @@ function validateAgainstSchema(data, schema) {
     issues
   };
 }
+function validateTemplateSafety(template) {
+  const warnings = [];
+  const lower = template.toLowerCase();
+  if (lower.includes("<script")) {
+    warnings.push("Script tags (<script>) are blocked for safety.");
+  }
+  if (lower.includes("<iframe")) {
+    warnings.push("Iframe tags (<iframe>) are blocked for safety.");
+  }
+  if (lower.includes("<object") || lower.includes("<embed")) {
+    warnings.push("Object and embed tags are blocked for safety.");
+  }
+  if (/\bon[a-zA-Z]+\s*=/i.test(template)) {
+    warnings.push("Inline event handlers (e.g. onclick=) are blocked for safety.");
+  }
+  if (lower.includes("javascript:") || lower.includes("data:")) {
+    warnings.push("javascript: and data: URIs inside attributes are blocked for safety.");
+  }
+  const allowedTags = /* @__PURE__ */ new Set([
+    "div",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "span",
+    "p",
+    "b",
+    "strong",
+    "i",
+    "em",
+    "small",
+    "ul",
+    "ol",
+    "li",
+    "dl",
+    "dt",
+    "dd",
+    "details",
+    "summary",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "br",
+    "style",
+    "label",
+    "input",
+    "button",
+    "img",
+    "figure",
+    "figcaption",
+    "main",
+    "aside",
+    "nav",
+    "progress",
+    "meter",
+    "time",
+    "mark",
+    "table",
+    "thead",
+    "tbody",
+    "tfoot",
+    "tr",
+    "td",
+    "th",
+    "svg",
+    "path",
+    "line",
+    "rect",
+    "circle",
+    "polygon",
+    "ellipse",
+    "g",
+    "text",
+    "defs",
+    "lineargradient",
+    "stop"
+  ]);
+  const tagRegex = /<([a-zA-Z0-9:-]+)/g;
+  let match;
+  const foundTags = /* @__PURE__ */ new Set();
+  while ((match = tagRegex.exec(template)) !== null) {
+    foundTags.add(match[1].toLowerCase());
+  }
+  for (const tag of foundTags) {
+    if (tag !== "if" && tag !== "each" && !tag.startsWith("/") && !allowedTags.has(tag)) {
+      warnings.push(`Tag <${tag}> is not in the allowed list of safe tags.`);
+    }
+  }
+  return warnings;
+}
 function normalizePreset(preset) {
   const now2 = (/* @__PURE__ */ new Date()).toISOString();
   const id = normalizePresetId(preset.id || `custom_loom_${Date.now()}`);
@@ -1909,6 +2003,52 @@ function normalizePreset(preset) {
     sampleData: preset.sampleData && typeof preset.sampleData === "object" && !Array.isArray(preset.sampleData) ? preset.sampleData : { sceneTitle: "New Scene", location: "Foyer" },
     createdAt: String(preset.createdAt || now2),
     updatedAt: now2
+  };
+}
+function checkPresetReadiness(preset) {
+  const reasons = [];
+  let schemaValid = false;
+  let schemaError;
+  if (!preset.schemaJson || typeof preset.schemaJson !== "object") {
+    schemaError = "Schema JSON is missing or not an object.";
+  } else {
+    try {
+      JSON.stringify(preset.schemaJson);
+      schemaValid = true;
+    } catch (err) {
+      schemaError = `Schema JSON error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  if (!schemaValid) reasons.push("Invalid Schema JSON");
+  let sampleDataValid = false;
+  let sampleDataError;
+  if (!preset.sampleData || typeof preset.sampleData !== "object") {
+    sampleDataError = "Sample data is missing or not an object.";
+  } else {
+    try {
+      JSON.stringify(preset.sampleData);
+      sampleDataValid = true;
+    } catch (err) {
+      sampleDataError = `Sample data JSON error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  if (!sampleDataValid) reasons.push("Invalid Sample Data");
+  const warnings = validateTemplateSafety(preset.htmlTemplate || "");
+  const templateSafe = warnings.length === 0;
+  if (!templateSafe) reasons.push("Unsafe HTML template elements found");
+  const promptPresent = Boolean(preset.promptInstructions && preset.promptInstructions.trim());
+  if (!promptPresent) reasons.push("Prompt instructions are missing");
+  const ready = schemaValid && sampleDataValid && promptPresent;
+  return {
+    schemaValid,
+    schemaError,
+    sampleDataValid,
+    sampleDataError,
+    templateSafe,
+    templateWarnings: warnings,
+    promptPresent,
+    ready,
+    reasons
   };
 }
 
@@ -3293,16 +3433,28 @@ var LoomKeeperBackend = class {
       const state = await this.buildState(userId);
       const target = targetOverride ?? await this.generationService.findLatestAssistantTarget(userId, chatId, messageId, swipeId);
       if (state.generation.disabledReason && state.generation.disabledReason !== "No assistant message is available to track.") {
+        await this.send(userId, { type: "toast", level: "error", message: `Generation blocked: ${state.generation.disabledReason}` });
         await this.send(userId, { type: "tracker_error", message: state.generation.disabledReason, state });
         return;
       }
       if (!target) {
         const latestState = await this.buildState(userId);
+        await this.send(userId, { type: "toast", level: "warning", message: "No assistant message is available to track." });
         await this.send(userId, { type: "tracker_error", message: "No assistant message is available to track.", state: latestState });
         return;
       }
       const settings = state.settings;
       const preset = state.activePreset;
+      const readiness = checkPresetReadiness(preset);
+      if (!readiness.ready) {
+        const blockerMsg = `Template '${preset.name}' (${preset.origin}) is not ready for generation: ${readiness.reasons.join(", ")}.`;
+        await this.send(userId, { type: "toast", level: "error", message: blockerMsg });
+        await this.send(userId, { type: "tracker_error", message: blockerMsg, state });
+        return;
+      }
+      const swipeNum = target.message.swipe_id !== void 0 ? target.message.swipe_id + 1 : 1;
+      const startMsg = `Backend received generation request for Swipe ${swipeNum}. Active preset: '${preset.name}' (${preset.origin}). Schema: ${readiness.schemaValid ? "Valid" : "Invalid"}, Template: ${readiness.templateSafe ? "Safe" : "Unsafe"}.`;
+      await this.send(userId, { type: "toast", level: "info", message: startMsg });
       const passive = preset.mode !== "sidecar_generate" ? this.generationService.tryPassiveExtract({ preset, settings, chatId: target.chatId, message: target.message }) : null;
       if (!passive && !state.permissions.generation) {
         await this.send(userId, {
@@ -3441,6 +3593,8 @@ var LoomKeeperBackend = class {
         ...this.diagnostics,
         lastGenerationError: message
       };
+      await this.send(userId, { type: "toast", level: "error", message: `Generation failed: ${message}` });
+      await this.send(userId, { type: "tracker_error", message: `Generation failed: ${message}`, state: await this.buildState(userId) });
       try {
         const state = await this.buildState(userId);
         const preset = state.activePreset;
