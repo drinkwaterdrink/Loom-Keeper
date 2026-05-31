@@ -311,14 +311,57 @@ function isInsideMessageHost(el: HTMLElement): boolean {
 }
 
 /**
+ * Helper to determine if a message bubble is geometrically aligned to the right
+ * side of the screen/viewport. In standard chat interfaces, user messages are
+ * always aligned to the right, and assistant messages are always aligned to the left.
+ * This provides a highly robust, layout-independent, and layout-safe heuristic.
+ */
+function isGeometricUserMessage(host: HTMLElement): boolean {
+  try {
+    const rect = host.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false; // Not fully rendered yet
+
+    const doc = host.ownerDocument || document;
+    const viewWidth = doc.defaultView?.innerWidth || window.innerWidth || 800;
+
+    // Calculate center point of the message element
+    const hostCenter = rect.left + rect.width / 2;
+    const viewportCenter = viewWidth / 2;
+
+    // If the center is significantly to the right of the screen center, it's user
+    return hostCenter > viewportCenter;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Helper to check if a message element contains toolbar indicators that are
  * uniquely present on AI/assistant messages (like Regenerate or Swipe controls).
  */
 function hasAiToolbarSignals(host: HTMLElement): boolean {
-  const buttons = Array.from(host.querySelectorAll('button, [role="button"], a, svg, [data-action]'));
+  const buttons = Array.from(host.querySelectorAll('button, [role="button"], a, svg, [data-action], [data-lv-action]'));
   return buttons.some((btn) => {
-    const text = (btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || '').trim();
-    return /\b(Regenerate|swipe|variant|alternate|previous response|next response|prev response|fork)\b/i.test(text);
+    const attrs = [
+      btn.textContent || '',
+      btn.getAttribute('aria-label') || '',
+      btn.getAttribute('title') || '',
+      btn.className || '',
+      btn.getAttribute('data-action') || '',
+      btn.getAttribute('data-lv-action') || '',
+      btn.getAttribute('id') || '',
+    ];
+    const combinedText = attrs.join(' ').toLowerCase();
+
+    // Check for AI specific actions, icons, or class descriptors:
+    // - Regenerate: regenerate, refresh, redo, reload
+    // - Swipe: swipe, alternate, variant, next, prev, chevron, arrow
+    // - Fork/Branch: fork, branch, split, clone
+    // - Breakdown: breakdown, chart, graph, analytics
+    // - Hide: hide, eye-off, invisible
+    return /\b(regenerate|refresh|redo|reload|swipe|alternate|variant|branch|fork|split|breakdown|chart|graph|analytics|eye-off|hide|invisible)\b/i.test(combinedText)
+      || /response[-_]?control/i.test(combinedText)
+      || /message[-_]?action/i.test(combinedText);
   });
 }
 
@@ -379,6 +422,7 @@ function domMessageRole(host: HTMLElement): 'user' | 'assistant' | null {
 }
 
 export function isDomUserMessage(host: HTMLElement): boolean {
+  if (isGeometricUserMessage(host)) return true;
   const role = domMessageRole(host);
   if (role === 'user') return true;
   // If explicitly identified as assistant, it's NOT a user message
@@ -396,17 +440,21 @@ function isAssistantMessageHost(
   messageId: string,
   state: { chatAssistantMessages?: { id: string; index?: number }[] | null | undefined },
 ): boolean {
-  // 1. If it has AI-specific toolbar buttons (like Regenerate/Swipe), it is DEFINITELY assistant!
+  // 1. Geometric alignment check (highest confidence visual signal!)
+  // If the message bubble is aligned to the right side of the screen, it is DEFINITELY user, not assistant.
+  if (isGeometricUserMessage(host)) return false;
+
+  // 2. If it has AI-specific toolbar buttons (like Regenerate/Swipe), it is DEFINITELY assistant!
   if (hasAiToolbarSignals(host)) return true;
 
-  // 2. DOM-based role detection
+  // 3. DOM-based role detection
   const domRole = domMessageRole(host);
   // If DOM positively says user — skip
   if (domRole === 'user') return false;
   // If DOM positively says assistant — allow
   if (domRole === 'assistant') return true;
 
-  // 3. Fall back to backend list with index-aware mapping support for numeric fallback IDs
+  // 4. Fall back to backend list with index-aware mapping support for numeric fallback IDs
   if (state.chatAssistantMessages && state.chatAssistantMessages.length > 0) {
     // Check direct ID match
     const hasDirectIdMatch = state.chatAssistantMessages.some((m) => m.id === messageId);
@@ -424,8 +472,9 @@ function isAssistantMessageHost(
     }
   }
 
-  // 4. Default to false to avoid injecting on wrong/user turns
-  return false;
+  // 5. Ultimate fallback: if there are no explicit signals but it's not right-aligned,
+  // in a standard chat UI it is extremely likely to be an assistant message!
+  return !isGeometricUserMessage(host);
 }
 
 export function findVisibleGlobalToolbars(doc: Document, state: LoomFrontendState): GlobalToolbarMatch[] {

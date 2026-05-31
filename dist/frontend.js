@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.26";
+var LOOM_VERSION = "1.0.27";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -7,7 +7,7 @@ var now = "2026-01-01T00:00:00.000Z";
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.22",
+  version: "1.0.23",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -380,7 +380,7 @@ var grandContinuityAtlasPreset = {
 var microLoomPreset = {
   id: "micro_loom",
   name: "Micro Loom",
-  version: "1.0.1",
+  version: "1.0.2",
   description: "Smallest, fastest tracker. Best for low token usage and fast models.",
   mode: "hybrid",
   schemaJson: {
@@ -478,7 +478,7 @@ var slimSceneSampleData = {
 var slimScenePreset = {
   id: SLIM_SCENE_PRESET_ID,
   name: "Slim Scene Loom",
-  version: "1.0.1",
+  version: "1.0.2",
   description: "A low-token continuity tracker for location, cast, mood, inventory, deltas, and active story anchors.",
   mode: "hybrid",
   schemaJson: {
@@ -566,7 +566,7 @@ var slimScenePreset = {
 var balancedStoryPreset = {
   id: "balanced_story_loom",
   name: "Balanced Story Loom",
-  version: "1.0.1",
+  version: "1.0.2",
   description: "Medium-detail continuity tracker. Monitors environment, relationships, and cast pockets.",
   mode: "hybrid",
   schemaJson: {
@@ -718,7 +718,7 @@ var balancedStoryPreset = {
 var castContinuityPreset = {
   id: "cast_continuity_loom",
   name: "Cast Continuity Loom",
-  version: "1.0.1",
+  version: "1.0.2",
   description: "Focuses entirely on character consistency: posture, proximity, intent, and speech traits.",
   mode: "hybrid",
   schemaJson: {
@@ -833,7 +833,7 @@ var castContinuityPreset = {
 var fullContinuityLedgerPreset = {
   id: "full_continuity_ledger",
   name: "Full Continuity Ledger",
-  version: "1.0.1",
+  version: "1.0.2",
   description: "Largest preset tracking weather, lighting, secrets, relationships, meters, and anchors.",
   mode: "hybrid",
   schemaJson: {
@@ -1011,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.22",
+  version: "1.0.23",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -4056,11 +4056,33 @@ function isToolbarLikeCluster(candidate) {
 function isInsideMessageHost(el) {
   return Boolean(el.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]'));
 }
+function isGeometricUserMessage(host) {
+  try {
+    const rect = host.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const doc = host.ownerDocument || document;
+    const viewWidth = doc.defaultView?.innerWidth || window.innerWidth || 800;
+    const hostCenter = rect.left + rect.width / 2;
+    const viewportCenter = viewWidth / 2;
+    return hostCenter > viewportCenter;
+  } catch {
+    return false;
+  }
+}
 function hasAiToolbarSignals(host) {
-  const buttons = Array.from(host.querySelectorAll('button, [role="button"], a, svg, [data-action]'));
+  const buttons = Array.from(host.querySelectorAll('button, [role="button"], a, svg, [data-action], [data-lv-action]'));
   return buttons.some((btn) => {
-    const text = (btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || "").trim();
-    return /\b(Regenerate|swipe|variant|alternate|previous response|next response|prev response|fork)\b/i.test(text);
+    const attrs = [
+      btn.textContent || "",
+      btn.getAttribute("aria-label") || "",
+      btn.getAttribute("title") || "",
+      btn.className || "",
+      btn.getAttribute("data-action") || "",
+      btn.getAttribute("data-lv-action") || "",
+      btn.getAttribute("id") || ""
+    ];
+    const combinedText = attrs.join(" ").toLowerCase();
+    return /\b(regenerate|refresh|redo|reload|swipe|alternate|variant|branch|fork|split|breakdown|chart|graph|analytics|eye-off|hide|invisible)\b/i.test(combinedText) || /response[-_]?control/i.test(combinedText) || /message[-_]?action/i.test(combinedText);
   });
 }
 function domMessageRole(host) {
@@ -4103,6 +4125,7 @@ function domMessageRole(host) {
   return null;
 }
 function isAssistantMessageHost(host, messageId, state2) {
+  if (isGeometricUserMessage(host)) return false;
   if (hasAiToolbarSignals(host)) return true;
   const domRole = domMessageRole(host);
   if (domRole === "user") return false;
@@ -4120,7 +4143,7 @@ function isAssistantMessageHost(host, messageId, state2) {
       }
     }
   }
-  return false;
+  return !isGeometricUserMessage(host);
 }
 function findVisibleGlobalToolbars(doc, state2) {
   const results = [];

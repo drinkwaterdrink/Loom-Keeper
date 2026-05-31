@@ -1,6 +1,6 @@
 import type { LoomPreset, LoomSettings } from './types.js';
 
-export const LOOM_VERSION = '1.0.26';
+export const LOOM_VERSION = '1.0.27';
 export const LOOM_SCHEMA_VERSION = '1';
 export const GRAND_CONTINUITY_ATLAS_PRESET_ID = 'grand_continuity_atlas';
 export const SLIM_SCENE_PRESET_ID = 'slim_scene_loom';
@@ -44,7 +44,7 @@ export const defaultSettings: LoomSettings = {
 export const grandContinuityAtlasPreset: LoomPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: 'Grand Continuity Atlas',
-  version: '1.0.22',
+  version: '1.0.23',
   description: 'A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.',
   origin: 'built-in',
   templateEngine: 'handlebars_compat',
@@ -419,7 +419,7 @@ export const grandContinuityAtlasPreset: LoomPreset = {
 export const microLoomPreset: LoomPreset = {
   id: 'micro_loom',
   name: 'Micro Loom',
-  version: '1.0.1',
+  version: '1.0.2',
   description: 'Smallest, fastest tracker. Best for low token usage and fast models.',
   mode: 'hybrid',
   schemaJson: {
@@ -520,7 +520,7 @@ export const slimSceneSampleData: Record<string, unknown> = {
 export const slimScenePreset: LoomPreset = {
   id: SLIM_SCENE_PRESET_ID,
   name: 'Slim Scene Loom',
-  version: '1.0.1',
+  version: '1.0.2',
   description: 'A low-token continuity tracker for location, cast, mood, inventory, deltas, and active story anchors.',
   mode: 'hybrid',
   schemaJson: {
@@ -610,7 +610,7 @@ export const slimScenePreset: LoomPreset = {
 export const balancedStoryPreset: LoomPreset = {
   id: 'balanced_story_loom',
   name: 'Balanced Story Loom',
-  version: '1.0.1',
+  version: '1.0.2',
   description: 'Medium-detail continuity tracker. Monitors environment, relationships, and cast pockets.',
   mode: 'hybrid',
   schemaJson: {
@@ -764,7 +764,7 @@ export const balancedStoryPreset: LoomPreset = {
 export const castContinuityPreset: LoomPreset = {
   id: 'cast_continuity_loom',
   name: 'Cast Continuity Loom',
-  version: '1.0.1',
+  version: '1.0.2',
   description: 'Focuses entirely on character consistency: posture, proximity, intent, and speech traits.',
   mode: 'hybrid',
   schemaJson: {
@@ -881,7 +881,7 @@ export const castContinuityPreset: LoomPreset = {
 export const fullContinuityLedgerPreset: LoomPreset = {
   id: 'full_continuity_ledger',
   name: 'Full Continuity Ledger',
-  version: '1.0.1',
+  version: '1.0.2',
   description: 'Largest preset tracking weather, lighting, secrets, relationships, meters, and anchors.',
   mode: 'hybrid',
   schemaJson: {
@@ -1061,7 +1061,7 @@ export const fullContinuityLedgerPreset: LoomPreset = {
 export const chronoscopeOccultLedgerPreset: LoomPreset = {
   id: 'chronoscope_occult_ledger',
   name: 'Chronoscope Occult Ledger',
-  version: '1.0.22',
+  version: '1.0.23',
   description: 'A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.',
   mode: 'hybrid',
   schemaJson: {
