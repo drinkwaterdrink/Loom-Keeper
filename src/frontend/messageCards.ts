@@ -858,6 +858,8 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
   container.classList.remove('sotl-chat-panel-container--expanded');
   if (isChatLoomPanelExpanded) {
     container.classList.add('sotl-chat-panel-container--expanded');
+    container.removeAttribute('style');
+    delete container.dataset.sotlNativeMounted;
   }
 
   if (!isChatLoomPanelExpanded) {
