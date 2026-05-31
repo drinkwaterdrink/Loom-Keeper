@@ -4818,8 +4818,9 @@ function injectMessageTrackerLinks(ctx, state2) {
       }
     }
     if (!msgEl) continue;
-    const linkHtml = '<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 8px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;color:#fff;background:var(--lv-accent,#3864d9);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.15);">Tracker</span>';
+    const linkHtml = '<span style="position:absolute;top:4px;left:4px;z-index:10;display:inline-flex;align-items:center;gap:2px;padding:2px 8px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;color:#fff;background:var(--lv-accent,#3864d9);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.15);">Tracker</span>';
     try {
+      if (!msgEl.style.position) msgEl.style.position = "relative";
       let injected = null;
       if (inject) {
         injected = inject(msgEl, linkHtml, "afterbegin");
