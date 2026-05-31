@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lumiverse Auditor"
+  short_description: "Audit Lumiverse extensions, packs, presets, world books, conversions, and import/build risks."
+  default_prompt: "Review this Lumiverse artifact for permissions, schema, prompt, UI, scanner, import, and runtime risks."

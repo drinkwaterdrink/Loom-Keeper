@@ -1,0 +1,4 @@
+interface:
+  display_name: "Preset Worldbook Forge"
+  short_description: "Build Lumiverse presets, prompt blocks, world books, characters, personas, and import mappings."
+  default_prompt: "Create or convert Lumiverse presets, prompt blocks, world books, character data, or prompt variables."

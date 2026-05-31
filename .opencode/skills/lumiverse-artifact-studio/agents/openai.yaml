@@ -1,0 +1,4 @@
+interface:
+  display_name: "Artifact Studio"
+  short_description: "Generate complete Lumiverse project bundles from a concept."
+  default_prompt: "Turn this Lumiverse idea into a complete artifact bundle with architecture, content specs, JSON drafts, and validation."

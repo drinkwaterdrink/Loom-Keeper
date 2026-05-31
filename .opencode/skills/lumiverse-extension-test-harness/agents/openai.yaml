@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extension Harness"
+  short_description: "Smoke-test Lumiverse Spindle backend logic with a mock runtime."
+  default_prompt: "Run this Lumiverse extension through the mock Spindle backend harness and report issues."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pack Lumia Forge"
+  short_description: "Create Lumiverse packs, Lumias, Loom items, Loom tools, and Council advisor systems."
+  default_prompt: "Design a Lumiverse pack with strong Lumias, Loom content, Council tools, and validated pack JSON where possible."

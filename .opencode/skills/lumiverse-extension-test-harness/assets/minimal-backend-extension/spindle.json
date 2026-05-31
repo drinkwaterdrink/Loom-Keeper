@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "name": "Harness Fixture",
+  "identifier": "harness_fixture",
+  "author": "Codex",
+  "github": "https://example.com/harness-fixture",
+  "homepage": "https://example.com/harness-fixture",
+  "description": "Minimal backend extension fixture for the Lumiverse test harness.",
+  "permissions": [],
+  "entry_backend": "dist/backend.js"
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pack Schema Collector"
+  short_description: "Infer verified Lumiverse pack schemas from real Content Workshop exports."
+  default_prompt: "Analyze these Lumiverse pack exports and update the verified schema knowledge base."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Artifact Evaluator"
+  short_description: "Score Lumiverse packs, prompts, presets, world books, and extension plans."
+  default_prompt: "Evaluate this Lumiverse artifact for usefulness, reliability, token economy, and readiness."

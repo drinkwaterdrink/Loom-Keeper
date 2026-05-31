@@ -1,0 +1,4 @@
+interface:
+  display_name: "ST to Lumiverse"
+  short_description: "Convert SillyTavern extensions, presets, lorebooks, and prompt mechanics into Lumiverse artifacts."
+  default_prompt: "Convert this SillyTavern artifact into Lumiverse-native Spindle code, packs, presets, or world books."

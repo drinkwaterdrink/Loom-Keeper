@@ -1,0 +1,12 @@
+{
+  "permissions": [],
+  "userId": "test-user",
+  "frontendMessages": [
+    { "type": "ready" },
+    { "type": "refresh_state" }
+  ],
+  "events": [
+    { "name": "CHAT_SWITCHED", "payload": { "chatId": "chat-1" } }
+  ]
+}
+

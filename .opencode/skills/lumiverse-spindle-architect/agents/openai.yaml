@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spindle Architect"
+  short_description: "Build Lumiverse Spindle extensions with native UI, backend APIs, permissions, and validation."
+  default_prompt: "Design or implement a Lumiverse Spindle extension with the right manifest, permissions, frontend, backend, storage, and validation."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "ST Migration Cookbook"
+  short_description: "Use concrete recipes for recurring SillyTavern-to-Lumiverse migrations."
+  default_prompt: "Use the closest migration recipe to convert this SillyTavern pattern into Lumiverse."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lumiverse Orchestrator"
+  short_description: "Route complex Lumiverse creation tasks to the right specialist workflow."
+  default_prompt: "Help me plan and build a Lumiverse-native artifact. Classify the request, choose the right surfaces, and route to specialist workflows."
