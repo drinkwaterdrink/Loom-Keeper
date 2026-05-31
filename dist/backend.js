@@ -279,7 +279,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.27";
+var LOOM_VERSION = "1.0.28";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -319,7 +319,7 @@ var defaultSettings = {
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.23",
+  version: "1.0.24",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -692,7 +692,7 @@ var grandContinuityAtlasPreset = {
 var microLoomPreset = {
   id: "micro_loom",
   name: "Micro Loom",
-  version: "1.0.2",
+  version: "1.0.3",
   description: "Smallest, fastest tracker. Best for low token usage and fast models.",
   mode: "hybrid",
   schemaJson: {
@@ -790,7 +790,7 @@ var slimSceneSampleData = {
 var slimScenePreset = {
   id: SLIM_SCENE_PRESET_ID,
   name: "Slim Scene Loom",
-  version: "1.0.2",
+  version: "1.0.3",
   description: "A low-token continuity tracker for location, cast, mood, inventory, deltas, and active story anchors.",
   mode: "hybrid",
   schemaJson: {
@@ -878,7 +878,7 @@ var slimScenePreset = {
 var balancedStoryPreset = {
   id: "balanced_story_loom",
   name: "Balanced Story Loom",
-  version: "1.0.2",
+  version: "1.0.3",
   description: "Medium-detail continuity tracker. Monitors environment, relationships, and cast pockets.",
   mode: "hybrid",
   schemaJson: {
@@ -1030,7 +1030,7 @@ var balancedStoryPreset = {
 var castContinuityPreset = {
   id: "cast_continuity_loom",
   name: "Cast Continuity Loom",
-  version: "1.0.2",
+  version: "1.0.3",
   description: "Focuses entirely on character consistency: posture, proximity, intent, and speech traits.",
   mode: "hybrid",
   schemaJson: {
@@ -1145,7 +1145,7 @@ var castContinuityPreset = {
 var fullContinuityLedgerPreset = {
   id: "full_continuity_ledger",
   name: "Full Continuity Ledger",
-  version: "1.0.2",
+  version: "1.0.3",
   description: "Largest preset tracking weather, lighting, secrets, relationships, meters, and anchors.",
   mode: "hybrid",
   schemaJson: {
@@ -1323,7 +1323,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.23",
+  version: "1.0.24",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {

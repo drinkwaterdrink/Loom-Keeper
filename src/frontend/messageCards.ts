@@ -397,8 +397,8 @@ function domMessageRole(host: HTMLElement): 'user' | 'assistant' | null {
 
   // 3. Check class name list of the host itself (not ancestors or parent classLists which are shared)
   const cls = host.className || '';
-  const userClassRe = /\b(user[-_]?message|human[-_]?message|you[-_]?message|user[-_]?turn|human[-_]?turn|user[-_]?bubble|sender[-_]?user|from[-_]?user|is[-_]?user|chat[-_]?user|msg[-_]?user|outgoing|self[-_]?message|message[-_]?right|my[-_]?message|align[-_]?right|right[-_]?align)\b/i;
-  const assistantClassRe = /\b(assistant[-_]?message|ai[-_]?message|bot[-_]?message|model[-_]?message|assistant[-_]?turn|ai[-_]?turn|bot[-_]?turn|chat[-_]?assistant|msg[-_]?assistant|incoming|from[-_]?ai|from[-_]?bot|response[-_]?message|message[-_]?left|align[-_]?left|left[-_]?align|char[-_]?message|character[-_]?message)\b/i;
+  const userClassRe = /\b(user|human|you|outgoing|self|me|user[-_]?message|human[-_]?message|you[-_]?message|user[-_]?turn|human[-_]?turn|user[-_]?bubble|sender[-_]?user|from[-_]?user|is[-_]?user|chat[-_]?user|msg[-_]?user|message[-_]?right|my[-_]?message|align[-_]?right|right[-_]?align)\b/i;
+  const assistantClassRe = /\b(assistant|ai|bot|model|character|char|companion|npc|incoming|response|assistant[-_]?message|ai[-_]?message|bot[-_]?message|model[-_]?message|assistant[-_]?turn|ai[-_]?turn|bot[-_]?turn|chat[-_]?assistant|msg[-_]?assistant|from[-_]?ai|from[-_]?bot|response[-_]?message|message[-_]?left|align[-_]?left|left[-_]?align|char[-_]?message|character[-_]?message)\b/i;
 
   if (userClassRe.test(cls)) return 'user';
   if (assistantClassRe.test(cls)) return 'assistant';
@@ -440,21 +440,49 @@ function isAssistantMessageHost(
   messageId: string,
   state: { chatAssistantMessages?: { id: string; index?: number }[] | null | undefined },
 ): boolean {
-  // 1. Geometric alignment check (highest confidence visual signal!)
+  // 1. Check if the element is a toolbar container rather than a message bubble
+  const isToolbar = host.classList.contains('message-actions') 
+    || host.classList.contains('message-action-buttons') 
+    || host.getAttribute('role') === 'toolbar' 
+    || host.querySelector('.sotl-message-paw-btn') !== null
+    || (!host.hasAttribute('data-message-id') && host.querySelectorAll('button').length >= 2);
+
+  if (isToolbar) {
+    // If it's a toolbar, check for AI signals directly (Regenerate, Swipe, Fork, etc.)
+    if (hasAiToolbarSignals(host)) return true;
+
+    // Check if the resolved message ID is known to be an assistant message in backend state
+    if (state.chatAssistantMessages && state.chatAssistantMessages.length > 0) {
+      const isKnownAssistant = state.chatAssistantMessages.some((m) => m.id === messageId);
+      if (isKnownAssistant) return true;
+    }
+
+    // Default for toolbar: resolve the actual message host bubble and evaluate it geometrically
+    const doc = host.ownerDocument || document;
+    const msgHost = findMessageHostById(doc, messageId);
+    if (msgHost instanceof HTMLElement) {
+      return isAssistantMessageHost(msgHost, messageId, state);
+    }
+    return false;
+  }
+
+  // ---- Now we know host is the MESSAGE BUBBLE element ----
+
+  // 2. Geometric alignment check (highest confidence visual signal!)
   // If the message bubble is aligned to the right side of the screen, it is DEFINITELY user, not assistant.
   if (isGeometricUserMessage(host)) return false;
 
-  // 2. If it has AI-specific toolbar buttons (like Regenerate/Swipe), it is DEFINITELY assistant!
+  // 3. If it has AI-specific toolbar buttons (like Regenerate/Swipe), it is DEFINITELY assistant!
   if (hasAiToolbarSignals(host)) return true;
 
-  // 3. DOM-based role detection
+  // 4. DOM-based role detection
   const domRole = domMessageRole(host);
   // If DOM positively says user — skip
   if (domRole === 'user') return false;
   // If DOM positively says assistant — allow
   if (domRole === 'assistant') return true;
 
-  // 4. Fall back to backend list with index-aware mapping support for numeric fallback IDs
+  // 5. Fall back to backend list with index-aware mapping support for numeric fallback IDs
   if (state.chatAssistantMessages && state.chatAssistantMessages.length > 0) {
     // Check direct ID match
     const hasDirectIdMatch = state.chatAssistantMessages.some((m) => m.id === messageId);
@@ -472,7 +500,7 @@ function isAssistantMessageHost(
     }
   }
 
-  // 5. Ultimate fallback: if there are no explicit signals but it's not right-aligned,
+  // 6. Ultimate fallback: if there are no explicit signals but it's not right-aligned,
   // in a standard chat UI it is extremely likely to be an assistant message!
   return !isGeometricUserMessage(host);
 }
