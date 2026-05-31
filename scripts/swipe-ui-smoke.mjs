@@ -129,10 +129,13 @@ assert.match(frontend, /syncFocusedTrackerSwipe/, 'focused trackers should follo
 assert.match(frontend, /MutationObserver/, 'message paw mounting should react to native toolbar visibility changes');
 assert.match(frontend, /readSwipeControlSignature/, 'frontend should poll swipe controls as a fallback sync trigger');
 assert.match(messageCards, /mountMessageTrackerActions/, 'message paw actions should have a dedicated mount path');
-assert.match(messageCards, /dataset\.sotlMessagePaw = 'true'/, 'message paw actions should be marked for duplicate cleanup');
+assert.match(messageCards, /sotl-message-history-badge/, 'message history badges should be the centered response action');
 assert.match(messageCards, /activeSwipeByMessageId\[messageId\]/, 'message paw action should use active swipe metadata');
-assert.match(messageCards, /Open Tracker/, 'message paw should provide a context-menu fallback item');
-assert.match(messageCards, /findVisibleMessageToolbars/, 'message paw should detect visible native toolbar clusters');
+assert.match(messageCards, /Tracker History/, 'message paw should provide a centered badge and context-menu fallback label');
+assert.match(messageCards, /querySelectorAll<HTMLElement>\('\.sotl-message-paw-btn'\)[\s\S]*remove/, 'native toolbar tracker buttons should be cleaned instead of injected');
+assert.match(styles, /\.sotl-message-history-badge[\s\S]*position:\s*absolute[\s\S]*left:\s*50%/, 'message history badge should be centered without taking layout space');
+assert.doesNotMatch(styles, /\.sotl-message-history-slot[\s\S]*min-height:\s*28px/, 'message history slot must not create vertical gaps');
+assert.doesNotMatch(messageCards, /insertAdjacentElement\('afterend', slot\)/, 'message history badge must not insert an in-flow slot after the header');
 assert.doesNotMatch(messageCards, /mountAnchoredMessagePaw/, 'fixed anchored message paw fallback should be removed');
 assert.doesNotMatch(styles, /sotl-message-paw-action--anchored/, 'anchored message paw CSS should be removed');
 assert.match(messageCards, /syncFixedLauncherToStockIcon/, 'floating paw should copy fixed fallback position from stock side icon');

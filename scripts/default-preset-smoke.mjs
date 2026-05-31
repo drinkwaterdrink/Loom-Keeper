@@ -21,7 +21,7 @@ async function importBundled(entryPoint) {
 const defaults = await importBundled('src/shared/defaults.ts');
 const prompts = await importBundled('src/shared/prompts.ts');
 
-assert.equal(defaults.LOOM_VERSION, '1.0.23');
+assert.equal(defaults.LOOM_VERSION, '1.0.24');
 assert.equal(defaults.defaultSettings.activePresetId, 'grand_continuity_atlas');
 assert.equal(defaults.defaultSettings.trackerHistoryLimit, 20);
 assert.equal(defaults.defaultSettings.promptInjectionTrackerLimit, 5);

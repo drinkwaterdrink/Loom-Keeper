@@ -1272,23 +1272,20 @@ export const loomStyles = `
 }
 
 .sotl-message-history-slot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 28px;
-  padding: 2px 0 4px;
-  box-sizing: border-box;
+  display: contents !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
   pointer-events: none;
 }
 
-.sotl-message-history-badge-host {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .sotl-message-history-badge {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1308,10 +1305,10 @@ export const loomStyles = `
   cursor: pointer;
   z-index: 3;
   pointer-events: auto;
+  touch-action: manipulation;
   box-sizing: border-box;
   transition: opacity 0.16s ease, transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
-
 
 .sotl-message-history-badge .sotl-message-paw-svg {
   width: 17px;
@@ -1323,7 +1320,7 @@ export const loomStyles = `
 .sotl-message-history-badge:hover,
 .sotl-message-history-badge:focus-visible {
   opacity: 1;
-  transform: translateY(-1px);
+  transform: translateX(-50%) translateY(-1px);
   border-color: color-mix(in srgb, var(--lv-accent, #3864d9) 70%, transparent);
   background: color-mix(in srgb, var(--lv-accent, #3864d9) 12%, var(--lv-surface-raised, rgba(12, 16, 24, 0.92)));
   outline: none;
@@ -1354,7 +1351,6 @@ export const loomStyles = `
     opacity: 0.48;
   }
 
-  .sotl-message-history-slot:hover .sotl-message-history-badge,
   .sotl-message-history-host:hover .sotl-message-history-badge,
   .sotl-message-history-badge:focus-visible {
     opacity: 0.96;

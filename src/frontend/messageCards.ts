@@ -756,32 +756,6 @@ function collectVisibleAssistantMessageHosts(doc: Document, state: LoomFrontendS
   return Array.from(byId.values()).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
 }
 
-function findMessageHeader(host: HTMLElement): HTMLElement | null {
-  const selectors = [
-    '[data-message-header]',
-    '[data-lv-message-header]',
-    '[data-lumiverse-message-header]',
-    '[data-message-meta]',
-    '[data-lv-message-meta]',
-    '.message-header',
-    '.chat-message-header',
-    '.message-meta',
-    '.chat-message-meta',
-    '[class*="header" i]',
-    '[class*="meta" i]',
-  ];
-  const hostTop = host.getBoundingClientRect().top;
-  for (const selector of selectors) {
-    const header = Array.from(host.querySelectorAll<HTMLElement>(selector)).find((candidate) => {
-      if (!isVisibleElement(candidate) || candidate.closest('[data-sotl-message-history-badge="true"], .sotl-message-card')) return false;
-      const rect = candidate.getBoundingClientRect();
-      return rect.width >= 100 && rect.height >= 16 && rect.height <= 120 && rect.top - hostTop <= 180;
-    });
-    if (header) return header;
-  }
-  return null;
-}
-
 function mountMessageHistoryBadges(doc: Document, state: LoomFrontendState, hosts: HTMLElement[]): number {
   const activeKeys = new Set<string>();
   let mounted = 0;
@@ -814,22 +788,15 @@ function mountMessageHistoryBadges(doc: Document, state: LoomFrontendState, host
     button.classList.toggle('sotl-message-history-badge--missing-tracker', !hasTracker);
     button.classList.toggle('sotl-message-history-badge--generating', state.generation.running);
 
-    let slot = host.querySelector<HTMLElement>('[data-sotl-message-history-slot="true"]');
-    if (!slot) {
-      slot = doc.createElement('div');
-      slot.className = 'sotl-message-history-slot';
-      slot.dataset.sotlMessageHistorySlot = 'true';
-    }
+    const oldSlot = button.closest<HTMLElement>('[data-sotl-message-history-slot="true"]');
     host.classList.add('sotl-message-history-host');
     button.classList.remove('sotl-message-history-badge--floating');
-    if (button.parentElement !== slot) slot.append(button);
+    if (button.parentElement !== host) host.append(button);
+    if (oldSlot && !oldSlot.querySelector('[data-sotl-message-history-badge="true"]')) oldSlot.remove();
+    host.querySelectorAll<HTMLElement>('[data-sotl-message-history-slot="true"]').forEach((slot) => {
+      if (!slot.querySelector('[data-sotl-message-history-badge="true"]')) slot.remove();
+    });
 
-    const header = findMessageHeader(host);
-    if (header?.parentElement && slot.previousElementSibling !== header) {
-      header.insertAdjacentElement('afterend', slot);
-    } else if (!slot.isConnected || slot.parentElement !== host) {
-      host.insertBefore(slot, host.firstChild);
-    }
     injectedMessageHistoryBadges.set(key, button);
   }
 
@@ -854,41 +821,6 @@ function mountMessageHistoryBadges(doc: Document, state: LoomFrontendState, host
 
   return mounted;
 }
-function findMessageToolbar(host: HTMLElement): HTMLElement | null {
-  const selector = [
-    '[data-message-actions]',
-    '[data-lv-message-actions]',
-    '[data-message-action-bar]',
-    '[data-lumiverse-message-actions]',
-    '[role="toolbar"]',
-    '.message-actions',
-    '.message-action-buttons',
-    '.chat-message-actions',
-    '.lv-message-actions',
-    '.lv-message-action-bar',
-    '.message-controls'
-  ].join(',');
-  const found = host.querySelector<HTMLElement>(selector);
-  if (found && isVisibleElement(found)) return found;
-
-  const candidates = Array.from(host.querySelectorAll<HTMLElement>('div, nav, section, menu, span'));
-  for (const candidate of candidates) {
-    if (!isVisibleElement(candidate)) continue;
-    const rect = candidate.getBoundingClientRect();
-    if (rect.height > 72 || rect.width > 420) continue;
-    
-    const buttons = Array.from(candidate.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action], svg'));
-    if (buttons.length < 2) continue;
-
-    const hasCopyOrDelete = buttons.some((btn) => {
-      const text = (btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || '').trim();
-      return /\b(Copy|Edit|Delete|Hide|Fork|Breakdown|trash|pencil|clone)\b/i.test(text);
-    });
-    if (hasCopyOrDelete) return candidate;
-  }
-  return null;
-}
-
 export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFrontendState | null): MessageCardMountStatus {
   void ctx;
   const doc = documentRef();
@@ -896,7 +828,7 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
   cleanupDisconnectedMessagePaws();
 
   if (!state) {
-    doc.querySelectorAll<HTMLElement>('.sotl-message-paw-btn, [data-sotl-message-history-badge="true"]').forEach((btn) => btn.remove());
+    doc.querySelectorAll<HTMLElement>('.sotl-message-paw-btn, [data-sotl-message-history-badge="true"], [data-sotl-message-history-slot="true"]').forEach((btn) => btn.remove());
     injectedMessagePaws.clear();
     injectedMessageHistoryBadges.clear();
     return { status: 'Message tracker history waiting for backend state.' };
@@ -904,72 +836,18 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
 
   const hosts = collectVisibleAssistantMessageHosts(doc, state);
   const badgeMounted = mountMessageHistoryBadges(doc, state, hosts);
-  let toolbarMounted = 0;
-  const activeToolbarKeys = new Set<string>();
 
-  for (const host of hosts) {
-    try {
-      const messageId = messageIdFromElement(host);
-      if (!messageId) continue;
-      const activeSwipe = resolveMessageSwipeId(state, messageId);
-      const key = messageHistoryKey(messageId, activeSwipe);
-      const toolbar = findMessageToolbar(host);
-      if (!toolbar) continue;
-      activeToolbarKeys.add(key);
-      const hasTracker = messageHasExactTracker(state, messageId, activeSwipe);
-
-      let button = toolbar.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
-      if (!button) {
-        button = doc.createElement('button');
-        button.type = 'button';
-        button.className = 'sotl-message-paw-btn';
-        button.dataset.sotlMessagePaw = 'true';
-
-        const copyBtn = Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action]'))
-          .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn') && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || ''));
-        const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))
-          .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn'));
-
-        if (referenceBtn) {
-          syncNativeLikeButtonVariables(button, referenceBtn);
-          toolbar.insertBefore(button, referenceBtn);
-        } else {
-          toolbar.insertBefore(button, toolbar.firstChild);
-        }
-        toolbarMounted += 1;
-      }
-
-      button.dataset.sotlAction = 'message-paw';
-      button.dataset.sotlMessageId = messageId;
-      if (typeof activeSwipe === 'number') button.dataset.sotlSwipeId = String(activeSwipe);
-      else delete button.dataset.sotlSwipeId;
-      button.title = 'Tracker History';
-      button.setAttribute('aria-label', 'Open tracker history for this response');
-      button.innerHTML = bearPawSvg('sotl-message-paw-svg');
-      button.classList.toggle('sotl-message-paw-btn--has-tracker', hasTracker);
-      button.classList.toggle('sotl-message-paw-btn--generating', state.generation.running);
-      injectedMessagePaws.set(key, button);
-    } catch (err) {
-      console.warn('Loom Keeper: failed to mount native message tracker history action', host, err);
-    }
-  }
-
-  for (const [key, btn] of injectedMessagePaws.entries()) {
-    if (!btn.isConnected || !activeToolbarKeys.has(key)) {
-      btn.remove();
-      injectedMessagePaws.delete(key);
-    }
-  }
+  // Centered in-message badges are the stable mobile path; native toolbar injection overlaps Lumiverse controls.
+  doc.querySelectorAll<HTMLElement>('.sotl-message-paw-btn').forEach((btn) => btn.remove());
+  injectedMessagePaws.clear();
 
   const menuMounted = mountContextMenuTrackerAction(doc, state);
   const reports: string[] = [];
   if (badgeMounted > 0) reports.push(`Mounted ${badgeMounted} message history badge(s).`);
-  if (toolbarMounted > 0) reports.push(`Injected ${toolbarMounted} native toolbar enhancement(s).`);
   if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action(s).`);
   if (hosts.length === 0) reports.push('No visible assistant message hosts found for history badges.');
   return { status: reports.join(' ') || 'Message history badges stable.' };
 }
-
 function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFrontendState, missingSwipeId?: number | undefined): string {
   const isGenerating = state.generation.running;
   const isCompact = state.settings.hudDefaultView === 'compact';
@@ -1265,7 +1143,3 @@ export function ensureFloatingButton(ctx: FrontendContext, state: LoomFrontendSt
   doc.body.append(button);
 }
 
-// Legacy smoke-test compatibility markers:
-// dataset.sotlMessagePaw = 'true'
-// Open Tracker
-// findVisibleMessageToolbars

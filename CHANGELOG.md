@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.24 - Mobile Message Spacing Hotfix
+
+- Removed the in-flow centered tracker-history slot that created vertical gaps and mobile scroll rubberbanding between messages.
+- Repositioned message tracker-history badges as absolute, center-aligned overlays inside response cards so they do not change message height.
+- Disabled native toolbar tracker-history injection and clean up old toolbar buttons to avoid overlapping Lumiverse copy/edit/delete controls.
+- Added a swipe UI smoke guard that fails if the message history slot takes vertical layout space again.
 ## v1.0.23 - Reliable Message Tracker History Badges
 
 - Added lightweight assistant message summaries to frontend state so visible assistant responses can get tracker-history controls even before a tracker exists.
