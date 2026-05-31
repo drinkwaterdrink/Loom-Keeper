@@ -753,9 +753,14 @@ export const loomStyles = `
 .sotl-paw-svg,
 .sotl-message-paw-svg {
   display: block;
-  width: var(--sotl-native-glyph-size, 22px);
-  height: var(--sotl-native-glyph-size, 22px);
+  width: var(--sotl-native-glyph-size, 24px);
+  height: var(--sotl-native-glyph-size, 24px);
   overflow: visible;
+}
+.sotl-chat-pill .sotl-paw-svg,
+.sotl-context-menu-item .sotl-message-paw-svg,
+.sotl-message-paw-action .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9);
 }
 .sotl-paw-pad,
 .sotl-paw-main,
@@ -967,8 +972,8 @@ export const loomStyles = `
   outline: none;
 }
 .sotl-message-paw-action .sotl-message-paw-svg {
-  width: var(--sotl-native-glyph-size, 16px);
-  height: var(--sotl-native-glyph-size, 16px);
+  width: max(18px, var(--sotl-native-glyph-size, 18px));
+  height: max(18px, var(--sotl-native-glyph-size, 18px));
 }
 .sotl-context-menu-item {
   display: flex;

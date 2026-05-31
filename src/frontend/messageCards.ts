@@ -14,12 +14,13 @@ export interface MessageCardMountStatus {
 const injectedWrappers = new Map<string, HTMLElement>();
 const injectedMessagePaws = new Map<string, HTMLElement>();
 const injectedContextMenuItems = new Set<HTMLElement>();
-let lastMessageActionTarget: { messageId: string; swipeId?: number | undefined } | null = null;
+let lastMessageActionTarget: { messageId: string; swipeId?: number | undefined; seenAt: number } | null = null;
 let isChatLoomPanelExpanded = false;
 let isDrawerOpen = false;
 let isSettingsOpen = false;
 let rerenderCallback: (() => void) | null = null;
 let openDrawerCallback: (() => void) | null = null;
+let chatPanelContainer: HTMLElement | null = null;
 
 export function registerOpenDrawerCallback(cb: () => void): void {
   openDrawerCallback = cb;
@@ -125,10 +126,10 @@ export function rememberMessageActionTarget(target: HTMLElement | null, state: L
   if (!target || !state) return;
   const messageId = messageIdFromElement(target) ?? findNearestTrackedMessageIdForElement(target, state);
   if (!messageId) return;
-  if (!state.messageTrackers.some((tracker) => tracker.messageId === messageId) && state.latestTracker?.messageId !== messageId) return;
   lastMessageActionTarget = {
     messageId,
     swipeId: state.activeSwipeByMessageId[messageId],
+    seenAt: Date.now(),
   };
 }
 
@@ -248,6 +249,8 @@ function visibleToolbarCandidate(element: Element): element is HTMLElement {
 }
 
 function findVisibleMessageToolbars(doc: Document, state: LoomFrontendState): Array<{ toolbar: HTMLElement; messageId: string; swipeId?: number | undefined }> {
+  const target = lastMessageActionTarget;
+  if (!target || Date.now() - target.seenAt > 5000) return [];
   const selector = [
     '[data-message-actions]',
     '[data-lv-message-actions]',
@@ -263,24 +266,30 @@ function findVisibleMessageToolbars(doc: Document, state: LoomFrontendState): Ar
   ].join(',');
   const seen = new Set<HTMLElement>();
   const toolbars: Array<{ toolbar: HTMLElement; messageId: string; swipeId?: number | undefined }> = [];
-  const candidates = [
-    ...Array.from(doc.querySelectorAll<HTMLElement>(selector)).filter(visibleToolbarCandidate),
-    ...Array.from(doc.querySelectorAll<HTMLElement>('div, nav, section, menu')).filter((candidate) => {
-      if (!isVisibleElement(candidate)) return false;
-      const rect = candidate.getBoundingClientRect();
-      if (rect.height > 72 || rect.width > 420) return false;
-      const controls = Array.from(candidate.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action], svg'))
-        .filter((control) => isVisibleElement(control));
-      const text = candidate.textContent?.trim() || '';
-      return controls.length >= 3 && text.length < 160;
-    }),
-  ];
+  const candidates = Array.from(doc.querySelectorAll<HTMLElement>(selector)).filter(visibleToolbarCandidate);
+  const messageHost = findMessageHostById(doc, target.messageId);
+  const hostRect = messageHost instanceof HTMLElement && isVisibleElement(messageHost)
+    ? messageHost.getBoundingClientRect()
+    : null;
+  const viewportHeight = doc.defaultView?.innerHeight ?? 0;
 
   for (const candidate of candidates) {
     if (seen.has(candidate) || candidate.closest('.sotl-chat-panel-container, [data-sotl-tracker-preview="true"]')) continue;
-    const messageId = messageIdFromElement(candidate) ?? findNearestTrackedMessageIdForElement(candidate, state);
-    if (!messageId) continue;
-    if (!state.messageTrackers.some((tracker) => tracker.messageId === messageId) && state.latestTracker?.messageId !== messageId) continue;
+    const rect = candidate.getBoundingClientRect();
+    if (viewportHeight > 0 && rect.top > viewportHeight * 0.72) continue;
+    if (candidate.closest('[data-chat-input], [data-input-bar], [data-composer], .chat-input, .composer, .input-bar, footer')) continue;
+    const candidateMessageId = messageIdFromElement(candidate);
+    const messageId = candidateMessageId ?? target.messageId;
+    if (messageId !== target.messageId) continue;
+    if (hostRect) {
+      const overlapsHorizontally = rect.right >= hostRect.left && rect.left <= hostRect.right;
+      const verticalGap = rect.top > hostRect.bottom
+        ? rect.top - hostRect.bottom
+        : hostRect.top > rect.bottom
+          ? hostRect.top - rect.bottom
+          : 0;
+      if (!overlapsHorizontally || verticalGap > 120) continue;
+    }
     seen.add(candidate);
     toolbars.push({
       toolbar: candidate,
@@ -289,7 +298,7 @@ function findVisibleMessageToolbars(doc: Document, state: LoomFrontendState): Ar
     });
   }
 
-  return toolbars.slice(0, 2);
+  return toolbars.slice(0, 1);
 }
 
 function cleanupDisconnectedMessagePaws(): void {
@@ -476,11 +485,15 @@ function visibleContextMenuCandidate(element: Element): element is HTMLElement {
 }
 
 function mountContextMenuTrackerAction(doc: Document, state: LoomFrontendState): number {
+  void state;
   const target = lastMessageActionTarget;
-  if (!target) return 0;
-  const hasTracker = state.messageTrackers.some((tracker) => tracker.messageId === target.messageId)
-    || state.latestTracker?.messageId === target.messageId;
-  if (!hasTracker) return 0;
+  doc.querySelectorAll<HTMLElement>('[data-sotl-context-menu-item="true"]').forEach((item) => {
+    if (!target || Date.now() - target.seenAt > 8000 || item.dataset.sotlMessageId !== target.messageId) {
+      item.remove();
+      injectedContextMenuItems.delete(item);
+    }
+  });
+  if (!target || Date.now() - target.seenAt > 8000) return 0;
   const menus = Array.from(doc.querySelectorAll('[role="menu"], [data-context-menu], [data-lv-context-menu], .context-menu, .lv-context-menu, .menu, .popover'))
     .filter(visibleContextMenuCandidate);
   let mounted = 0;
@@ -668,18 +681,22 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
   const doc = documentRef();
   if (!doc) return { status: 'Message tracker paw unavailable: no document.' };
   cleanupDisconnectedMessagePaws();
-  cleanupMessageTrackerActions();
   if (!state) return { status: 'Message tracker paw waiting for backend state.' };
-
-  const messageIds = new Set<string>();
-  for (const tracker of state.messageTrackers) {
-    if (tracker.messageId) messageIds.add(tracker.messageId);
-  }
-  if (state.latestTracker?.messageId) messageIds.add(state.latestTracker.messageId);
-  if (messageIds.size === 0) return { status: 'No message trackers available for message paw actions.' };
 
   let mounted = 0;
   const toolbars = findVisibleMessageToolbars(doc, state);
+  const desiredKeys = new Set(toolbars.map(({ messageId, swipeId }) => messageActionKey(messageId, swipeId)));
+  doc.querySelectorAll<HTMLElement>('[data-sotl-message-paw="true"]').forEach((button) => {
+    const messageId = button.dataset.sotlMessageId || '';
+    const swipeValue = button.dataset.sotlSwipeId;
+    const swipeId = swipeValue === undefined || swipeValue === '' ? undefined : Number(swipeValue);
+    const key = messageActionKey(messageId, Number.isFinite(swipeId) ? swipeId : undefined);
+    const desired = desiredKeys.has(key) && toolbars.some(({ toolbar }) => toolbar.contains(button));
+    if (!desired) {
+      button.remove();
+      injectedMessagePaws.delete(key);
+    }
+  });
   for (const { toolbar, messageId, swipeId } of toolbars) {
     if (toolbar.querySelector('[data-sotl-message-paw="true"]')) continue;
     const key = messageActionKey(messageId, swipeId);
@@ -718,10 +735,9 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
   `;
 
   const generateIcon = `
-    <button class="sotl-chat-panel__action-btn" data-sotl-panel-action="generate" ${isGenerating || state.generation.disabledReason ? 'disabled' : ''} title="${escapeHtml(state.generation.disabledReason || 'Generate Tracker State')}" aria-label="Generate Tracker State">
+    <button class="sotl-chat-panel__action-btn" data-sotl-panel-action="generate" ${!isGenerating && state.generation.disabledReason ? 'disabled' : ''} title="${escapeHtml(isGenerating ? 'Stop tracker generation' : state.generation.disabledReason || 'Generate Tracker State')}" aria-label="${isGenerating ? 'Stop tracker generation' : 'Generate Tracker State'}">
       <svg class="${isGenerating ? 'sotl-spin' : ''}" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-        <path d="M23 4v6h-6"/>
-        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        ${isGenerating ? '<rect x="6" y="6" width="12" height="12" rx="2"/>' : '<path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>'}
       </svg>
     </button>
   `;
@@ -768,7 +784,7 @@ function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFronten
       header,
       '  <div class="sotl-chat-panel__body">',
       `    <p class="sotl-chat-panel__desc">${escapeHtml(missingText)}</p>`,
-      `    <button class="sotl-button" data-sotl-panel-action="generate" ${isGenerating || state.generation.disabledReason ? 'disabled' : ''} style="margin-top: 6px; width: 100%; justify-content: center;">Generate Tracker</button>`,
+      `    <button class="sotl-button" data-sotl-panel-action="generate" ${!isGenerating && state.generation.disabledReason ? 'disabled' : ''} style="margin-top: 6px; width: 100%; justify-content: center;">${isGenerating ? 'Stop Generation' : 'Generate Tracker'}</button>`,
       '  </div>',
       '</div>'
     ].join('\n');
@@ -838,19 +854,28 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
   const doc = documentRef();
   if (!doc) return;
 
-  // Clean up any existing panel first
-  doc.querySelector('.sotl-chat-panel-container')?.remove();
-
-  if (!state) return;
-
-  if (!shouldShowGlobalPaw(doc, state)) return;
-
-  const container = doc.createElement('div');
+  const show = Boolean(state && shouldShowGlobalPaw(doc, state));
+  const container = chatPanelContainer && chatPanelContainer.isConnected
+    ? chatPanelContainer
+    : doc.querySelector<HTMLElement>('.sotl-chat-panel-container') ?? doc.createElement('div');
+  chatPanelContainer = container;
   container.className = 'sotl-chat-panel-container';
+  container.dataset.sotlChatPanel = 'true';
+  if (!show || !state) {
+    isChatLoomPanelExpanded = false;
+    container.hidden = true;
+    container.setAttribute('aria-hidden', 'true');
+    container.dataset.sotlHiddenReason = !state ? 'state-unavailable' : 'not-normal-chat';
+    if (!container.isConnected) doc.body.append(container);
+    return;
+  }
+  container.hidden = false;
+  container.removeAttribute('aria-hidden');
+  container.dataset.sotlHiddenReason = '';
+  container.classList.remove('sotl-chat-panel-container--expanded');
   if (isChatLoomPanelExpanded) {
     container.classList.add('sotl-chat-panel-container--expanded');
   }
-  container.dataset.sotlChatPanel = 'true';
 
   if (!isChatLoomPanelExpanded) {
     const generatingClass = state.generation.running ? ' sotl-chat-pill--generating' : '';
@@ -876,7 +901,7 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
         container.style.removeProperty('position');
         container.style.setProperty('display', 'block');
         container.style.setProperty('margin-top', '8px');
-        container.remove();
+        container.hidden = true;
         // Attach click handler and return early (skip doc.body.append below)
         attachContainerClickHandler(container, ctx, state as LoomFrontendState, doc as Document);
         return;
@@ -892,7 +917,7 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
   }
 
   attachContainerClickHandler(container, ctx, state, doc);
-  doc.body.append(container);
+  if (!container.isConnected || container.parentElement !== doc.body) doc.body.append(container);
 }
 
 function attachContainerClickHandler(
@@ -901,7 +926,11 @@ function attachContainerClickHandler(
   state: LoomFrontendState,
   doc: Document,
 ): void {
+  (container as HTMLElement & { __sotlState?: LoomFrontendState }).__sotlState = state;
+  if ((container as HTMLElement & { __sotlClickBound?: boolean }).__sotlClickBound) return;
+  (container as HTMLElement & { __sotlClickBound?: boolean }).__sotlClickBound = true;
   container.addEventListener('click', (e) => {
+    const currentState = (container as HTMLElement & { __sotlState?: LoomFrontendState }).__sotlState ?? state;
     const target = e.target as HTMLElement | null;
     if (!target) return;
     const action = target.dataset.sotlPanelAction || target.closest('[data-sotl-panel-action]')?.getAttribute('data-sotl-panel-action');
@@ -913,8 +942,8 @@ function attachContainerClickHandler(
       isChatLoomPanelExpanded = true;
       triggerRerender();
     } else if (action === 'toggle-hud-view') {
-      const nextView = state.settings.hudDefaultView === 'compact' ? 'full' : 'compact';
-      state.settings.hudDefaultView = nextView;
+      const nextView = currentState.settings.hudDefaultView === 'compact' ? 'full' : 'compact';
+      currentState.settings.hudDefaultView = nextView;
       triggerRerender();
       
       const msg = { type: 'save_settings' as const, settings: { hudDefaultView: nextView } };
@@ -928,7 +957,6 @@ function attachContainerClickHandler(
       }
     } else if (action === 'drawer') {
       isChatLoomPanelExpanded = false;
-      container.remove();
       triggerRerender();
       setTimeout(() => {
         if (openDrawerCallback) {
@@ -947,9 +975,10 @@ function attachContainerClickHandler(
       }, 100);
     } else if (action === 'generate') {
       if (typeof ctx.sendToBackend === 'function') {
-        ctx.sendToBackend({ type: 'generate_tracker' });
+        if (currentState.generation.running) ctx.sendToBackend({ type: 'cancel_generation' });
+        else ctx.sendToBackend({ type: 'generate_tracker' });
       } else {
-        const genBtn = doc.querySelector('[data-sotl-action="generate"]') as HTMLElement | null;
+        const genBtn = doc.querySelector(`[data-sotl-action="${currentState.generation.running ? 'cancel-generation' : 'generate'}"]`) as HTMLElement | null;
         genBtn?.click();
       }
     }

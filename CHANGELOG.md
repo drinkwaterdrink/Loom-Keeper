@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.21 - Mobile UI Stabilization
+
+- Removed State of the Loom input-bar action registrations and constrained message paw insertion to the selected message's visible native action toolbar only.
+- Removed the broad generic toolbar heuristic that could attach paws to the composer, bottom action bar, or unrelated side controls.
+- Reworked the global chat paw to reuse one mounted DOM node with hidden/visible state instead of destructive remove/recreate loops.
+- Replaced the paw glyph with a heavier five-toe bear paw SVG and kept the generation pulse animation.
+- Kept tracker preview overlays mounted while refreshing, preserved old tracker content during regeneration, and changed Generate/Regenerate controls into Stop Generation while generation is running.
+- Routed the HUD drawer/settings icon to a safe in-chat preview on mobile to avoid the half-screen drawer split; desktop still opens the Track drawer.
+
 ## v1.0.20 - Mobile Tracker Access Polish
 
 - Hid the global floating paw outside the normal chat screen, including drawers, settings, branch views, modals, context menus, and tracker preview overlays.

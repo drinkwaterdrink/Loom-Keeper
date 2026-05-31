@@ -585,8 +585,9 @@ function renderControlsPanel(
         `<select class="sotl-select" data-sotl-field="sidecarGenerationTimeoutMs">${renderTimeoutOptions(state)}</select>`,
         '</label>',
         '<div class="sotl-actions">',
-        button('Generate tracker', 'generate', { primary: true, disabled: Boolean(disabledReason) && !state.generation.running, title: disabledReason }),
-        state.generation.running ? button('Cancel Generation', 'cancel-generation', { style: 'background: rgba(220,53,69,0.1); color: var(--lv-error-text,#bd2130); border-color: rgba(220,53,69,0.2);' }) : '',
+        state.generation.running
+          ? button('Stop Generation', 'cancel-generation', { primary: true, style: 'background: rgba(220,53,69,0.1); color: var(--lv-error-text,#bd2130); border-color: rgba(220,53,69,0.2);' })
+          : button('Generate tracker', 'generate', { primary: true, disabled: Boolean(disabledReason), title: disabledReason }),
         button('Refresh', 'refresh'),
         '</div>',
         renderGenerationBanner(state, disabledReason),

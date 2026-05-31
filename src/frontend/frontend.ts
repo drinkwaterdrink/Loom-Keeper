@@ -278,6 +278,36 @@ function formatGeneratedAt(value?: string | undefined): string {
   return date.toLocaleString();
 }
 
+function isMobileViewport(): boolean {
+  const doc = documentRef();
+  const width = doc?.defaultView?.innerWidth ?? 1024;
+  return width <= 720;
+}
+
+function markGenerationPending(message: string): void {
+  if (!state) return;
+  state = {
+    ...state,
+    generation: {
+      ...state.generation,
+      running: true,
+      message,
+    },
+  };
+}
+
+function markGenerationStopping(): void {
+  if (!state) return;
+  state = {
+    ...state,
+    generation: {
+      ...state.generation,
+      running: true,
+      message: 'Stopping generation...',
+    },
+  };
+}
+
 function isCurrentTracker(tracker: LoomTrackerState | null, currentState: LoomFrontendState | null): boolean {
   if (!tracker || !currentState) return false;
   const current = resolveActiveTrackerForState(currentState).tracker;
@@ -303,12 +333,12 @@ function openTrackerPreview(messageId: string | undefined, swipeId?: number | un
 function renderTrackerPreviewOverlay(): void {
   const doc = documentRef();
   if (!doc) return;
-  doc.querySelector('[data-sotl-tracker-preview="true"]')?.remove();
+  let overlay = doc.querySelector<HTMLElement>('[data-sotl-tracker-preview="true"]');
   if (!trackerPreviewRef) return;
 
   const resolved = resolveTrackerForMessageSwipe(state, trackerPreviewRef.messageId, trackerPreviewRef.swipeId);
   const tracker = resolved.tracker;
-  const overlay = doc.createElement('div');
+  if (!overlay) overlay = doc.createElement('div');
   overlay.className = 'sotl-tracker-preview-overlay';
   overlay.dataset.sotlTrackerPreview = 'true';
 
@@ -318,10 +348,11 @@ function renderTrackerPreviewOverlay(): void {
   const current = isCurrentTracker(tracker, state);
   const status = tracker ? (current ? 'current' : 'previous retained') : 'missing';
   const jsonButton = tracker ? '<button class="sotl-button" type="button" data-sotl-action="preview-copy-json">Copy JSON</button>' : '';
+  const isGenerating = Boolean(state?.generation.running);
   const regenerateButton = tracker
-    ? `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml(tracker.messageId || trackerPreviewRef.messageId)}"${typeof tracker.swipeId === 'number' ? ` data-sotl-swipe-id="${tracker.swipeId}"` : ''}>Regenerate</button>`
-    : `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml(trackerPreviewRef.messageId)}"${typeof resolved.swipeId === 'number' ? ` data-sotl-swipe-id="${resolved.swipeId}"` : ''}>Generate This Swipe</button>`;
-  const drawerButton = tracker ? '<button class="sotl-button" type="button" data-sotl-action="preview-open-drawer">Open in Track drawer</button>' : '';
+    ? `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml(tracker.messageId || trackerPreviewRef.messageId)}"${typeof tracker.swipeId === 'number' ? ` data-sotl-swipe-id="${tracker.swipeId}"` : ''}>${isGenerating ? 'Stop Generation' : 'Regenerate'}</button>`
+    : `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml(trackerPreviewRef.messageId)}"${typeof resolved.swipeId === 'number' ? ` data-sotl-swipe-id="${resolved.swipeId}"` : ''}>${isGenerating ? 'Stop Generation' : 'Generate This Swipe'}</button>`;
+  const drawerButton = tracker && !isMobileViewport() ? '<button class="sotl-button" type="button" data-sotl-action="preview-open-drawer">Open in Track drawer</button>' : '';
   const body = tracker && state
     ? renderTrackerForState(tracker, state).html
     : `<div class="sotl-tracker-preview__missing">${escapeHtml(resolved.notice || `No retained/generated tracker for ${formatSwipeLabel(resolved.swipeId)}.`)}</div>`;
@@ -345,6 +376,7 @@ function renderTrackerPreviewOverlay(): void {
     `    <span class="sotl-tracker-preview__badge" data-status="${escapeHtml(status)}">${escapeHtml(status)}</span>`,
     '    <button class="sotl-icon-button sotl-tracker-preview__close" type="button" data-sotl-action="close-tracker-preview" aria-label="Close tracker preview">×</button>',
     '  </header>',
+    isGenerating ? `<p class="sotl-note">${escapeHtml(state?.generation.message || 'Generating tracker...')} Existing tracker content stays visible until replacement is saved.</p>` : '',
     resolved.notice ? `<p class="sotl-note sotl-warning">${escapeHtml(resolved.notice)}</p>` : '',
     `  <div class="sotl-tracker-preview__body">${body}</div>`,
     '  <footer class="sotl-tracker-preview__actions">',
@@ -356,7 +388,7 @@ function renderTrackerPreviewOverlay(): void {
     '</section>',
   ].filter(Boolean).join('\n');
 
-  doc.body.append(overlay);
+  if (!overlay.isConnected) doc.body.append(overlay);
 }
 
 function bindRootEvents(root: HTMLElement): void {
@@ -438,37 +470,17 @@ function registerSettingsMount(ctx: FrontendContext): void {
 }
 
 function registerInputActions(ctx: FrontendContext): void {
-  const register = getUi(ctx).registerInputBarAction;
-  if (typeof register !== 'function') return;
-  try {
-  const openAction = (register as (options: Record<string, unknown>) => PlacementHandle | void)({
-    id: 'open_loom',
-    label: 'Open Loom',
-    iconSvg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 3h2v18H5V3Zm12 0h2v18h-2V3ZM9 5h6v2H9V5Zm0 4h6v2H9V9Zm0 4h6v2H9v-2Zm0 4h6v2H9v-2Z"/></svg>',
-    enabled: true,
-  });
-  if (openAction?.onClick) cleanupFns.push(openAction.onClick(() => activateDrawer()));
-  if (openAction?.destroy) cleanupFns.push(() => openAction.destroy?.());
-
-  const generateAction = (register as (options: Record<string, unknown>) => PlacementHandle | void)({
-    id: 'generate_loom_tracker',
-    label: 'Generate Loom',
-    iconSvg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2l1.5 5.1L19 8l-4.4 3.3L16 17l-4-3-4 3 1.4-5.7L5 8l5.5-.9L12 2Zm-7 15h14v2H5v-2Z"/></svg>',
-    enabled: true,
-  });
-  if (generateAction?.onClick) cleanupFns.push(generateAction.onClick(() => {
-    if (contextRef) postToBackend(contextRef, { type: 'generate_tracker' });
-  }));
-  if (generateAction?.destroy) cleanupFns.push(() => generateAction.destroy?.());
-  } catch (error) {
-    const text = error instanceof Error ? error.message : String(error);
-    console.warn?.(`State of the Loom input action registration failed: ${text}`);
-  }
+  void ctx;
+  // v1.0.21 stability pass: keep State of the Loom out of the composer/input bar.
 }
 
 function activateDrawer(): void {
   setDrawerOpenState(true);
-  documentRef()?.querySelector('.sotl-chat-panel-container')?.remove();
+  const launcher = documentRef()?.querySelector<HTMLElement>('.sotl-chat-panel-container');
+  if (launcher) {
+    launcher.hidden = true;
+    launcher.setAttribute('aria-hidden', 'true');
+  }
   if (drawerHandle?.activate) {
     drawerHandle.activate();
   }
@@ -488,6 +500,24 @@ function activateDrawer(): void {
       }
     }, 120);
   }
+}
+
+function activateHudTarget(): void {
+  if (isMobileViewport()) {
+    const resolved = state ? resolveActiveTrackerForState(state) : { tracker: null };
+    const messageId = resolved.tracker?.messageId ?? state?.diagnostics.swipeReport?.activeMessageId;
+    if (messageId) {
+      openTrackerPreview(messageId, resolved.tracker?.swipeId ?? state?.diagnostics.swipeReport?.activeSwipeId);
+      return;
+    }
+    lastToast = {
+      level: 'info',
+      message: 'Open the Track tab for settings; mobile drawer opening is disabled from the HUD to avoid layout splits.',
+    };
+    rerender();
+    return;
+  }
+  activateDrawer();
 }
 
 function paint(status: LoomUiStatus): void {
@@ -629,7 +659,7 @@ function handleDrawerEvent(event: Event): void {
       if (trackerPreviewRef) {
         const resolved = resolveTrackerForMessageSwipe(state, trackerPreviewRef.messageId, trackerPreviewRef.swipeId);
         if (resolved.tracker) {
-          const jsonText = JSON.stringify(resolved.tracker.data, null, 2);
+          const jsonText = JSON.stringify(resolved.tracker, null, 2);
           if (typeof navigator !== 'undefined' && navigator.clipboard) {
             navigator.clipboard.writeText(jsonText).catch((err) => console.error('Failed to copy preview JSON:', err));
           }
@@ -638,10 +668,19 @@ function handleDrawerEvent(event: Event): void {
       return;
     }
     if (action === 'preview-regenerate') {
+      if (state?.generation.running) {
+        markGenerationStopping();
+        postToBackend(contextRef, { type: 'cancel_generation' });
+        renderTrackerPreviewOverlay();
+        rerender();
+        return;
+      }
       const messageId = actionButton.dataset.sotlMessageId || trackerPreviewRef?.messageId;
       const actionSwipeId = datasetSwipeId(actionButton) ?? trackerPreviewRef?.swipeId;
+      markGenerationPending('Generating tracker for this message...');
       postToBackend(contextRef, { type: 'generate_tracker', messageId, swipeId: actionSwipeId });
-      closeTrackerPreview();
+      renderTrackerPreviewOverlay();
+      rerender();
       startBackendTimer();
       return;
     }
@@ -659,9 +698,21 @@ function handleDrawerEvent(event: Event): void {
       rerender();
       return;
     }
-    if (action === 'generate') postToBackend(contextRef, { type: 'generate_tracker' });
+    if (action === 'generate') {
+      if (state?.generation.running) {
+        markGenerationStopping();
+        postToBackend(contextRef, { type: 'cancel_generation' });
+      } else {
+        markGenerationPending('Generating tracker...');
+        postToBackend(contextRef, { type: 'generate_tracker' });
+      }
+      rerender();
+      return;
+    }
     if (action === 'cancel-generation') {
-      postToBackend(contextRef, { type: 'cancel_generation' } as any);
+      markGenerationStopping();
+      postToBackend(contextRef, { type: 'cancel_generation' });
+      rerender();
       return;
     }
     if (action === 'refresh') requestBackendState({ type: 'refresh_state' });
@@ -672,10 +723,28 @@ function handleDrawerEvent(event: Event): void {
       startBackendTimer();
     }
     const actionSwipeId = datasetSwipeId(actionButton);
-    if (action.startsWith('regenerate:')) postToBackend(contextRef, { type: 'generate_tracker', messageId: action.slice('regenerate:'.length), swipeId: actionSwipeId });
+    if (action.startsWith('regenerate:')) {
+      if (state?.generation.running) {
+        markGenerationStopping();
+        postToBackend(contextRef, { type: 'cancel_generation' });
+      } else {
+        markGenerationPending('Regenerating tracker...');
+        postToBackend(contextRef, { type: 'generate_tracker', messageId: action.slice('regenerate:'.length), swipeId: actionSwipeId });
+      }
+      rerender();
+    }
     if (action.startsWith('hide:') && state?.activeChat.id) postToBackend(contextRef, { type: 'hide_tracker', chatId: state.activeChat.id, messageId: action.slice('hide:'.length), swipeId: actionSwipeId, hidden: true });
     if (action.startsWith('delete:') && state?.activeChat.id) postToBackend(contextRef, { type: 'delete_tracker', chatId: state.activeChat.id, messageId: action.slice('delete:'.length), swipeId: actionSwipeId });
-    if (action === 'card-regenerate') postToBackend(contextRef, { type: 'generate_tracker', messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId });
+    if (action === 'card-regenerate') {
+      if (state?.generation.running) {
+        markGenerationStopping();
+        postToBackend(contextRef, { type: 'cancel_generation' });
+      } else {
+        markGenerationPending('Regenerating tracker...');
+        postToBackend(contextRef, { type: 'generate_tracker', messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId });
+      }
+      rerender();
+    }
     if (action === 'card-edit') activateDrawer();
     if (action === 'card-hide' && state?.activeChat.id) postToBackend(contextRef, { type: 'hide_tracker', chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId, hidden: true });
     if (action === 'card-delete' && state?.activeChat.id) postToBackend(contextRef, { type: 'delete_tracker', chatId: state.activeChat.id, messageId: actionButton.dataset.sotlMessageId, swipeId: actionSwipeId });
@@ -1199,7 +1268,7 @@ function registerFrontendEvents(ctx: FrontendContext): void {
 export function setup(ctx: FrontendContext): () => void {
   contextRef = ctx;
   registerRerenderCallback(() => rerender());
-  registerOpenDrawerCallback(() => activateDrawer());
+  registerOpenDrawerCallback(() => activateHudTarget());
   installStyle(ctx);
   registerDrawer(ctx);
   registerSettingsMount(ctx);
