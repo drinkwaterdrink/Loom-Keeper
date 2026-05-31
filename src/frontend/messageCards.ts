@@ -235,6 +235,7 @@ function hasVisibleChatContent(doc: Document): boolean {
 export function shouldShowGlobalPaw(doc: Document, state: LoomFrontendState | null): boolean {
   if (!state?.settings.showChatHudLauncher) return false;
   if (isDrawerOpen || isSettingsOpen) return false;
+  if (isChatLoomPanelExpanded) return true;
   if (hasVisibleBlockingSurface(doc)) return false;
   if (!hasVisibleComposer(doc)) return false;
   if (!hasVisibleChatContent(doc) && !state.activeChat.id) return false;
@@ -430,22 +431,29 @@ function mountContextMenuTrackerAction(doc: Document, state: LoomFrontendState):
   void state;
   const target = lastMessageActionTarget;
   doc.querySelectorAll<HTMLElement>('[data-sotl-context-menu-item="true"]').forEach((item) => {
-    if (!target || Date.now() - target.seenAt > 8000 || item.dataset.sotlMessageId !== target.messageId) {
+    if (!target || Date.now() - target.seenAt > 30000 || item.dataset.sotlMessageId !== target.messageId) {
       item.remove();
       injectedContextMenuItems.delete(item);
     }
   });
-  if (!target || Date.now() - target.seenAt > 8000) return 0;
-  const menus = Array.from(doc.querySelectorAll('[role="menu"], [data-context-menu], [data-lv-context-menu], .context-menu, .lv-context-menu, .menu, .popover'))
+  if (!target || Date.now() - target.seenAt > 30000) return 0;
+  
+  let menus = Array.from(doc.querySelectorAll('[role="menu"], [role="listbox"], [role="dialog"], [class*="dropdown" i], [class*="menu" i], [class*="popup" i], .context-menu, .lv-context-menu, .menu, .popover, .dropdown'))
     .filter(visibleContextMenuCandidate);
+
+  // Keep only the innermost menus
+  menus = menus.filter((menu) => {
+    return !menus.some((other) => other !== menu && menu.contains(other));
+  });
+
   let mounted = 0;
   for (const menu of menus) {
     if (menu.querySelector('[data-sotl-context-menu-item="true"]')) continue;
-    const candidates = Array.from(menu.querySelectorAll<HTMLElement>('button, [role="menuitem"], [data-menu-item], li, div'));
+    const candidates = Array.from(menu.querySelectorAll<HTMLElement>('button, [role="menuitem"], [role="button"], [data-menu-item], li, div, span, a'));
     const reference = candidates.find((candidate) => isVisibleElement(candidate) && /\b(Copy|Edit|Hide from AI context|Fork chat here|Prompt Breakdown)\b/i.test(candidate.textContent || ''));
     const item = doc.createElement(reference?.tagName.toLowerCase() === 'button' ? 'button' : 'div');
     if (item instanceof HTMLButtonElement) item.type = 'button';
-    item.className = 'sotl-context-menu-item';
+    item.className = 'sotl-context-menu-item ' + (reference?.className || '');
     item.dataset.sotlContextMenuItem = 'true';
     item.dataset.sotlAction = 'message-paw';
     item.dataset.sotlMessageId = target.messageId;
@@ -856,6 +864,12 @@ function attachContainerClickHandler(
     const currentState = (container as HTMLElement & { __sotlState?: LoomFrontendState }).__sotlState ?? state;
     const target = e.target as HTMLElement | null;
     if (!target) return;
+    const pill = target.closest('.sotl-chat-pill');
+    if (pill && !isChatLoomPanelExpanded) {
+      isChatLoomPanelExpanded = true;
+      triggerRerender();
+      return;
+    }
     const action = target.dataset.sotlPanelAction || target.closest('[data-sotl-panel-action]')?.getAttribute('data-sotl-panel-action');
     
     if (action === 'collapse') {

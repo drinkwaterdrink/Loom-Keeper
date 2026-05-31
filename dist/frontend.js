@@ -3841,7 +3841,17 @@ function renderDrawer(state2, status = {}) {
 function bearPawSvg(className = "sotl-paw-svg") {
   return [
     `<svg class="${className}" viewBox="0 0 512 512" width="26" height="26" fill="currentColor" aria-hidden="true">`,
-    '  <path d="M226.5 92.9c14.3 42.9-.3 86.2-32.6 96.8s-70.1-15.6-84.4-58.5S110 45 142.3 34.4s70.1 15.6 84.4 58.5zM100.4 198.6c18.9 30.9 9.5 71.1-21 89.9s-71.1 9.5-89.9-21-9.5-71.1 21-89.9 71.1-9.5 89.9 21zm289.4-64.2c-14.3 42.9-57.8 69.1-96.8 58.5s-46.9-54.2-32.6-96.8 57.8-69.1 96.8-58.5 46.9 54.2 32.6 96.8zm73.3 64.2c-18.9 30.9-59.4 39.7-89.9 21s-39.7-59.4-21-89.9 59.4-39.7 89.9-21 39.7 59.4 21 89.9zm-252.8 171.7c-50.6 8.7-98.8-19.3-107.2-62.7s26.8-85.3 77.4-94 98.8 19.3 107.2 62.7-26.8 85.3-77.4 94zm241.7-62.7c-8.4 43.4-56.6 71.4-107.2 62.7s-85.8-50.6-77.4-94 56.6-71.4 107.2-62.7 85.8 50.6 77.4 94z"/>',
+    '  <path class="sotl-bear-claw sotl-bear-claw--1" d="M62,130 Q88,156 98,181 C106,178 109,173 109,171 Q93,145 62,130 Z"/>',
+    '  <path class="sotl-bear-claw sotl-bear-claw--2" d="M141,63 Q157,93 164,121 C172,119 175,114 175,111 Q162,83 141,63 Z"/>',
+    '  <path class="sotl-bear-claw sotl-bear-claw--3" d="M256,33 Q251,69 248,97 C256,99 256,99 264,97 Q261,69 256,33 Z"/>',
+    '  <path class="sotl-bear-claw sotl-bear-claw--4" d="M371,63 Q355,93 348,121 C340,119 337,114 337,111 Q350,83 371,63 Z"/>',
+    '  <path class="sotl-bear-claw sotl-bear-claw--5" d="M450,130 Q424,156 414,181 C406,178 403,173 403,171 Q419,145 450,130 Z"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--1" cx="108" cy="225" rx="22" ry="28" transform="rotate(-20 108 225)"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--2" cx="172" cy="160" rx="24" ry="30" transform="rotate(-10 172 160)"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--3" cx="256" cy="130" rx="26" ry="32"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--4" cx="340" cy="160" rx="24" ry="30" transform="rotate(10 340 160)"/>',
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--5" cx="404" cy="225" rx="22" ry="28" transform="rotate(20 404 225)"/>',
+    '  <path class="sotl-paw-main sotl-bear-main" d="M102,348 C92,281 179,250 256,260 C333,250 420,281 410,348 C400,415 317,435 256,435 C195,435 112,415 102,348 Z"/>',
     "</svg>"
   ].join("");
 }
@@ -4025,6 +4035,7 @@ function hasVisibleChatContent(doc) {
 function shouldShowGlobalPaw(doc, state2) {
   if (!state2?.settings.showChatHudLauncher) return false;
   if (isDrawerOpen || isSettingsOpen) return false;
+  if (isChatLoomPanelExpanded) return true;
   if (hasVisibleBlockingSurface(doc)) return false;
   if (!hasVisibleComposer(doc)) return false;
   if (!hasVisibleChatContent(doc) && !state2.activeChat.id) return false;
@@ -4179,21 +4190,24 @@ function mountContextMenuTrackerAction(doc, state2) {
   void state2;
   const target = lastMessageActionTarget;
   doc.querySelectorAll('[data-sotl-context-menu-item="true"]').forEach((item) => {
-    if (!target || Date.now() - target.seenAt > 8e3 || item.dataset.sotlMessageId !== target.messageId) {
+    if (!target || Date.now() - target.seenAt > 3e4 || item.dataset.sotlMessageId !== target.messageId) {
       item.remove();
       injectedContextMenuItems.delete(item);
     }
   });
-  if (!target || Date.now() - target.seenAt > 8e3) return 0;
-  const menus = Array.from(doc.querySelectorAll('[role="menu"], [data-context-menu], [data-lv-context-menu], .context-menu, .lv-context-menu, .menu, .popover')).filter(visibleContextMenuCandidate);
+  if (!target || Date.now() - target.seenAt > 3e4) return 0;
+  let menus = Array.from(doc.querySelectorAll('[role="menu"], [role="listbox"], [role="dialog"], [class*="dropdown" i], [class*="menu" i], [class*="popup" i], .context-menu, .lv-context-menu, .menu, .popover, .dropdown')).filter(visibleContextMenuCandidate);
+  menus = menus.filter((menu) => {
+    return !menus.some((other) => other !== menu && menu.contains(other));
+  });
   let mounted = 0;
   for (const menu of menus) {
     if (menu.querySelector('[data-sotl-context-menu-item="true"]')) continue;
-    const candidates = Array.from(menu.querySelectorAll('button, [role="menuitem"], [data-menu-item], li, div'));
+    const candidates = Array.from(menu.querySelectorAll('button, [role="menuitem"], [role="button"], [data-menu-item], li, div, span, a'));
     const reference = candidates.find((candidate) => isVisibleElement(candidate) && /\b(Copy|Edit|Hide from AI context|Fork chat here|Prompt Breakdown)\b/i.test(candidate.textContent || ""));
     const item = doc.createElement(reference?.tagName.toLowerCase() === "button" ? "button" : "div");
     if (item instanceof HTMLButtonElement) item.type = "button";
-    item.className = "sotl-context-menu-item";
+    item.className = "sotl-context-menu-item " + (reference?.className || "");
     item.dataset.sotlContextMenuItem = "true";
     item.dataset.sotlAction = "message-paw";
     item.dataset.sotlMessageId = target.messageId;
@@ -4524,6 +4538,12 @@ function attachContainerClickHandler(container, ctx, state2, doc) {
     const currentState = container.__sotlState ?? state2;
     const target = e.target;
     if (!target) return;
+    const pill = target.closest(".sotl-chat-pill");
+    if (pill && !isChatLoomPanelExpanded) {
+      isChatLoomPanelExpanded = true;
+      triggerRerender();
+      return;
+    }
     const action = target.dataset.sotlPanelAction || target.closest("[data-sotl-panel-action]")?.getAttribute("data-sotl-panel-action");
     if (action === "collapse") {
       isChatLoomPanelExpanded = false;
