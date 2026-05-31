@@ -1346,6 +1346,27 @@ export const loomStyles = `
   pointer-events: none;
 }
 
+@media (max-width: 720px) {
+  .sotl-message-history-slot,
+  .sotl-message-history-badge,
+  .sotl-message-paw-btn,
+  [data-sotl-message-paw="true"],
+  [data-sotl-message-history-badge="true"],
+  [data-sotl-message-history-slot="true"] {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+}
 @media (hover: hover) and (min-width: 721px) {
   .sotl-message-history-badge {
     opacity: 0.48;

@@ -136,6 +136,9 @@ assert.match(messageCards, /querySelectorAll<HTMLElement>\('\.sotl-message-paw-b
 assert.match(styles, /\.sotl-message-history-badge[\s\S]*position:\s*absolute[\s\S]*left:\s*50%/, 'message history badge should be centered without taking layout space');
 assert.doesNotMatch(styles, /\.sotl-message-history-slot[\s\S]*min-height:\s*28px/, 'message history slot must not create vertical gaps');
 assert.doesNotMatch(messageCards, /insertAdjacentElement\('afterend', slot\)/, 'message history badge must not insert an in-flow slot after the header');
+assert.match(messageCards, /isMobileViewport\(doc\)[\s\S]*cleanupMessageCards\(ctx\)/, 'inline tracker cards should be disabled on mobile');
+assert.match(messageCards, /isMobileViewport\(doc\)[\s\S]*cleanupMessageHistoryDom\(doc\)/, 'inline message tracker history should be disabled on mobile');
+assert.match(styles, /@media \(max-width: 720px\)[\s\S]*\.sotl-message-history-badge[\s\S]*display:\s*none !important/, 'mobile CSS should forcibly hide stale message history controls');
 assert.doesNotMatch(messageCards, /mountAnchoredMessagePaw/, 'fixed anchored message paw fallback should be removed');
 assert.doesNotMatch(styles, /sotl-message-paw-action--anchored/, 'anchored message paw CSS should be removed');
 assert.match(messageCards, /syncFixedLauncherToStockIcon/, 'floating paw should copy fixed fallback position from stock side icon');

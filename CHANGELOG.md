@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.25 - Mobile Inline Injection Rollback
+
+- Disabled inline message tracker-history badge injection on mobile and clean up any stale badge/slot nodes left by previous builds.
+- Disabled inline tracker-card message attachment on mobile, even if the setting was enabled, to preserve the native chat scroll layout.
+- Added mobile CSS that forcibly hides leftover message-history controls so old DOM cannot keep creating message gaps.
+- Kept tracker access available through the Track drawer/history list and context-menu fallback instead of mutating mobile message rows.
 ## v1.0.24 - Mobile Message Spacing Hotfix
 
 - Removed the in-flow centered tracker-history slot that created vertical gaps and mobile scroll rubberbanding between messages.

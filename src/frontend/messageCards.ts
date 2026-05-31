@@ -285,14 +285,27 @@ function cleanupDisconnectedMessagePaws(): void {
   }
 }
 
-export function cleanupMessageTrackerActions(): void {
-  const doc = documentRef();
-  doc?.querySelectorAll('[data-sotl-message-paw="true"], [data-sotl-message-history-badge="true"], [data-sotl-message-history-slot="true"], [data-sotl-context-menu-item="true"]').forEach((node) => {
+function isMobileViewport(doc: Document): boolean {
+  const view = doc.defaultView;
+  if (!view) return false;
+  try {
+    if (typeof view.matchMedia === 'function' && view.matchMedia('(max-width: 720px)').matches) return true;
+  } catch {
+    // Fall back to width below.
+  }
+  return view.innerWidth <= 720;
+}
+
+function cleanupMessageHistoryDom(doc: Document): void {
+  doc.querySelectorAll('[data-sotl-message-paw="true"], [data-sotl-message-history-badge="true"], [data-sotl-message-history-slot="true"], .sotl-message-paw-btn').forEach((node) => {
     try {
       node.remove();
     } catch {
       // Ignored
     }
+  });
+  doc.querySelectorAll<HTMLElement>('.sotl-message-history-host').forEach((host) => {
+    host.classList.remove('sotl-message-history-host');
   });
   for (const button of injectedMessagePaws.values()) {
     try {
@@ -310,6 +323,19 @@ export function cleanupMessageTrackerActions(): void {
     }
   }
   injectedMessageHistoryBadges.clear();
+}
+
+export function cleanupMessageTrackerActions(): void {
+  const doc = documentRef();
+  if (!doc) return;
+  cleanupMessageHistoryDom(doc);
+  doc.querySelectorAll('[data-sotl-context-menu-item="true"]').forEach((node) => {
+    try {
+      node.remove();
+    } catch {
+      // Ignored
+    }
+  });
   for (const item of injectedContextMenuItems) {
     try {
       item.remove();
@@ -605,6 +631,10 @@ export function mountMessageCards(ctx: FrontendContext, state: LoomFrontendState
   const doc = documentRef();
   if (!doc) return { status: 'Message-card renderer unavailable: no document.' };
   if (!state) return { status: 'Message-card renderer waiting for backend state.' };
+  if (isMobileViewport(doc)) {
+    cleanupMessageCards(ctx);
+    return { status: 'Message-card rendering disabled on mobile to preserve chat scroll layout.' };
+  }
 
   const showCards = state.settings.renderInMessages;
   if (!showCards) {
@@ -834,10 +864,16 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
     return { status: 'Message tracker history waiting for backend state.' };
   }
 
+  if (isMobileViewport(doc)) {
+    cleanupMessageHistoryDom(doc);
+    const menuMounted = mountContextMenuTrackerAction(doc, state);
+    return { status: menuMounted > 0 ? `Mounted ${menuMounted} context menu tracker action(s).` : 'Inline message tracker history disabled on mobile to preserve chat scroll layout.' };
+  }
+
   const hosts = collectVisibleAssistantMessageHosts(doc, state);
   const badgeMounted = mountMessageHistoryBadges(doc, state, hosts);
 
-  // Centered in-message badges are the stable mobile path; native toolbar injection overlaps Lumiverse controls.
+  // Centered in-message badges are the desktop path; native toolbar injection overlaps Lumiverse controls.
   doc.querySelectorAll<HTMLElement>('.sotl-message-paw-btn').forEach((btn) => btn.remove());
   injectedMessagePaws.clear();
 

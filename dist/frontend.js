@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.24";
+var LOOM_VERSION = "1.0.25";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -7,7 +7,7 @@ var now = "2026-01-01T00:00:00.000Z";
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.24",
+  version: "1.0.25",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -1011,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.24",
+  version: "1.0.25",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -4077,13 +4077,24 @@ function cleanupDisconnectedMessagePaws() {
     if (!button2.isConnected) injectedMessagePaws.delete(key);
   }
 }
-function cleanupMessageTrackerActions() {
-  const doc = documentRef2();
-  doc?.querySelectorAll('[data-sotl-message-paw="true"], [data-sotl-message-history-badge="true"], [data-sotl-message-history-slot="true"], [data-sotl-context-menu-item="true"]').forEach((node) => {
+function isMobileViewport(doc) {
+  const view = doc.defaultView;
+  if (!view) return false;
+  try {
+    if (typeof view.matchMedia === "function" && view.matchMedia("(max-width: 720px)").matches) return true;
+  } catch {
+  }
+  return view.innerWidth <= 720;
+}
+function cleanupMessageHistoryDom(doc) {
+  doc.querySelectorAll('[data-sotl-message-paw="true"], [data-sotl-message-history-badge="true"], [data-sotl-message-history-slot="true"], .sotl-message-paw-btn').forEach((node) => {
     try {
       node.remove();
     } catch {
     }
+  });
+  doc.querySelectorAll(".sotl-message-history-host").forEach((host) => {
+    host.classList.remove("sotl-message-history-host");
   });
   for (const button2 of injectedMessagePaws.values()) {
     try {
@@ -4099,6 +4110,17 @@ function cleanupMessageTrackerActions() {
     }
   }
   injectedMessageHistoryBadges.clear();
+}
+function cleanupMessageTrackerActions() {
+  const doc = documentRef2();
+  if (!doc) return;
+  cleanupMessageHistoryDom(doc);
+  doc.querySelectorAll('[data-sotl-context-menu-item="true"]').forEach((node) => {
+    try {
+      node.remove();
+    } catch {
+    }
+  });
   for (const item of injectedContextMenuItems) {
     try {
       item.remove();
@@ -4336,6 +4358,10 @@ function mountMessageCards(ctx, state2) {
   const doc = documentRef2();
   if (!doc) return { status: "Message-card renderer unavailable: no document." };
   if (!state2) return { status: "Message-card renderer waiting for backend state." };
+  if (isMobileViewport(doc)) {
+    cleanupMessageCards(ctx);
+    return { status: "Message-card rendering disabled on mobile to preserve chat scroll layout." };
+  }
   const showCards = state2.settings.renderInMessages;
   if (!showCards) {
     cleanupMessageCards(ctx);
@@ -4530,6 +4556,11 @@ function mountMessageTrackerActions(ctx, state2) {
     injectedMessagePaws.clear();
     injectedMessageHistoryBadges.clear();
     return { status: "Message tracker history waiting for backend state." };
+  }
+  if (isMobileViewport(doc)) {
+    cleanupMessageHistoryDom(doc);
+    const menuMounted2 = mountContextMenuTrackerAction(doc, state2);
+    return { status: menuMounted2 > 0 ? `Mounted ${menuMounted2} context menu tracker action(s).` : "Inline message tracker history disabled on mobile to preserve chat scroll layout." };
   }
   const hosts = collectVisibleAssistantMessageHosts(doc, state2);
   const badgeMounted = mountMessageHistoryBadges(doc, state2, hosts);
@@ -6131,6 +6162,27 @@ var loomStyles = `
   pointer-events: none;
 }
 
+@media (max-width: 720px) {
+  .sotl-message-history-slot,
+  .sotl-message-history-badge,
+  .sotl-message-paw-btn,
+  [data-sotl-message-paw="true"],
+  [data-sotl-message-history-badge="true"],
+  [data-sotl-message-history-slot="true"] {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+}
 @media (hover: hover) and (min-width: 721px) {
   .sotl-message-history-badge {
     opacity: 0.48;
@@ -6361,7 +6413,7 @@ function formatGeneratedAt(value) {
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
 }
-function isMobileViewport() {
+function isMobileViewport2() {
   const doc = documentRef3();
   const width = doc?.defaultView?.innerWidth ?? 1024;
   return width <= 720;
@@ -6457,7 +6509,7 @@ function renderTrackerPreviewOverlay() {
   const preset = tracker && state ? state.presets.find((candidate) => candidate.id === tracker.presetId) : void 0;
   const jsonButton = tracker ? '<button class="sotl-button" type="button" data-sotl-action="preview-copy-json">Copy JSON</button>' : "";
   const regenerateButton = tracker ? `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(tracker.messageId || trackerPreviewRef.messageId)}"${typeof tracker.swipeId === "number" ? ` data-sotl-swipe-id="${tracker.swipeId}"` : ""}>${isGenerating ? "Stop Generation" : "Regenerate"}</button>` : `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(trackerPreviewRef.messageId)}"${typeof resolved.swipeId === "number" ? ` data-sotl-swipe-id="${resolved.swipeId}"` : ""} style="margin-top: 10px; width: 100%; justify-content: center;">${isGenerating ? "Stop Generation" : "Generate Tracker"}</button>`;
-  const drawerButton = tracker && !isMobileViewport() ? '<button class="sotl-button" type="button" data-sotl-action="preview-open-drawer">Open in Track drawer</button>' : "";
+  const drawerButton = tracker && !isMobileViewport2() ? '<button class="sotl-button" type="button" data-sotl-action="preview-open-drawer">Open in Track drawer</button>' : "";
   const body = tracker && state ? renderTrackerForState(tracker, state).html : `<div class="sotl-tracker-preview__missing" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center;">
          <p style="margin: 0 0 10px; font-weight: 500; font-size: 14px;">No tracker exists for this message/swipe.</p>
          ${regenerateButton}
@@ -6603,7 +6655,7 @@ function activateDrawer() {
   }
 }
 function activateHudTarget() {
-  if (isMobileViewport()) {
+  if (isMobileViewport2()) {
     const resolved = state ? resolveActiveTrackerForState(state) : { tracker: null };
     const messageId = resolved.tracker?.messageId ?? state?.diagnostics.swipeReport?.activeMessageId;
     if (messageId) {
