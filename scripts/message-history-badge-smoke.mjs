@@ -1,7 +1,7 @@
 /**
  * message-history-badge-smoke.mjs
- * DOM simulation tests for the Loom Keeper per-message Tracker History fallback badge.
- * Verifies fallback badges, placement priority, correct attributes, idempotency,
+ * DOM simulation tests for the Loom Keeper per-message Tracker History badge.
+ * Verifies toolbar injection, correct attributes, idempotency,
  * visibility rules, and coexistence with native toolbar and global launchers.
  */
 
@@ -110,13 +110,17 @@ async function runTests() {
   const { mountMessageHistoryBadges, mountMessageTrackerActions, getMessageActionDiagnostics } = cardMod;
 
   // ----------------------------------------------------
-  // TEST 1: Message host without native toolbar still gets .sotl-message-history-badge
+  // TEST 1: Badge injects into native toolbar before Copy button
   // ----------------------------------------------------
   {
     const doc = setupDOM(`
       <div id="chat-messages">
         <div class="msg" data-message-id="msg-1">
           <div class="message-header">Bridget</div>
+          <div class="message-actions">
+            <button aria-label="Copy">Copy</button>
+            <button aria-label="Edit">Edit</button>
+          </div>
           <div class="content">Hello there.</div>
         </div>
       </div>
@@ -129,9 +133,14 @@ async function runTests() {
     mountMessageHistoryBadges({}, state);
 
     const badge = doc.querySelector('.sotl-message-history-badge');
-    assert.ok(badge, 'Badge should mount on assistant message');
-    assert.ok(!badge.classList.contains('sotl-message-history-badge--floating'), 'Should append to message-header and not float');
-    console.log('  ✓ TEST 1 passed: Fallback badge mounts inside detected message header');
+    assert.ok(badge, 'Badge should mount on assistant message with toolbar');
+    assert.ok(badge.classList.contains('sotl-message-history-badge--toolbar'), 'Should have toolbar variant class');
+    
+    // Check it was inserted before Copy
+    const toolbar = doc.querySelector('.message-actions');
+    const copyBtn = toolbar.querySelector('[aria-label="Copy"]');
+    assert.ok(copyBtn.previousElementSibling === badge, 'Badge should be directly before Copy button');
+    console.log('  ✓ TEST 1 passed: Badge injects into native toolbar before Copy button');
   }
 
   // ----------------------------------------------------
@@ -140,7 +149,9 @@ async function runTests() {
   {
     const doc = setupDOM(`
       <div class="msg" data-message-id="msg-abc">
-        <div class="message-header">AI</div>
+        <div class="message-actions">
+          <button aria-label="Copy">Copy</button>
+        </div>
       </div>
     `);
 
@@ -161,7 +172,9 @@ async function runTests() {
   {
     const doc = setupDOM(`
       <div class="msg" data-message-id="msg-swipe">
-        <div class="message-header">AI</div>
+        <div class="message-actions">
+          <button aria-label="Copy">Copy</button>
+        </div>
       </div>
     `);
 
@@ -183,7 +196,9 @@ async function runTests() {
   {
     const doc = setupDOM(`
       <div class="msg" data-message-id="msg-1">
-        <div class="message-header">AI</div>
+        <div class="message-actions">
+          <button aria-label="Copy">Copy</button>
+        </div>
       </div>
     `);
 
@@ -199,12 +214,14 @@ async function runTests() {
   }
 
   // ----------------------------------------------------
-  // TEST 5: Message with no tracker still gets a badge
+  // TEST 5: Message with no tracker still gets a badge (when toolbar visible)
   // ----------------------------------------------------
   {
     const doc = setupDOM(`
       <div class="msg" data-message-id="msg-untracked">
-        <div class="message-header">AI</div>
+        <div class="message-actions">
+          <button aria-label="Copy">Copy</button>
+        </div>
       </div>
     `);
 
@@ -222,52 +239,63 @@ async function runTests() {
   }
 
   // ----------------------------------------------------
-  // TEST 6: Native toolbar injection failure does not prevent the badge
+  // TEST 6: No toolbar = no badge (prevents layout disruption)
   // ----------------------------------------------------
   {
     const doc = setupDOM(`
-      <div class="msg" data-message-id="msg-fail">
+      <div class="msg" data-message-id="msg-no-toolbar">
         <div class="message-header">AI</div>
+        <div class="content">No toolbar here.</div>
       </div>
     `);
 
     const state = makeState({
-      chatAssistantMessages: [{ id: 'msg-fail', role: 'assistant', index: 0 }],
+      chatAssistantMessages: [{ id: 'msg-no-toolbar', role: 'assistant', index: 0 }],
     });
 
-    // Native scanner fails to find toolbars
-    mountMessageTrackerActions({}, state);
-    const nativeBtn = doc.querySelector('.sotl-message-paw-btn');
-    assert.ok(!nativeBtn, 'No native toolbar buttons mounted');
-
-    // Badges still mount!
     mountMessageHistoryBadges({}, state);
+
     const badge = doc.querySelector('.sotl-message-history-badge');
-    assert.ok(badge, 'Badge mounts despite native toolbar injection failure');
-    console.log('  ✓ TEST 6 passed: Fallback badge mounts perfectly when native toolbars are absent');
+    assert.ok(!badge, 'No badge should mount when toolbar is absent (prevents layout issues)');
+    
+    // Host should NOT have position: relative set
+    const host = doc.querySelector('.msg');
+    assert.notEqual(host.style.position, 'relative', 'Host position should not be modified');
+    console.log('  ✓ TEST 6 passed: No badge injected when no toolbar visible (zero layout impact)');
   }
 
   // ----------------------------------------------------
-  // TEST 7: Portal/global toolbar injection fails safely while badge still works
+  // TEST 7: Badge appears when toolbar becomes visible
   // ----------------------------------------------------
   {
     const doc = setupDOM(`
-      <div class="msg" data-message-id="msg-portal-fail">
+      <div class="msg" data-message-id="msg-appear">
         <div class="message-header">AI</div>
+        <div class="content">Message text.</div>
       </div>
-      <div class="portal-toolbar" style="display: none;"></div>
     `);
 
     const state = makeState({
-      chatAssistantMessages: [{ id: 'msg-portal-fail', role: 'assistant', index: 0 }],
+      chatAssistantMessages: [{ id: 'msg-appear', role: 'assistant', index: 0 }],
     });
 
-    mountMessageTrackerActions({}, state);
+    // First mount — no toolbar, no badge
     mountMessageHistoryBadges({}, state);
+    assert.ok(!doc.querySelector('.sotl-message-history-badge'), 'No badge without toolbar');
 
+    // Simulate toolbar appearing (user taps message)
+    const host = doc.querySelector('.msg');
+    const toolbar = doc.createElement('div');
+    toolbar.className = 'message-actions';
+    toolbar.innerHTML = '<button aria-label="Copy">Copy</button><button aria-label="Edit">Edit</button>';
+    host.appendChild(toolbar);
+
+    // Second mount — toolbar visible, badge should appear
+    mountMessageHistoryBadges({}, state);
     const badge = doc.querySelector('.sotl-message-history-badge');
-    assert.ok(badge, 'History badge mounts correctly');
-    console.log('  ✓ TEST 7 passed: Fallback badge mounts safely when portal toolbar queries fail');
+    assert.ok(badge, 'Badge appears when toolbar becomes visible');
+    assert.ok(toolbar.contains(badge), 'Badge is inside the toolbar');
+    console.log('  ✓ TEST 7 passed: Badge appears dynamically when toolbar becomes visible');
   }
 
   // ----------------------------------------------------
@@ -276,7 +304,9 @@ async function runTests() {
   {
     const doc = setupDOM(`
       <div class="msg" data-message-id="msg-dup">
-        <div class="message-header">AI</div>
+        <div class="message-actions">
+          <button aria-label="Copy">Copy</button>
+        </div>
       </div>
     `);
 
@@ -299,7 +329,9 @@ async function runTests() {
   {
     const doc = setupDOM(`
       <div class="msg" data-message-id="msg-scroll">
-        <div class="message-header">AI</div>
+        <div class="message-actions">
+          <button aria-label="Copy">Copy</button>
+        </div>
       </div>
     `);
 
@@ -323,7 +355,9 @@ async function runTests() {
   {
     const doc = setupDOM(`
       <div class="msg" data-message-id="msg-distinct">
-        <div class="message-header">AI</div>
+        <div class="message-actions">
+          <button aria-label="Copy">Copy</button>
+        </div>
       </div>
       <div class="sotl-chat-pill">L</div>
     `);
@@ -349,7 +383,9 @@ async function runTests() {
   {
     const doc = setupDOM(`
       <div class="msg" data-message-id="msg-global-launcher">
-        <div class="message-header">AI</div>
+        <div class="message-actions">
+          <button aria-label="Copy">Copy</button>
+        </div>
       </div>
       <div class="sotl-chat-pill">L</div>
     `);
@@ -367,28 +403,27 @@ async function runTests() {
   }
 
   // ----------------------------------------------------
-  // TEST 12: Upper-right floating placement when header is not detected
+  // TEST 12: Badge does not disrupt layout when no toolbar exists
   // ----------------------------------------------------
   {
     const doc = setupDOM(`
-      <div class="msg" data-message-id="msg-float">
-        <div class="content">No header here.</div>
+      <div class="msg" data-message-id="msg-layout">
+        <div class="content">No header, no toolbar — layout must not change.</div>
       </div>
     `);
 
     const state = makeState({
-      chatAssistantMessages: [{ id: 'msg-float', role: 'assistant', index: 0 }],
+      chatAssistantMessages: [{ id: 'msg-layout', role: 'assistant', index: 0 }],
     });
 
     mountMessageHistoryBadges({}, state);
 
     const badge = doc.querySelector('.sotl-message-history-badge');
-    assert.ok(badge, 'Badge still mounts');
-    assert.ok(badge.classList.contains('sotl-message-history-badge--floating'), 'Should float in upper right corner');
+    assert.ok(!badge, 'No visible badge when toolbar is absent');
     
     const host = doc.querySelector('.msg');
-    assert.equal(host.style.position, 'relative', 'Host must have relative layout for absolute floating positioning');
-    console.log('  ✓ TEST 12 passed: Floating upper-right layout applied correctly when header is missing');
+    assert.notEqual(host.style.position, 'relative', 'Host position must NOT be modified (zero layout impact)');
+    console.log('  ✓ TEST 12 passed: No layout disruption when toolbar is absent');
   }
 
   // ----------------------------------------------------
@@ -397,7 +432,9 @@ async function runTests() {
   {
     const doc = setupDOM(`
       <div class="msg" data-message-id="msg-swipe-test">
-        <div class="message-header">AI</div>
+        <div class="message-actions">
+          <button aria-label="Copy">Copy</button>
+        </div>
       </div>
     `);
 
@@ -417,12 +454,14 @@ async function runTests() {
   }
 
   // ----------------------------------------------------
-  // TEST 14: Source-code assertions for fallback badge queries
+  // TEST 14: Source-code assertions for badge queries
   // ----------------------------------------------------
   {
     const source = readFileSync('src/frontend/messageCards.ts', 'utf-8');
     assert.match(source, /mountMessageHistoryBadges/, 'Source must declare mountMessageHistoryBadges');
     assert.match(source, /sotl-message-history-badge/, 'Source must reference history badge class');
+    assert.match(source, /sotl-message-history-badge--toolbar/, 'Source must reference toolbar variant class');
+    assert.match(source, /findMessageToolbar/, 'Source must use findMessageToolbar for badge placement');
     console.log('  ✓ TEST 14 passed: Structural source assertions passed\n');
   }
 

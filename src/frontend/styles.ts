@@ -1284,7 +1284,7 @@ export const loomStyles = `
   padding: 0;
   opacity: 0.65;
   color: inherit;
-  margin-left: 6px;
+  margin: 0;
   flex-shrink: 0;
   
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1297,6 +1297,25 @@ export const loomStyles = `
   display: block;
   color: var(--lv-text-muted, #8f9baa);
   transition: transform 0.2s ease, color 0.2s ease;
+}
+
+/* Toolbar variant: syncs with native toolbar button sizing */
+.sotl-message-history-badge--toolbar {
+  width: var(--sotl-native-width, var(--sotl-native-size, 28px));
+  height: var(--sotl-native-height, var(--sotl-native-size, 28px));
+  border-radius: var(--sotl-native-radius, 6px);
+  background: var(--sotl-native-bg, transparent);
+  border: var(--sotl-native-border, none);
+  padding: var(--sotl-native-padding, 0);
+  opacity: var(--sotl-native-opacity, 0.75);
+  box-shadow: var(--sotl-native-shadow, none);
+  color: var(--sotl-native-color, inherit);
+}
+
+.sotl-message-history-badge--toolbar .sotl-message-paw-svg {
+  width: var(--sotl-native-glyph-size, 16px);
+  height: var(--sotl-native-glyph-size, 16px);
+  color: var(--lv-accent, #3864d9);
 }
 
 /* Hover effects */
@@ -1322,24 +1341,6 @@ export const loomStyles = `
 /* Missing tracker class */
 .sotl-message-history-badge--missing-tracker {
   opacity: 0.5;
-}
-
-/* Floating variant when header row is not detected */
-.sotl-message-history-badge--floating {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(12, 16, 24, 0.65) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  border-radius: 6px;
-  width: 26px;
-  height: 26px;
-  margin-left: 0;
-  z-index: 10;
-}
-.sotl-message-history-badge--floating:hover {
-  background: rgba(21, 27, 38, 0.85) !important;
-  border-color: var(--lv-accent, #3864d9) !important;
 }
 
 /* Generating / weaving state styling */

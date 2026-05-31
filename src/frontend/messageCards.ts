@@ -1016,30 +1016,6 @@ function findMessageToolbar(host: HTMLElement): HTMLElement | null {
   return null;
 }
 
-function findHeaderRow(host: HTMLElement): HTMLElement | null {
-  const headerSelectors = [
-    '.message-header',
-    '.message-title',
-    '.message-author',
-    '.message-metadata',
-    '.message-info',
-    '.avatar-row',
-    '.char-name',
-    '.user-name',
-    '.message-head',
-    '.message-header-row',
-    'header',
-    '.header',
-    '.metadata',
-    '.info'
-  ];
-  for (const selector of headerSelectors) {
-    const el = host.querySelector<HTMLElement>(selector);
-    if (el && isVisibleElement(el)) return el;
-  }
-  return null;
-}
-
 export function mountMessageHistoryBadges(ctx: FrontendContext, state: LoomFrontendState | null): MessageCardMountStatus {
   void ctx;
   const doc = documentRef();
@@ -1072,19 +1048,51 @@ export function mountMessageHistoryBadges(ctx: FrontendContext, state: LoomFront
       const key = `${messageId}::swipe:${typeof activeSwipe === 'number' ? activeSwipe : 'main'}`;
       activeKeys.add(key);
 
+      // Check if badge already exists anywhere in the host
       let badge = host.querySelector<HTMLButtonElement>('.sotl-message-history-badge');
+      // Also check in the native toolbar (portal or in-host) for this message
+      const toolbar = findMessageToolbar(host);
+
+      if (badge) {
+        // Badge already exists — check if it needs to be relocated
+        // If toolbar appeared and badge is NOT in the toolbar, move it there
+        if (toolbar && !toolbar.contains(badge)) {
+          badge.remove();
+          badge = null; // Force re-creation in the toolbar
+        }
+        // If toolbar disappeared and badge WAS in a toolbar, it may be disconnected
+        if (badge && !badge.isConnected) {
+          badge = null; // Force re-creation
+        }
+      }
+
       if (!badge) {
         badge = doc.createElement('button');
         badge.type = 'button';
         badge.className = 'sotl-message-history-badge';
 
-        const header = findHeaderRow(host);
-        if (header) {
-          header.appendChild(badge);
+        if (toolbar) {
+          // ---- PRIMARY: inject into native toolbar before Copy icon ----
+          badge.classList.add('sotl-message-history-badge--toolbar');
+          const copyBtn = Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action]'))
+            .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-history-badge') && !btn.classList.contains('sotl-message-paw-btn') && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || ''));
+          const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))
+            .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-history-badge') && !btn.classList.contains('sotl-message-paw-btn'));
+          if (referenceBtn) {
+            // Sync size/style with native sibling button
+            syncNativeLikeButtonVariables(badge, referenceBtn);
+            toolbar.insertBefore(badge, referenceBtn);
+          } else {
+            toolbar.insertBefore(badge, toolbar.firstChild);
+          }
         } else {
-          host.style.position = 'relative';
-          badge.classList.add('sotl-message-history-badge--floating');
-          host.prepend(badge);
+          // ---- FALLBACK: no toolbar visible, skip badge entirely ----
+          // Don't inject floating badges that disrupt layout.
+          // The toolbar badge will appear when user taps/selects the message.
+          // Just track this message as needing a badge when toolbar appears.
+          injectedHistoryBadges.set(key, null as unknown as HTMLButtonElement); // Placeholder
+          badgesMounted++; // Count as "tracked" even if not visually mounted
+          return; // Skip to next host
         }
       }
 
@@ -1108,7 +1116,10 @@ export function mountMessageHistoryBadges(ctx: FrontendContext, state: LoomFront
       badge.classList.toggle('sotl-message-history-badge--missing-tracker', !hasTracker);
       badge.classList.toggle('sotl-message-history-badge--generating', state.generation.running);
 
-      badge.innerHTML = bearPawSvg('sotl-message-paw-svg');
+      // Only set innerHTML if badge doesn't already have SVG content (prevents layout thrash)
+      if (!badge.querySelector('.sotl-message-paw-svg')) {
+        badge.innerHTML = bearPawSvg('sotl-message-paw-svg');
+      }
 
       injectedHistoryBadges.set(key, badge);
       badgesMounted++;
@@ -1118,9 +1129,9 @@ export function mountMessageHistoryBadges(ctx: FrontendContext, state: LoomFront
   });
 
   for (const [key, badge] of injectedHistoryBadges.entries()) {
-    if (!badge.isConnected || !activeKeys.has(key)) {
+    if (!badge || !badge.isConnected || !activeKeys.has(key)) {
       try {
-        badge.remove();
+        if (badge) badge.remove();
       } catch {
         // ignore
       }

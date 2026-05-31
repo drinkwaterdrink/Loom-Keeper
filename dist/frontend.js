@@ -4631,29 +4631,6 @@ function findMessageToolbar(host) {
   }
   return null;
 }
-function findHeaderRow(host) {
-  const headerSelectors = [
-    ".message-header",
-    ".message-title",
-    ".message-author",
-    ".message-metadata",
-    ".message-info",
-    ".avatar-row",
-    ".char-name",
-    ".user-name",
-    ".message-head",
-    ".message-header-row",
-    "header",
-    ".header",
-    ".metadata",
-    ".info"
-  ];
-  for (const selector of headerSelectors) {
-    const el = host.querySelector(selector);
-    if (el && isVisibleElement(el)) return el;
-  }
-  return null;
-}
 function mountMessageHistoryBadges(ctx, state2) {
   void ctx;
   const doc = documentRef2();
@@ -4681,17 +4658,34 @@ function mountMessageHistoryBadges(ctx, state2) {
       const key = `${messageId}::swipe:${typeof activeSwipe === "number" ? activeSwipe : "main"}`;
       activeKeys.add(key);
       let badge2 = host.querySelector(".sotl-message-history-badge");
+      const toolbar = findMessageToolbar(host);
+      if (badge2) {
+        if (toolbar && !toolbar.contains(badge2)) {
+          badge2.remove();
+          badge2 = null;
+        }
+        if (badge2 && !badge2.isConnected) {
+          badge2 = null;
+        }
+      }
       if (!badge2) {
         badge2 = doc.createElement("button");
         badge2.type = "button";
         badge2.className = "sotl-message-history-badge";
-        const header = findHeaderRow(host);
-        if (header) {
-          header.appendChild(badge2);
+        if (toolbar) {
+          badge2.classList.add("sotl-message-history-badge--toolbar");
+          const copyBtn = Array.from(toolbar.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-history-badge") && !btn.classList.contains("sotl-message-paw-btn") && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || ""));
+          const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll('button, [role="button"], a')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-history-badge") && !btn.classList.contains("sotl-message-paw-btn"));
+          if (referenceBtn) {
+            syncNativeLikeButtonVariables(badge2, referenceBtn);
+            toolbar.insertBefore(badge2, referenceBtn);
+          } else {
+            toolbar.insertBefore(badge2, toolbar.firstChild);
+          }
         } else {
-          host.style.position = "relative";
-          badge2.classList.add("sotl-message-history-badge--floating");
-          host.prepend(badge2);
+          injectedHistoryBadges.set(key, null);
+          badgesMounted++;
+          return;
         }
       }
       badge2.dataset.sotlAction = "message-paw";
@@ -4710,7 +4704,9 @@ function mountMessageHistoryBadges(ctx, state2) {
       badge2.classList.toggle("sotl-message-history-badge--has-tracker", hasTracker);
       badge2.classList.toggle("sotl-message-history-badge--missing-tracker", !hasTracker);
       badge2.classList.toggle("sotl-message-history-badge--generating", state2.generation.running);
-      badge2.innerHTML = bearPawSvg("sotl-message-paw-svg");
+      if (!badge2.querySelector(".sotl-message-paw-svg")) {
+        badge2.innerHTML = bearPawSvg("sotl-message-paw-svg");
+      }
       injectedHistoryBadges.set(key, badge2);
       badgesMounted++;
     } catch (err) {
@@ -4718,9 +4714,9 @@ function mountMessageHistoryBadges(ctx, state2) {
     }
   });
   for (const [key, badge2] of injectedHistoryBadges.entries()) {
-    if (!badge2.isConnected || !activeKeys.has(key)) {
+    if (!badge2 || !badge2.isConnected || !activeKeys.has(key)) {
       try {
-        badge2.remove();
+        if (badge2) badge2.remove();
       } catch {
       }
       injectedHistoryBadges.delete(key);
@@ -6386,7 +6382,7 @@ var loomStyles = `
   padding: 0;
   opacity: 0.65;
   color: inherit;
-  margin-left: 6px;
+  margin: 0;
   flex-shrink: 0;
   
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -6399,6 +6395,25 @@ var loomStyles = `
   display: block;
   color: var(--lv-text-muted, #8f9baa);
   transition: transform 0.2s ease, color 0.2s ease;
+}
+
+/* Toolbar variant: syncs with native toolbar button sizing */
+.sotl-message-history-badge--toolbar {
+  width: var(--sotl-native-width, var(--sotl-native-size, 28px));
+  height: var(--sotl-native-height, var(--sotl-native-size, 28px));
+  border-radius: var(--sotl-native-radius, 6px);
+  background: var(--sotl-native-bg, transparent);
+  border: var(--sotl-native-border, none);
+  padding: var(--sotl-native-padding, 0);
+  opacity: var(--sotl-native-opacity, 0.75);
+  box-shadow: var(--sotl-native-shadow, none);
+  color: var(--sotl-native-color, inherit);
+}
+
+.sotl-message-history-badge--toolbar .sotl-message-paw-svg {
+  width: var(--sotl-native-glyph-size, 16px);
+  height: var(--sotl-native-glyph-size, 16px);
+  color: var(--lv-accent, #3864d9);
 }
 
 /* Hover effects */
@@ -6424,24 +6439,6 @@ var loomStyles = `
 /* Missing tracker class */
 .sotl-message-history-badge--missing-tracker {
   opacity: 0.5;
-}
-
-/* Floating variant when header row is not detected */
-.sotl-message-history-badge--floating {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(12, 16, 24, 0.65) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  border-radius: 6px;
-  width: 26px;
-  height: 26px;
-  margin-left: 0;
-  z-index: 10;
-}
-.sotl-message-history-badge--floating:hover {
-  background: rgba(21, 27, 38, 0.85) !important;
-  border-color: var(--lv-accent, #3864d9) !important;
 }
 
 /* Generating / weaving state styling */
