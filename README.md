@@ -1,8 +1,8 @@
-# Loom Keeper (v1.0.21)
+# Loom Keeper (v1.0.22)
 
-Loom Keeper is a Lumiverse-native Loom Keeper continuity tracker for roleplay state continuity tracking. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
+Loom Keeper is a Lumiverse-native roleplay state continuity tracker. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.20 tightens the native mobile tracker access layer: the global paw is hidden outside the real chat screen, the glyph is now a bear-paw-style icon, duplicate fixed side paws are disabled, per-message paws open a mobile-safe in-chat tracker viewer, swipe changes refresh automatically, and tracker retention/context/generation-history settings are labeled as separate controls. Version 1.0.19 polished native toolbar detection, long-press menu fallback, active-swipe refresh bursts, and direct Message Tracker List opening.
+Version 1.0.22 implements a sleek, 100% maskless, stroke-based diagonal needle and thread icon design (`loomNeedleSvg`) for absolute visibility on WebKit mobile containers, native message toolbar buttons positioned next to the native Copy action, robust `state.activeSwipeByMessageId` guards, try/catch shields around UI mount blocks, core-only render key cache caching to eliminate mobile scroll rubberbanding, and a right-margin vertical gutter fallback for the global launcher.
 
 Release notes are tracked in [CHANGELOG.md](./CHANGELOG.md).
 
@@ -10,7 +10,7 @@ Release notes are tracked in [CHANGELOG.md](./CHANGELOG.md).
 
 ## Key Features
 
-1. **Native-Style Paw Launcher**: A right-side paw button that first tries Lumiverse-style side-rail placement, then falls back to a flush-right compatibility overlay. During active tracker generation, the paw pads animate subtly and respect reduced-motion settings.
+1. **Native-Style Needle & Thread Launcher**: A right-side button featuring a diagonal needle and weaving thread. It first tries Lumiverse-style side-rail placement, then falls back to a clean right-margin vertical gutter floating layout. During active tracker generation, it shows a subtle stitching animation and respects reduced-motion settings.
 2. **Floating HUD Panel**: An overlay panel showing the current chat's continuity status.
    - **View Toggle**: Switch between **Compact Summary** (generic custom-schema summary) and **Full Tracker** (HTML rendering based on the tracker preset) directly in the HUD header. Changes save immediately without a full page refresh.
 3. **Custom Template Editor**: An interactive dashboard in the viewport drawer under **Custom Template Editor**:

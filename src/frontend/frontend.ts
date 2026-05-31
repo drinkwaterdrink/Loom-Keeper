@@ -344,16 +344,44 @@ function renderTrackerPreviewOverlay(): void {
 
   const resolved = resolveTrackerForMessageSwipe(state, trackerPreviewRef.messageId, trackerPreviewRef.swipeId);
   const isGenerating = Boolean(state?.generation.running);
-  const stateMsg = state?.generation.message || '';
   const trackerKey = resolved.tracker ? `${resolved.tracker.generatedAt}::${resolved.tracker.validation.ok}` : 'missing';
 
-  const renderKey = `${trackerPreviewRef.messageId}::${resolved.swipeId}::${isGenerating}::${stateMsg}::${trackerKey}`;
-  if (renderKey === lastPreviewRenderKey && overlay && overlay.isConnected) {
+  const coreRenderKey = `${trackerPreviewRef.messageId}::${resolved.swipeId}::${trackerKey}`;
+  const tracker = resolved.tracker;
+  const current = isCurrentTracker(tracker, state);
+  const status = tracker ? (current ? 'current' : 'previous retained') : 'missing';
+
+  if (coreRenderKey === lastPreviewRenderKey && overlay && overlay.isConnected) {
+    // Dynamic updates for badge, buttons, and progress message without destroying the body DOM
+    const badge = overlay.querySelector('.sotl-tracker-preview__badge');
+    if (badge) {
+      badge.textContent = status;
+      badge.setAttribute('data-status', status);
+    }
+
+    let progressBanner = overlay.querySelector('.sotl-tracker-preview__progress-banner');
+    if (isGenerating) {
+      if (!progressBanner) {
+        progressBanner = doc.createElement('p');
+        progressBanner.className = 'sotl-note sotl-tracker-preview__progress-banner';
+        progressBanner.setAttribute('style', 'font-size: 11px; margin: 0 0 2px;');
+        const head = overlay.querySelector('.sotl-card-details') || overlay.querySelector('.sotl-tracker-preview__head');
+        head?.insertAdjacentElement('afterend', progressBanner);
+      }
+      progressBanner.textContent = `${state?.generation.message || 'Generating tracker...'} Existing content remains until replacement is saved.`;
+    } else if (progressBanner) {
+      progressBanner.remove();
+    }
+
+    const buttons = overlay.querySelectorAll<HTMLButtonElement>('[data-sotl-action="preview-regenerate"]');
+    buttons.forEach((btn) => {
+      btn.textContent = isGenerating ? 'Stop Generation' : (tracker ? 'Regenerate' : 'Generate Tracker');
+    });
+
     return;
   }
-  lastPreviewRenderKey = renderKey;
+  lastPreviewRenderKey = coreRenderKey;
 
-  const tracker = resolved.tracker;
   if (!overlay) overlay = doc.createElement('div');
   overlay.className = 'sotl-tracker-preview-overlay';
   overlay.dataset.sotlTrackerPreview = 'true';
@@ -361,8 +389,6 @@ function renderTrackerPreviewOverlay(): void {
   const preset = tracker && state
     ? state.presets.find((candidate) => candidate.id === tracker.presetId)
     : undefined;
-  const current = isCurrentTracker(tracker, state);
-  const status = tracker ? (current ? 'current' : 'previous retained') : 'missing';
   const jsonButton = tracker ? '<button class="sotl-button" type="button" data-sotl-action="preview-copy-json">Copy JSON</button>' : '';
   
   const regenerateButton = tracker

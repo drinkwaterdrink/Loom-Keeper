@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.22 - Loom Keeper Icon, Toolbar, and Scroll Optimization
+
+- Replaced the bear paw icon concept with a sleek, 100% maskless, stroke-based diagonal needle and thread SVG design to ensure perfect rendering in WebKit-based mobile containers.
+- Embedded the tracker history button natively inside the selected message toolbar, positioned precisely to the left of the native Copy button.
+- Safeguarded `state.activeSwipeByMessageId` access across all state resolvers, syncers, drawer renderers, and message cards to prevent null-pointer runtime errors.
+- Introduced robust try/catch shielding around individual component mounts inside `updateMessageCardStatus` and message card toolbar iteration loops.
+- Resolved mobile scroll rubberbanding by introducing a core-only `lastPreviewRenderKey` cache, bypassing full `innerHTML` updates and performing direct DOM patches for generation updates.
+- Added a vertical right-margin floating gutter fallback for the global HUD launcher to guarantee accessibility without overlapping composer or settings surfaces.
+
 ## v1.0.21 - Mobile UI Stabilization
 
 - Removed State of the Loom input-bar action registrations and constrained message paw insertion to the selected message's visible native action toolbar only.

@@ -155,14 +155,13 @@ function isLargeBlockingSurface(element: Element): boolean {
   return rect.width >= 160 && rect.height >= 140;
 }
 
-function hasVisibleBlockingSurface(doc: Document): boolean {
+function findFirstVisibleBlockingSurface(doc: Document): HTMLElement | null {
   const selectors = [
     '.lumiverse-drawer',
     '.drawer',
     '[data-drawer]',
     '#drawer',
     '.sotl-drawer',
-    '.sotl-root',
     '.lumiverse-settings',
     '.settings-modal',
     '[data-settings]',
@@ -180,14 +179,15 @@ function hasVisibleBlockingSurface(doc: Document): boolean {
     '[data-sotl-tracker-preview="true"]',
     '[data-route*="branch" i]',
     '[data-screen*="branch" i]',
-    '[class*="branch" i]',
     '[data-route*="settings" i]',
     '[data-screen*="settings" i]',
   ].join(',');
-  return Array.from(doc.querySelectorAll(selectors)).some((candidate) => {
-    if (candidate.closest('.sotl-chat-panel-container')) return false;
-    return isLargeBlockingSurface(candidate);
-  });
+  const candidates = Array.from(doc.querySelectorAll<HTMLElement>(selectors));
+  for (const candidate of candidates) {
+    if (candidate.closest('.sotl-chat-panel-container')) continue;
+    if (isLargeBlockingSurface(candidate)) return candidate;
+  }
+  return null;
 }
 
 function isInExtensionOrMenu(element: HTMLElement): boolean {
@@ -232,13 +232,46 @@ function hasVisibleChatContent(doc: Document): boolean {
   });
 }
 
+let lastGlobalPawHideReason = '';
+
+export function getGlobalPawHideReason(): string {
+  return lastGlobalPawHideReason;
+}
+
 export function shouldShowGlobalPaw(doc: Document, state: LoomFrontendState | null): boolean {
-  if (!state?.settings.showChatHudLauncher) return false;
-  if (isDrawerOpen || isSettingsOpen) return false;
-  if (isChatLoomPanelExpanded) return true;
-  if (hasVisibleBlockingSurface(doc)) return false;
-  if (!hasVisibleComposer(doc)) return false;
-  if (!hasVisibleChatContent(doc) && !state.activeChat.id) return false;
+  if (!state) {
+    lastGlobalPawHideReason = 'state-unavailable';
+    return false;
+  }
+  if (!state.settings.showChatHudLauncher) {
+    lastGlobalPawHideReason = 'disabled-in-settings';
+    return false;
+  }
+  if (isDrawerOpen || isSettingsOpen) {
+    lastGlobalPawHideReason = 'drawer-or-settings-open';
+    return false;
+  }
+  if (isChatLoomPanelExpanded) {
+    lastGlobalPawHideReason = '';
+    return true;
+  }
+  
+  const blockingEl = findFirstVisibleBlockingSurface(doc);
+  if (blockingEl) {
+    lastGlobalPawHideReason = `blocking-surface-active:${blockingEl.className || blockingEl.tagName}`;
+    return false;
+  }
+  
+  if (!hasVisibleComposer(doc)) {
+    lastGlobalPawHideReason = 'no-visible-composer';
+    return false;
+  }
+  if (!hasVisibleChatContent(doc) && !state.activeChat.id) {
+    lastGlobalPawHideReason = 'no-chat-content';
+    return false;
+  }
+  
+  lastGlobalPawHideReason = '';
   return true;
 }
 
@@ -392,30 +425,47 @@ function findStockSideIcon(doc: Document): HTMLElement | null {
 function syncFixedLauncherToStockIcon(doc: Document, container: HTMLElement): void {
   const reference = findStockSideIcon(doc);
   const pill = container.querySelector<HTMLElement>('.sotl-chat-pill');
-  if (!reference || !pill) return;
-  syncNativeLikeButtonVariables(pill, reference);
-  const rect = reference.getBoundingClientRect();
-  const gap = Math.max(6, Math.min(10, rect.height * 0.22));
+  if (!pill) return;
+  
+  if (reference) {
+    syncNativeLikeButtonVariables(pill, reference);
+    const rect = reference.getBoundingClientRect();
+    const gap = Math.max(6, Math.min(10, rect.height * 0.22));
 
-  const nextLeft = Math.round(rect.left);
-  const nextTop = Math.round(rect.bottom + gap);
-  const nextWidth = Math.round(rect.width);
+    const nextLeft = Math.round(rect.left);
+    const nextTop = Math.round(rect.bottom + gap);
+    const nextWidth = Math.round(rect.width);
 
-  const curLeft = parseInt(container.style.left || '0', 10);
-  const curTop = parseInt(container.style.top || '0', 10);
-  const curWidth = parseInt(container.style.width || '0', 10);
+    const curLeft = parseInt(container.style.left || '0', 10);
+    const curTop = parseInt(container.style.top || '0', 10);
+    const curWidth = parseInt(container.style.width || '0', 10);
 
-  if (
-    Math.abs(nextLeft - curLeft) > 1 ||
-    Math.abs(nextTop - curTop) > 1 ||
-    Math.abs(nextWidth - curWidth) > 1 ||
-    container.style.position !== 'fixed'
-  ) {
+    if (
+      Math.abs(nextLeft - curLeft) > 1 ||
+      Math.abs(nextTop - curTop) > 1 ||
+      Math.abs(nextWidth - curWidth) > 1 ||
+      container.style.position !== 'fixed'
+    ) {
+      container.style.position = 'fixed';
+      container.style.left = `${nextLeft}px`;
+      container.style.right = 'auto';
+      container.style.top = `${nextTop}px`;
+      container.style.width = `${nextWidth}px`;
+    }
+  } else {
+    // Robust fixed-position right-margin gutter fallback (no bottom-bar)
+    // Sits floating on the right side aligned vertically near the rail area
     container.style.position = 'fixed';
-    container.style.left = `${nextLeft}px`;
-    container.style.right = 'auto';
-    container.style.top = `${nextTop}px`;
-    container.style.width = `${nextWidth}px`;
+    container.style.right = '12px';
+    container.style.left = 'auto';
+    container.style.top = '180px';
+    container.style.bottom = 'auto';
+    container.style.width = '36px';
+    container.style.height = '36px';
+    container.style.zIndex = '10002';
+    
+    pill.style.width = '100%';
+    pill.style.height = '100%';
   }
 }
 
@@ -907,7 +957,7 @@ export function ensureChatLoomPanel(ctx: FrontendContext, state: LoomFrontendSta
     isChatLoomPanelExpanded = false;
     container.hidden = true;
     container.setAttribute('aria-hidden', 'true');
-    container.dataset.sotlHiddenReason = !state ? 'state-unavailable' : 'not-normal-chat';
+    container.dataset.sotlHiddenReason = !state ? 'state-unavailable' : (lastGlobalPawHideReason || 'not-normal-chat');
     if (!container.isConnected) doc.body.append(container);
     return;
   }
