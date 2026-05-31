@@ -1,6 +1,6 @@
 import type { LoomPreset, LoomSettings } from './types.js';
 
-export const LOOM_VERSION = '1.0.31';
+export const LOOM_VERSION = '1.0.32';
 export const LOOM_SCHEMA_VERSION = '1';
 export const GRAND_CONTINUITY_ATLAS_PRESET_ID = 'grand_continuity_atlas';
 export const SLIM_SCENE_PRESET_ID = 'slim_scene_loom';

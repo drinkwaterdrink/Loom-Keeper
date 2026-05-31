@@ -1,8 +1,8 @@
-# Loom Keeper (v1.0.22)
+# Loom Keeper (v1.0.32)
 
 Loom Keeper is a Lumiverse-native roleplay state continuity tracker. It provides a visual Loom HUD, custom tracker template dashboards, and per-user settings persistence with robust storage recovery.
 
-Version 1.0.22 implements a sleek, 100% maskless, stroke-based diagonal needle and thread icon design (`loomNeedleSvg`) for absolute visibility on WebKit mobile containers, native message toolbar buttons positioned next to the native Copy action, robust `state.activeSwipeByMessageId` guards, try/catch shields around UI mount blocks, core-only render key cache caching to eliminate mobile scroll rubberbanding, and a right-margin vertical gutter fallback for the global launcher.
+Latest (v1.0.32): Per-message tracker access now uses a clean blue "Tracker" pill badge injected below each assistant message. No more emoji/SVG rendering issues.
 
 Release notes are tracked in [CHANGELOG.md](./CHANGELOG.md).
 

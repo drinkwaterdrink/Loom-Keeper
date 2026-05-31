@@ -279,7 +279,7 @@ function getEntityCaptureMilestoneStatus() {
 }
 
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.31";
+var LOOM_VERSION = "1.0.32";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";

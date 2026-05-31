@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.31";
+var LOOM_VERSION = "1.0.32";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -4768,6 +4768,91 @@ function mountMessageHistoryBadges(ctx, state2) {
   lastBadgesMounted = badgesMounted;
   return { status: `Mounted ${badgesMounted} history badges.` };
 }
+var injectedTrackerLinks = /* @__PURE__ */ new Map();
+function cleanupMessageTrackerLinks() {
+  for (const el of injectedTrackerLinks.values()) {
+    try {
+      el.remove();
+    } catch {
+    }
+  }
+  injectedTrackerLinks.clear();
+}
+function injectMessageTrackerLinks(ctx, state2) {
+  const doc = documentRef2();
+  if (!doc) return;
+  if (!state2) {
+    cleanupMessageTrackerLinks();
+    return;
+  }
+  const domApi = ctx.dom && typeof ctx.dom === "object" ? ctx.dom : null;
+  const inject = domApi && typeof domApi.inject === "function" ? domApi.inject : null;
+  const messages = state2.chatAssistantMessages ?? [];
+  const allHosts = Array.from(doc.querySelectorAll("[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid]"));
+  const hostById = /* @__PURE__ */ new Map();
+  for (const host of allHosts) {
+    const id = messageIdFromElement(host);
+    if (id) hostById.set(id, host);
+  }
+  const assistantIds = /* @__PURE__ */ new Set();
+  for (const m of messages) {
+    if (m.id) assistantIds.add(m.id);
+  }
+  const assistantHosts = [];
+  for (const [id, el] of hostById) {
+    if (assistantIds.has(id)) assistantHosts.push({ id, el });
+  }
+  const activeKeys = /* @__PURE__ */ new Set();
+  let mountedCount = 0;
+  for (const msg of messages) {
+    const messageId = msg.id;
+    if (!messageId) continue;
+    activeKeys.add(messageId);
+    const existing = injectedTrackerLinks.get(messageId);
+    if (existing && existing.isConnected) continue;
+    let msgEl = hostById.get(messageId) ?? null;
+    if (!msgEl) {
+      const idx = messages.indexOf(msg);
+      if (idx >= 0 && idx < assistantHosts.length) {
+        msgEl = assistantHosts[idx].el;
+      }
+    }
+    if (!msgEl) continue;
+    const btnHtml = `<div style="display:flex;justify-content:flex-end;padding:2px 4px;margin:0;"><span style="display:inline-block;padding:2px 8px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;color:#fff;background:var(--lv-accent,#3864d9);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.15);letter-spacing:0.3px;">Tracker</span></div>`;
+    try {
+      let injected = null;
+      if (inject) {
+        injected = inject(msgEl, btnHtml, "afterend");
+      } else {
+        const temp = doc.createElement("div");
+        temp.innerHTML = btnHtml;
+        const child = temp.firstElementChild;
+        if (child instanceof HTMLElement) {
+          msgEl.insertAdjacentElement("afterend", child);
+          injected = child;
+        }
+      }
+      if (injected) {
+        injected.dataset.sotlAction = "context-tracker-history";
+        injected.dataset.sotlMessageId = messageId;
+        injected.tabIndex = 0;
+        injected.setAttribute("role", "button");
+        injectedTrackerLinks.set(messageId, injected);
+        mountedCount++;
+      }
+    } catch {
+    }
+  }
+  for (const [id, el] of injectedTrackerLinks.entries()) {
+    if (!el.isConnected || !activeKeys.has(id)) {
+      try {
+        el.remove();
+      } catch {
+      }
+      injectedTrackerLinks.delete(id);
+    }
+  }
+}
 function mountMessageTrackerActions(ctx, state2) {
   void ctx;
   const doc = documentRef2();
@@ -7240,6 +7325,11 @@ function updateMessageCardStatus() {
       console.warn("Loom Keeper: mountMessageHistoryBadges failed", err);
       badgeStatus = "Badges failed to mount";
     }
+    try {
+      injectMessageTrackerLinks(contextRef, state);
+    } catch (err) {
+      console.warn("Loom Keeper: injectMessageTrackerLinks failed", err);
+    }
     lastRenderStatus = [cardStatus, pawStatus, badgeStatus].filter(Boolean).join(" ");
     try {
       const diag = getMessageActionDiagnostics();
@@ -8070,6 +8160,7 @@ function setup(ctx) {
     documentRef3()?.querySelector(".sotl-chat-panel-container")?.remove();
     closeTrackerPreview();
     cleanupMessageTrackerActions();
+    cleanupMessageTrackerLinks();
     documentRef3()?.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
     if (swipeStateRefreshTimer !== void 0 && typeof globalThis.clearTimeout === "function") globalThis.clearTimeout(swipeStateRefreshTimer);
     rootListenerCleanups.clear();

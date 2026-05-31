@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.32 - Blue Tracker Pill Badge
+- Replaced emoji/SVG per-message tracker icon with a clean **blue pill badge** ("Tracker" text on accent-color background).
+- Uses `ctx.dom.inject()` with `afterend` position — right-aligned badge below each assistant message.
+- Removed all emoji (`\u{1FA99}`) and SVG icon code from tracker injection — no more device-dependent rendering.
+- Version bumped 1.0.31 → 1.0.32.
+
 ## v1.0.23 - Per-Message Tracker History Architectural Fix
 
 - Added `chatAssistantMessages` to the frontend state so the UI can identify all assistant messages, not just those with existing trackers.

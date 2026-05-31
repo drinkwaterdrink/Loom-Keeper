@@ -1225,6 +1225,82 @@ export function mountMessageHistoryBadges(ctx: FrontendContext, state: LoomFront
   return { status: `Mounted ${badgesMounted} history badges.` };
 }
 
+const injectedTrackerLinks = new Map<string, HTMLElement>();
+
+export function cleanupMessageTrackerLinks(): void {
+  for (const el of injectedTrackerLinks.values()) {
+    try { el.remove(); } catch { /* ignore */ }
+  }
+  injectedTrackerLinks.clear();
+}
+
+export function injectMessageTrackerLinks(ctx: FrontendContext, state: LoomFrontendState | null): void {
+  const doc = documentRef();
+  if (!doc) return;
+  if (!state) { cleanupMessageTrackerLinks(); return; }
+  const domApi = ctx.dom && typeof ctx.dom === 'object' ? ctx.dom as Record<string, unknown> : null;
+  const inject = domApi && typeof domApi.inject === 'function' ? domApi.inject as (target: HTMLElement, html: string, pos?: string) => HTMLElement : null;
+  const messages = state.chatAssistantMessages ?? [];
+  const allHosts = Array.from(doc.querySelectorAll<HTMLElement>('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid]'));
+  const hostById = new Map<string, HTMLElement>();
+  for (const host of allHosts) {
+    const id = messageIdFromElement(host);
+    if (id) hostById.set(id, host);
+  }
+  const assistantIds = new Set<string>();
+  for (const m of messages) { if (m.id) assistantIds.add(m.id); }
+  const assistantHosts: Array<{ id: string; el: HTMLElement }> = [];
+  for (const [id, el] of hostById) {
+    if (assistantIds.has(id)) assistantHosts.push({ id, el });
+  }
+  const activeKeys = new Set<string>();
+  let mountedCount = 0;
+  for (const msg of messages) {
+    const messageId = msg.id;
+    if (!messageId) continue;
+    activeKeys.add(messageId);
+    const existing = injectedTrackerLinks.get(messageId);
+    if (existing && existing.isConnected) continue;
+    let msgEl = hostById.get(messageId) ?? null;
+    if (!msgEl) {
+      const idx = messages.indexOf(msg);
+      if (idx >= 0 && idx < assistantHosts.length) {
+        msgEl = assistantHosts[idx].el;
+      }
+    }
+    if (!msgEl) continue;
+    const btnHtml = `<div style="display:flex;justify-content:flex-end;padding:2px 4px;margin:0;"><span style="display:inline-block;padding:2px 8px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;color:#fff;background:var(--lv-accent,#3864d9);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.15);letter-spacing:0.3px;">Tracker</span></div>`;
+    try {
+      let injected: HTMLElement | null = null;
+      if (inject) {
+        injected = inject(msgEl, btnHtml, 'afterend');
+      } else {
+        const temp = doc.createElement('div');
+        temp.innerHTML = btnHtml;
+        const child = temp.firstElementChild;
+        if (child instanceof HTMLElement) {
+          msgEl.insertAdjacentElement('afterend', child);
+          injected = child;
+        }
+      }
+      if (injected) {
+        injected.dataset.sotlAction = 'context-tracker-history';
+        injected.dataset.sotlMessageId = messageId;
+        injected.tabIndex = 0;
+        injected.setAttribute('role', 'button');
+        injectedTrackerLinks.set(messageId, injected);
+        mountedCount++;
+      }
+    } catch { /* injection failed */ }
+  }
+  for (const [id, el] of injectedTrackerLinks.entries()) {
+    if (!el.isConnected || !activeKeys.has(id)) {
+      try { el.remove(); } catch { /* ignore */ }
+      injectedTrackerLinks.delete(id);
+    }
+  }
+}
+
 export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFrontendState | null): MessageCardMountStatus {
   void ctx;
   const doc = documentRef();

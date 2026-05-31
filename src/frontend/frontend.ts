@@ -1,6 +1,6 @@
 import type { LoomBackendMessage, LoomFrontendMessage, LoomFrontendState, LoomSettings, LoomTrackerState } from '../shared/types.js';
 import { renderDrawer } from './drawer.js';
-import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, mountMessageTrackerActions, mountMessageHistoryBadges, cleanupMessageTrackerActions, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback, rememberMessageActionTarget, getMessageActionDiagnostics } from './messageCards.js';
+import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, mountMessageTrackerActions, mountMessageHistoryBadges, injectMessageTrackerLinks, cleanupMessageTrackerActions, cleanupMessageTrackerLinks, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback, rememberMessageActionTarget, getMessageActionDiagnostics } from './messageCards.js';
 import { bearPawSvg } from './icons.js';
 import { renderTrackerForState, resolveActiveTrackerForState } from './rendering.js';
 import { renderSettingsPanel } from './settingsPanel.js';
@@ -641,6 +641,12 @@ function updateMessageCardStatus(): void {
     } catch (err) {
       console.warn('Loom Keeper: mountMessageHistoryBadges failed', err);
       badgeStatus = 'Badges failed to mount';
+    }
+
+    try {
+      injectMessageTrackerLinks(contextRef, state);
+    } catch (err) {
+      console.warn('Loom Keeper: injectMessageTrackerLinks failed', err);
     }
 
     lastRenderStatus = [cardStatus, pawStatus, badgeStatus].filter(Boolean).join(' ');
@@ -1519,6 +1525,7 @@ export function setup(ctx: FrontendContext): () => void {
     documentRef()?.querySelector('.sotl-chat-panel-container')?.remove();
     closeTrackerPreview();
     cleanupMessageTrackerActions();
+    cleanupMessageTrackerLinks();
     documentRef()?.querySelectorAll('[data-sotl-mounted="true"]').forEach((node) => node.remove());
     if (swipeStateRefreshTimer !== undefined && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(swipeStateRefreshTimer);
     rootListenerCleanups.clear();
