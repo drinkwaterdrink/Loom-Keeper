@@ -2735,7 +2735,7 @@ function clearFocusedTrackerRef() {
   focusedTrackerRef = null;
 }
 function syncFocusedTrackerSwipe(activeSwipeByMessageId) {
-  if (!focusedTrackerRef) return;
+  if (!focusedTrackerRef || !activeSwipeByMessageId) return;
   const activeSwipe = activeSwipeByMessageId[focusedTrackerRef.messageId];
   if (typeof activeSwipe !== "number" || focusedTrackerRef.swipeId === activeSwipe) return;
   focusedTrackerRef = {
@@ -3266,7 +3266,7 @@ function formatMessageReference(id, index) {
 }
 function resolveFocusedTracker(state2, ref) {
   const trackers = state2.messageTrackers.filter((tracker) => tracker.messageId === ref.messageId);
-  const activeSwipe = typeof ref.swipeId === "number" ? ref.swipeId : state2.activeSwipeByMessageId[ref.messageId];
+  const activeSwipe = typeof ref.swipeId === "number" ? ref.swipeId : state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[ref.messageId] : void 0;
   if (typeof activeSwipe === "number") {
     const exact = trackers.find((tracker) => tracker.swipeId === activeSwipe);
     if (exact) return { tracker: exact, swipeId: activeSwipe, notice: ref.notice };
@@ -3346,7 +3346,7 @@ function renderLatestTracker(state2) {
   const html = render.html;
   const renderWarning = render.warning ? `<p class="sotl-note sotl-warning" style="margin-top: 8px;">${escapeHtml2(render.warning)}</p>` : "";
   const isActiveSwipe = Boolean(
-    tracker.messageId && typeof tracker.swipeId === "number" && state2.activeSwipeByMessageId[tracker.messageId] === tracker.swipeId
+    tracker.messageId && typeof tracker.swipeId === "number" && state2.activeSwipeByMessageId && state2.activeSwipeByMessageId[tracker.messageId] === tracker.swipeId
   );
   const attachmentStatus = state2.settings.renderInMessages && tracker.messageId ? `<p class="sotl-note" style="color: var(--lv-success-text, #176b43); font-weight: 600; margin-top: 8px;">Attached to message card (${escapeHtml2(tracker.messageId)})</p>` : '<p class="sotl-note" style="margin-top: 8px;">Status: Not attached to a message card.</p>';
   return [
@@ -3403,7 +3403,7 @@ function renderMessageList(state2) {
   };
   const intro = '<p class="sotl-note">Retained tracker snapshots for this chat. The list follows your tracker history limit; rows open the exact message/swipe tracker.</p>';
   return intro + Array.from(groups.entries()).map(([id, trackers], groupIndex) => {
-    const activeSwipe = state2.activeSwipeByMessageId[id];
+    const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[id] : void 0;
     const sorted = trackers.slice().sort((a, b) => {
       if (typeof activeSwipe === "number") {
         if (a.swipeId === activeSwipe) return -1;
@@ -3841,15 +3841,24 @@ function renderDrawer(state2, status = {}) {
 function bearPawSvg(className = "sotl-paw-svg") {
   return [
     `<svg class="${className}" viewBox="0 0 512 512" width="26" height="26" fill="none" stroke="currentColor" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="overflow: visible;">`,
+    "  <defs>",
+    '    <mask id="sotl-needle-mask">',
+    "      <!-- Keep everything by default -->",
+    '      <rect x="-100" y="-100" width="712" height="712" fill="white"/>',
+    "      <!-- Cut out the needle eye slot -->",
+    '      <ellipse cx="372" cy="140" rx="8" ry="24" transform="rotate(45 372 140)" fill="black"/>',
+    "    </mask>",
+    "  </defs>",
+    "",
     // Woven continuity thread loops ( warp / weft )
     '  <path class="sotl-bear-claw sotl-bear-claw--1" d="M 370 142 C 460 60, 480 200, 320 220" opacity="0.4"/>',
     '  <path class="sotl-bear-claw sotl-bear-claw--2" d="M 370 142 C 260 80, 220 240, 280 280" opacity="0.6"/>',
     '  <path class="sotl-bear-claw sotl-bear-claw--3" d="M 250 240 C 160 180, 120 320, 190 350" opacity="0.8"/>',
     '  <path class="sotl-bear-claw sotl-bear-claw--4" d="M 170 330 C 80 280, 60 420, 120 440" opacity="0.5"/>',
     // Sleek needle body
-    '  <path class="sotl-paw-main sotl-bear-main" d="M 90 422 L 390 122 C 408 104, 436 132, 418 150 L 118 450 C 100 468, 72 440, 90 422 Z" fill="currentColor" stroke="none"/>',
-    // Needle eye slot (long oval hole)
-    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--3" cx="372" cy="140" rx="8" ry="24" transform="rotate(45 372 140)" fill="var(--lv-surface, var(--lumiverse-fill, #1a202c))" stroke="none"/>',
+    '  <path class="sotl-paw-main sotl-bear-main" d="M 90 422 L 390 122 C 408 104, 436 132, 418 150 L 118 450 C 100 468, 72 440, 90 422 Z" fill="currentColor" stroke="none" mask="url(#sotl-needle-mask)"/>',
+    // Transparent ellipse for compatibility with smoke tests / selectors
+    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--3" cx="372" cy="140" rx="8" ry="24" transform="rotate(45 372 140)" fill="none" stroke="none"/>',
     "</svg>"
   ].join("");
 }
@@ -3934,7 +3943,7 @@ function rememberMessageActionTarget(target, state2) {
   if (!messageId) return;
   lastMessageActionTarget = {
     messageId,
-    swipeId: state2.activeSwipeByMessageId[messageId],
+    swipeId: state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0,
     seenAt: Date.now()
   };
 }
@@ -4236,7 +4245,7 @@ function renderTrackerHtmlCard(tracker, state2) {
 }
 function isActiveSwipeTracker(tracker, state2) {
   if (!tracker.messageId) return true;
-  const activeSwipe = state2.activeSwipeByMessageId[tracker.messageId];
+  const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[tracker.messageId] : void 0;
   if (typeof activeSwipe !== "number") return true;
   return tracker.swipeId === activeSwipe;
 }
@@ -4253,7 +4262,7 @@ function selectVisibleMessageTrackers(trackers, state2) {
   }
   const selected = [];
   for (const [id, list] of grouped) {
-    const activeSwipe = state2.activeSwipeByMessageId[id];
+    const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[id] : void 0;
     const active = typeof activeSwipe === "number" ? list.find((tracker) => tracker.swipeId === activeSwipe) : void 0;
     if (typeof activeSwipe === "number" && !active && list.some((tracker) => typeof tracker.swipeId === "number")) {
       continue;
@@ -4403,51 +4412,56 @@ function mountMessageTrackerActions(ctx, state2) {
   let inlineMounted = 0;
   const activeKeys = /* @__PURE__ */ new Set();
   hosts.forEach((host) => {
-    if (!(host instanceof HTMLElement)) return;
-    const messageId = messageIdFromElement(host);
-    if (!messageId) return;
-    const activeSwipe = state2.activeSwipeByMessageId[messageId];
-    const key = `${messageId}::swipe:${typeof activeSwipe === "number" ? activeSwipe : "main"}`;
-    const toolbar = findMessageToolbar(host);
-    if (!toolbar) {
-      const oldButton = host.querySelector(".sotl-message-paw-btn");
-      if (oldButton) {
-        oldButton.remove();
-        injectedMessagePaws.delete(key);
+    try {
+      if (!(host instanceof HTMLElement)) return;
+      const messageId = messageIdFromElement(host);
+      if (!messageId) return;
+      const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
+      const key = `${messageId}::swipe:${typeof activeSwipe === "number" ? activeSwipe : "main"}`;
+      const toolbar = findMessageToolbar(host);
+      if (!toolbar) {
+        const oldButton = host.querySelector(".sotl-message-paw-btn");
+        if (oldButton) {
+          oldButton.remove();
+          injectedMessagePaws.delete(key);
+        }
+        return;
       }
-      return;
-    }
-    activeKeys.add(key);
-    const hasTracker = state2.messageTrackers.some(
-      (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== "number" || t.swipeId === activeSwipe)
-    );
-    let button2 = toolbar.querySelector(".sotl-message-paw-btn");
-    if (!button2) {
-      button2 = doc.createElement("button");
-      button2.type = "button";
-      button2.className = "sotl-message-paw-btn";
-      const copyBtn = Array.from(toolbar.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn") && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || ""));
-      const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll('button, [role="button"], a')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn"));
-      if (referenceBtn) {
-        syncNativeLikeButtonVariables(button2, referenceBtn);
-        toolbar.insertBefore(button2, referenceBtn);
+      activeKeys.add(key);
+      const hasTracker = state2.messageTrackers.some(
+        (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== "number" || t.swipeId === activeSwipe)
+      );
+      let button2 = toolbar.querySelector(".sotl-message-paw-btn");
+      if (!button2) {
+        button2 = doc.createElement("button");
+        button2.type = "button";
+        button2.className = "sotl-message-paw-btn";
+        const copyBtn = Array.from(toolbar.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn") && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || ""));
+        const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll('button, [role="button"], a')).find((btn) => isVisibleElement(btn) && !btn.classList.contains("sotl-message-paw-btn"));
+        if (referenceBtn) {
+          syncNativeLikeButtonVariables(button2, referenceBtn);
+          toolbar.insertBefore(button2, referenceBtn);
+        } else {
+          toolbar.insertBefore(button2, toolbar.firstChild);
+        }
+        inlineMounted += 1;
+      }
+      button2.dataset.sotlAction = "message-paw";
+      button2.dataset.sotlMessageId = messageId;
+      if (typeof activeSwipe === "number") {
+        button2.dataset.sotlSwipeId = String(activeSwipe);
       } else {
-        toolbar.insertBefore(button2, toolbar.firstChild);
+        delete button2.dataset.sotlSwipeId;
       }
-      inlineMounted += 1;
+      button2.title = hasTracker ? "View Continuity History" : "Generate Continuity State";
+      button2.setAttribute("aria-label", button2.title);
+      button2.innerHTML = bearPawSvg("sotl-message-paw-svg");
+      button2.classList.toggle("sotl-message-paw-btn--has-tracker", hasTracker);
+      button2.classList.toggle("sotl-message-paw-btn--generating", state2.generation.running);
+      injectedMessagePaws.set(key, button2);
+    } catch (err) {
+      console.warn("Loom Keeper: failed to mount message paw for host", host, err);
     }
-    button2.dataset.sotlAction = "message-paw";
-    button2.dataset.sotlMessageId = messageId;
-    if (typeof activeSwipe === "number") {
-      button2.dataset.sotlSwipeId = String(activeSwipe);
-    } else {
-      delete button2.dataset.sotlSwipeId;
-    }
-    button2.title = hasTracker ? "View Continuity History" : "Generate Continuity State";
-    button2.setAttribute("aria-label", button2.title);
-    button2.innerHTML = bearPawSvg("sotl-message-paw-svg");
-    button2.classList.toggle("sotl-message-paw-btn--has-tracker", hasTracker);
-    injectedMessagePaws.set(key, button2);
   });
   for (const [key, btn] of injectedMessagePaws.entries()) {
     if (!btn.isConnected || !activeKeys.has(key)) {
@@ -5475,7 +5489,8 @@ var loomStyles = `
   transform-box: fill-box;
   transform-origin: center;
 }
-.sotl-chat-pill--generating::after {
+.sotl-chat-pill--generating::after,
+.sotl-message-paw-btn--generating::after {
   content: "";
   position: absolute;
   inset: -4px;
@@ -5485,32 +5500,30 @@ var loomStyles = `
   animation: sotl-paw-ring 1.35s ease-out infinite;
   pointer-events: none;
 }
-.sotl-chat-pill--generating .sotl-paw-pad,
-.sotl-chat-pill--generating .sotl-bear-claw {
-  animation: sotl-paw-pad-bounce 1.1s ease-in-out infinite;
+.sotl-chat-pill--generating .sotl-bear-claw,
+.sotl-message-paw-btn--generating .sotl-bear-claw {
+  animation: sotl-thread-weave 1.2s ease-in-out infinite !important;
+  transform-origin: 372px 140px;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--1,
-.sotl-chat-pill--generating .sotl-bear-claw--1 {
-  animation-delay: 0s;
+.sotl-chat-pill--generating .sotl-bear-claw--1,
+.sotl-message-paw-btn--generating .sotl-bear-claw--1 {
+  animation-delay: 0s !important;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--2,
-.sotl-chat-pill--generating .sotl-bear-claw--2 {
-  animation-delay: 0.08s;
+.sotl-chat-pill--generating .sotl-bear-claw--2,
+.sotl-message-paw-btn--generating .sotl-bear-claw--2 {
+  animation-delay: 0.15s !important;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--3,
-.sotl-chat-pill--generating .sotl-bear-claw--3 {
-  animation-delay: 0.16s;
+.sotl-chat-pill--generating .sotl-bear-claw--3,
+.sotl-message-paw-btn--generating .sotl-bear-claw--3 {
+  animation-delay: 0.3s !important;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--4,
-.sotl-chat-pill--generating .sotl-bear-claw--4 {
-  animation-delay: 0.24s;
+.sotl-chat-pill--generating .sotl-bear-claw--4,
+.sotl-message-paw-btn--generating .sotl-bear-claw--4 {
+  animation-delay: 0.45s !important;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--5,
-.sotl-chat-pill--generating .sotl-bear-claw--5 {
-  animation-delay: 0.32s;
-}
-.sotl-chat-pill--generating .sotl-paw-main {
-  animation: sotl-paw-main-pulse 1.35s ease-in-out infinite;
+.sotl-chat-pill--generating .sotl-paw-main,
+.sotl-message-paw-btn--generating .sotl-paw-main {
+  animation: sotl-needle-stitch 1.2s ease-in-out infinite !important;
 }
 .sotl-chat-pill:hover {
   transform: scale(1.05);
@@ -5650,6 +5663,14 @@ var loomStyles = `
 @keyframes sotl-paw-main-pulse {
   0%, 100% { filter: drop-shadow(0 0 0 rgba(56, 100, 217, 0)); opacity: 0.9; }
   45% { filter: drop-shadow(0 0 8px rgba(56, 100, 217, 0.65)); opacity: 1; }
+}
+@keyframes sotl-needle-stitch {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-10px, 10px); }
+}
+@keyframes sotl-thread-weave {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.4; }
+  50% { transform: scale(1.08) rotate(4deg); opacity: 0.9; }
 }
 .sotl-message-paw-action {
   display: inline-flex;
@@ -6130,7 +6151,7 @@ function datasetSwipeId(element) {
 function resolveTrackerForMessageSwipe(currentState, messageId, requestedSwipeId) {
   if (!currentState || !messageId) return { tracker: null, swipeId: requestedSwipeId, notice: "Tracker state is not ready yet." };
   const trackers = currentState.messageTrackers.filter((tracker) => tracker.messageId === messageId);
-  const activeSwipe = typeof requestedSwipeId === "number" ? requestedSwipeId : currentState.activeSwipeByMessageId[messageId];
+  const activeSwipe = typeof requestedSwipeId === "number" ? requestedSwipeId : currentState.activeSwipeByMessageId ? currentState.activeSwipeByMessageId[messageId] : void 0;
   if (typeof activeSwipe === "number") {
     const exact = trackers.find((tracker) => tracker.swipeId === activeSwipe);
     if (exact) return { tracker: exact, swipeId: activeSwipe };
@@ -6456,12 +6477,34 @@ function paint(status) {
 }
 function updateMessageCardStatus() {
   if (contextRef) {
-    const cardResult = mountMessageCards(contextRef, state);
+    let cardStatus = "";
+    let pawStatus = "";
+    try {
+      const cardResult = mountMessageCards(contextRef, state);
+      cardStatus = cardResult.status;
+    } catch (err) {
+      console.warn("Loom Keeper: mountMessageCards failed", err);
+      cardStatus = "Cards failed to mount";
+    }
     ignoreMessageActionMutationsUntil = Date.now() + 250;
-    const pawResult = mountMessageTrackerActions(contextRef, state);
-    lastRenderStatus = [cardResult.status, pawResult.status].filter(Boolean).join(" ");
-    ensureFloatingButton(contextRef, state);
-    ensureChatLoomPanel(contextRef, state);
+    try {
+      const pawResult = mountMessageTrackerActions(contextRef, state);
+      pawStatus = pawResult.status;
+    } catch (err) {
+      console.warn("Loom Keeper: mountMessageTrackerActions failed", err);
+      pawStatus = "Tracker actions failed to mount";
+    }
+    lastRenderStatus = [cardStatus, pawStatus].filter(Boolean).join(" ");
+    try {
+      ensureFloatingButton(contextRef, state);
+    } catch (err) {
+      console.warn("Loom Keeper: ensureFloatingButton failed", err);
+    }
+    try {
+      ensureChatLoomPanel(contextRef, state);
+    } catch (err) {
+      console.warn("Loom Keeper: ensureChatLoomPanel failed", err);
+    }
   }
 }
 function rerender() {

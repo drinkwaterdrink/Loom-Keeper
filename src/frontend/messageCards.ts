@@ -128,7 +128,7 @@ export function rememberMessageActionTarget(target: HTMLElement | null, state: L
   if (!messageId) return;
   lastMessageActionTarget = {
     messageId,
-    swipeId: state.activeSwipeByMessageId[messageId],
+    swipeId: state.activeSwipeByMessageId ? state.activeSwipeByMessageId[messageId] : undefined,
     seenAt: Date.now(),
   };
 }
@@ -490,7 +490,7 @@ function renderTrackerHtmlCard(tracker: LoomTrackerState, state: LoomFrontendSta
 
 function isActiveSwipeTracker(tracker: LoomTrackerState, state: LoomFrontendState): boolean {
   if (!tracker.messageId) return true;
-  const activeSwipe = state.activeSwipeByMessageId[tracker.messageId];
+  const activeSwipe = state.activeSwipeByMessageId ? state.activeSwipeByMessageId[tracker.messageId] : undefined;
   if (typeof activeSwipe !== 'number') return true;
   return tracker.swipeId === activeSwipe;
 }
@@ -509,7 +509,7 @@ function selectVisibleMessageTrackers(trackers: LoomTrackerState[], state: LoomF
   }
   const selected: LoomTrackerState[] = [];
   for (const [id, list] of grouped) {
-    const activeSwipe = state.activeSwipeByMessageId[id];
+    const activeSwipe = state.activeSwipeByMessageId ? state.activeSwipeByMessageId[id] : undefined;
     const active = typeof activeSwipe === 'number'
       ? list.find((tracker) => tracker.swipeId === activeSwipe)
       : undefined;
@@ -689,70 +689,75 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
   const activeKeys = new Set<string>();
 
   hosts.forEach((host) => {
-    if (!(host instanceof HTMLElement)) return;
-    const messageId = messageIdFromElement(host);
-    if (!messageId) return;
+    try {
+      if (!(host instanceof HTMLElement)) return;
+      const messageId = messageIdFromElement(host);
+      if (!messageId) return;
 
-    const activeSwipe = state.activeSwipeByMessageId[messageId];
-    const key = `${messageId}::swipe:${typeof activeSwipe === 'number' ? activeSwipe : 'main'}`;
+      const activeSwipe = state.activeSwipeByMessageId ? state.activeSwipeByMessageId[messageId] : undefined;
+      const key = `${messageId}::swipe:${typeof activeSwipe === 'number' ? activeSwipe : 'main'}`;
 
-    const toolbar = findMessageToolbar(host);
-    if (!toolbar) {
-      // Toolbar not visible (message is not selected/hovered) — remove the button
-      const oldButton = host.querySelector('.sotl-message-paw-btn');
-      if (oldButton) {
-        oldButton.remove();
-        injectedMessagePaws.delete(key);
+      const toolbar = findMessageToolbar(host);
+      if (!toolbar) {
+        // Toolbar not visible (message is not selected/hovered) — remove the button
+        const oldButton = host.querySelector('.sotl-message-paw-btn');
+        if (oldButton) {
+          oldButton.remove();
+          injectedMessagePaws.delete(key);
+        }
+        return;
       }
-      return;
-    }
 
-    activeKeys.add(key);
+      activeKeys.add(key);
 
-    const hasTracker = state.messageTrackers.some(
-      (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== 'number' || t.swipeId === activeSwipe)
-    );
+      const hasTracker = state.messageTrackers.some(
+        (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== 'number' || t.swipeId === activeSwipe)
+      );
 
-    let button = toolbar.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
-    if (!button) {
-      button = doc.createElement('button');
-      button.type = 'button';
-      button.className = 'sotl-message-paw-btn';
-      
-      // Inject just to the left of the Copy button inside the toolbar
-      const copyBtn = Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action]'))
-        .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn') && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || ''));
-      
-      const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))
-        .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn'));
+      let button = toolbar.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
+      if (!button) {
+        button = doc.createElement('button');
+        button.type = 'button';
+        button.className = 'sotl-message-paw-btn';
+        
+        // Inject just to the left of the Copy button inside the toolbar
+        const copyBtn = Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action]'))
+          .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn') && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || ''));
+        
+        const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))
+          .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn'));
 
-      if (referenceBtn) {
-        syncNativeLikeButtonVariables(button, referenceBtn);
-        toolbar.insertBefore(button, referenceBtn);
+        if (referenceBtn) {
+          syncNativeLikeButtonVariables(button, referenceBtn);
+          toolbar.insertBefore(button, referenceBtn);
+        } else {
+          toolbar.insertBefore(button, toolbar.firstChild);
+        }
+        inlineMounted += 1;
+      }
+
+      button.dataset.sotlAction = 'message-paw';
+      button.dataset.sotlMessageId = messageId;
+      if (typeof activeSwipe === 'number') {
+        button.dataset.sotlSwipeId = String(activeSwipe);
       } else {
-        toolbar.insertBefore(button, toolbar.firstChild);
+        delete button.dataset.sotlSwipeId;
       }
-      inlineMounted += 1;
+
+      button.title = hasTracker ? 'View Continuity History' : 'Generate Continuity State';
+      button.setAttribute('aria-label', button.title);
+      
+      // Inject the Needle & Thread SVG
+      button.innerHTML = bearPawSvg('sotl-message-paw-svg');
+
+      // Toggle styling classes
+      button.classList.toggle('sotl-message-paw-btn--has-tracker', hasTracker);
+      button.classList.toggle('sotl-message-paw-btn--generating', state.generation.running);
+
+      injectedMessagePaws.set(key, button);
+    } catch (err) {
+      console.warn('Loom Keeper: failed to mount message paw for host', host, err);
     }
-
-    button.dataset.sotlAction = 'message-paw';
-    button.dataset.sotlMessageId = messageId;
-    if (typeof activeSwipe === 'number') {
-      button.dataset.sotlSwipeId = String(activeSwipe);
-    } else {
-      delete button.dataset.sotlSwipeId;
-    }
-
-    button.title = hasTracker ? 'View Continuity History' : 'Generate Continuity State';
-    button.setAttribute('aria-label', button.title);
-    
-    // Inject the Needle & Thread SVG
-    button.innerHTML = bearPawSvg('sotl-message-paw-svg');
-
-    // Toggle styling class
-    button.classList.toggle('sotl-message-paw-btn--has-tracker', hasTracker);
-
-    injectedMessagePaws.set(key, button);
   });
 
   // Cleanup old buttons that are no longer in the DOM or whose swipe keys are stale

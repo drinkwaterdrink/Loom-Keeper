@@ -88,8 +88,8 @@ export function clearFocusedTrackerRef(): void {
   focusedTrackerRef = null;
 }
 
-export function syncFocusedTrackerSwipe(activeSwipeByMessageId: Record<string, number>): void {
-  if (!focusedTrackerRef) return;
+export function syncFocusedTrackerSwipe(activeSwipeByMessageId: Record<string, number> | undefined): void {
+  if (!focusedTrackerRef || !activeSwipeByMessageId) return;
   const activeSwipe = activeSwipeByMessageId[focusedTrackerRef.messageId];
   if (typeof activeSwipe !== 'number' || focusedTrackerRef.swipeId === activeSwipe) return;
   focusedTrackerRef = {

@@ -768,7 +768,8 @@ export const loomStyles = `
   transform-box: fill-box;
   transform-origin: center;
 }
-.sotl-chat-pill--generating::after {
+.sotl-chat-pill--generating::after,
+.sotl-message-paw-btn--generating::after {
   content: "";
   position: absolute;
   inset: -4px;
@@ -778,32 +779,30 @@ export const loomStyles = `
   animation: sotl-paw-ring 1.35s ease-out infinite;
   pointer-events: none;
 }
-.sotl-chat-pill--generating .sotl-paw-pad,
-.sotl-chat-pill--generating .sotl-bear-claw {
-  animation: sotl-paw-pad-bounce 1.1s ease-in-out infinite;
+.sotl-chat-pill--generating .sotl-bear-claw,
+.sotl-message-paw-btn--generating .sotl-bear-claw {
+  animation: sotl-thread-weave 1.2s ease-in-out infinite !important;
+  transform-origin: 372px 140px;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--1,
-.sotl-chat-pill--generating .sotl-bear-claw--1 {
-  animation-delay: 0s;
+.sotl-chat-pill--generating .sotl-bear-claw--1,
+.sotl-message-paw-btn--generating .sotl-bear-claw--1 {
+  animation-delay: 0s !important;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--2,
-.sotl-chat-pill--generating .sotl-bear-claw--2 {
-  animation-delay: 0.08s;
+.sotl-chat-pill--generating .sotl-bear-claw--2,
+.sotl-message-paw-btn--generating .sotl-bear-claw--2 {
+  animation-delay: 0.15s !important;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--3,
-.sotl-chat-pill--generating .sotl-bear-claw--3 {
-  animation-delay: 0.16s;
+.sotl-chat-pill--generating .sotl-bear-claw--3,
+.sotl-message-paw-btn--generating .sotl-bear-claw--3 {
+  animation-delay: 0.3s !important;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--4,
-.sotl-chat-pill--generating .sotl-bear-claw--4 {
-  animation-delay: 0.24s;
+.sotl-chat-pill--generating .sotl-bear-claw--4,
+.sotl-message-paw-btn--generating .sotl-bear-claw--4 {
+  animation-delay: 0.45s !important;
 }
-.sotl-chat-pill--generating .sotl-bear-toe--5,
-.sotl-chat-pill--generating .sotl-bear-claw--5 {
-  animation-delay: 0.32s;
-}
-.sotl-chat-pill--generating .sotl-paw-main {
-  animation: sotl-paw-main-pulse 1.35s ease-in-out infinite;
+.sotl-chat-pill--generating .sotl-paw-main,
+.sotl-message-paw-btn--generating .sotl-paw-main {
+  animation: sotl-needle-stitch 1.2s ease-in-out infinite !important;
 }
 .sotl-chat-pill:hover {
   transform: scale(1.05);
@@ -943,6 +942,14 @@ export const loomStyles = `
 @keyframes sotl-paw-main-pulse {
   0%, 100% { filter: drop-shadow(0 0 0 rgba(56, 100, 217, 0)); opacity: 0.9; }
   45% { filter: drop-shadow(0 0 8px rgba(56, 100, 217, 0.65)); opacity: 1; }
+}
+@keyframes sotl-needle-stitch {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-10px, 10px); }
+}
+@keyframes sotl-thread-weave {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.4; }
+  50% { transform: scale(1.08) rotate(4deg); opacity: 0.9; }
 }
 .sotl-message-paw-action {
   display: inline-flex;

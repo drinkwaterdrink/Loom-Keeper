@@ -153,7 +153,7 @@ function formatMessageReference(id: string, index: number): string {
 
 function resolveFocusedTracker(state: LoomFrontendState, ref: FocusedTrackerRef): { tracker?: LoomTrackerState | undefined; swipeId?: number | undefined; notice?: string | undefined } {
   const trackers = state.messageTrackers.filter((tracker) => tracker.messageId === ref.messageId);
-  const activeSwipe = typeof ref.swipeId === 'number' ? ref.swipeId : state.activeSwipeByMessageId[ref.messageId];
+  const activeSwipe = typeof ref.swipeId === 'number' ? ref.swipeId : (state.activeSwipeByMessageId ? state.activeSwipeByMessageId[ref.messageId] : undefined);
   if (typeof activeSwipe === 'number') {
     const exact = trackers.find((tracker) => tracker.swipeId === activeSwipe);
     if (exact) return { tracker: exact, swipeId: activeSwipe, notice: ref.notice };
@@ -243,6 +243,7 @@ function renderLatestTracker(state: LoomFrontendState): string {
   const isActiveSwipe = Boolean(
     tracker.messageId
     && typeof tracker.swipeId === 'number'
+    && state.activeSwipeByMessageId
     && state.activeSwipeByMessageId[tracker.messageId] === tracker.swipeId,
   );
   const attachmentStatus = state.settings.renderInMessages && tracker.messageId
@@ -306,7 +307,7 @@ function renderMessageList(state: LoomFrontendState): string {
 
   const intro = '<p class="sotl-note">Retained tracker snapshots for this chat. The list follows your tracker history limit; rows open the exact message/swipe tracker.</p>';
   return intro + Array.from(groups.entries()).map(([id, trackers], groupIndex) => {
-    const activeSwipe = state.activeSwipeByMessageId[id];
+    const activeSwipe = state.activeSwipeByMessageId ? state.activeSwipeByMessageId[id] : undefined;
     const sorted = trackers
       .slice()
       .sort((a, b) => {

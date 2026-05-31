@@ -215,7 +215,7 @@ function resolveTrackerForMessageSwipe(
   const trackers = currentState.messageTrackers.filter((tracker) => tracker.messageId === messageId);
   const activeSwipe = typeof requestedSwipeId === 'number'
     ? requestedSwipeId
-    : currentState.activeSwipeByMessageId[messageId];
+    : (currentState.activeSwipeByMessageId ? currentState.activeSwipeByMessageId[messageId] : undefined);
   if (typeof activeSwipe === 'number') {
     const exact = trackers.find((tracker) => tracker.swipeId === activeSwipe);
     if (exact) return { tracker: exact, swipeId: activeSwipe };
@@ -587,12 +587,40 @@ function paint(status: LoomUiStatus): void {
 
 function updateMessageCardStatus(): void {
   if (contextRef) {
-    const cardResult = mountMessageCards(contextRef, state);
+    let cardStatus = '';
+    let pawStatus = '';
+
+    try {
+      const cardResult = mountMessageCards(contextRef, state);
+      cardStatus = cardResult.status;
+    } catch (err) {
+      console.warn('Loom Keeper: mountMessageCards failed', err);
+      cardStatus = 'Cards failed to mount';
+    }
+
     ignoreMessageActionMutationsUntil = Date.now() + 250;
-    const pawResult = mountMessageTrackerActions(contextRef, state);
-    lastRenderStatus = [cardResult.status, pawResult.status].filter(Boolean).join(' ');
-    ensureFloatingButton(contextRef, state);
-    ensureChatLoomPanel(contextRef, state);
+
+    try {
+      const pawResult = mountMessageTrackerActions(contextRef, state);
+      pawStatus = pawResult.status;
+    } catch (err) {
+      console.warn('Loom Keeper: mountMessageTrackerActions failed', err);
+      pawStatus = 'Tracker actions failed to mount';
+    }
+
+    lastRenderStatus = [cardStatus, pawStatus].filter(Boolean).join(' ');
+
+    try {
+      ensureFloatingButton(contextRef, state);
+    } catch (err) {
+      console.warn('Loom Keeper: ensureFloatingButton failed', err);
+    }
+
+    try {
+      ensureChatLoomPanel(contextRef, state);
+    } catch (err) {
+      console.warn('Loom Keeper: ensureChatLoomPanel failed', err);
+    }
   }
 }
 
