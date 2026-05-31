@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.25";
+var LOOM_VERSION = "1.0.26";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -7,7 +7,7 @@ var now = "2026-01-01T00:00:00.000Z";
 var grandContinuityAtlasPreset = {
   id: GRAND_CONTINUITY_ATLAS_PRESET_ID,
   name: "Grand Continuity Atlas",
-  version: "1.0.21",
+  version: "1.0.22",
   description: "A detailed, visually polished continuity atlas for rich roleplay scenes, character appearance, relationships, world state, and fragile details.",
   origin: "built-in",
   templateEngine: "handlebars_compat",
@@ -380,7 +380,7 @@ var grandContinuityAtlasPreset = {
 var microLoomPreset = {
   id: "micro_loom",
   name: "Micro Loom",
-  version: "1.0.0",
+  version: "1.0.1",
   description: "Smallest, fastest tracker. Best for low token usage and fast models.",
   mode: "hybrid",
   schemaJson: {
@@ -478,7 +478,7 @@ var slimSceneSampleData = {
 var slimScenePreset = {
   id: SLIM_SCENE_PRESET_ID,
   name: "Slim Scene Loom",
-  version: "1.0.0",
+  version: "1.0.1",
   description: "A low-token continuity tracker for location, cast, mood, inventory, deltas, and active story anchors.",
   mode: "hybrid",
   schemaJson: {
@@ -566,7 +566,7 @@ var slimScenePreset = {
 var balancedStoryPreset = {
   id: "balanced_story_loom",
   name: "Balanced Story Loom",
-  version: "1.0.0",
+  version: "1.0.1",
   description: "Medium-detail continuity tracker. Monitors environment, relationships, and cast pockets.",
   mode: "hybrid",
   schemaJson: {
@@ -718,7 +718,7 @@ var balancedStoryPreset = {
 var castContinuityPreset = {
   id: "cast_continuity_loom",
   name: "Cast Continuity Loom",
-  version: "1.0.0",
+  version: "1.0.1",
   description: "Focuses entirely on character consistency: posture, proximity, intent, and speech traits.",
   mode: "hybrid",
   schemaJson: {
@@ -833,7 +833,7 @@ var castContinuityPreset = {
 var fullContinuityLedgerPreset = {
   id: "full_continuity_ledger",
   name: "Full Continuity Ledger",
-  version: "1.0.0",
+  version: "1.0.1",
   description: "Largest preset tracking weather, lighting, secrets, relationships, meters, and anchors.",
   mode: "hybrid",
   schemaJson: {
@@ -1011,7 +1011,7 @@ var fullContinuityLedgerPreset = {
 var chronoscopeOccultLedgerPreset = {
   id: "chronoscope_occult_ledger",
   name: "Chronoscope Occult Ledger",
-  version: "1.0.21",
+  version: "1.0.22",
   description: "A premium, highly-styled Gothic/Occult ledger with custom CSS, visual progress bars, and flexible tables.",
   mode: "hybrid",
   schemaJson: {
@@ -3909,7 +3909,14 @@ function setSettingsOpenState(open) {
 }
 function findMessageHostById(doc, messageId) {
   const id = escapeSelector(messageId);
-  return doc.querySelector(`[data-message-id="${id}"]`) ?? doc.querySelector(`[data-lumiverse-message-id="${id}"]`) ?? doc.querySelector(`[data-lv-message-id="${id}"]`) ?? doc.querySelector(`[data-chat-message-id="${id}"]`) ?? doc.querySelector(`[data-message_id="${id}"]`) ?? doc.querySelector(`[data-messageid="${id}"]`) ?? doc.getElementById(`message-${messageId}`);
+  const direct = doc.querySelector(`[data-message-id="${id}"]`) ?? doc.querySelector(`[data-lumiverse-message-id="${id}"]`) ?? doc.querySelector(`[data-lv-message-id="${id}"]`) ?? doc.querySelector(`[data-chat-message-id="${id}"]`) ?? doc.querySelector(`[data-message_id="${id}"]`) ?? doc.querySelector(`[data-messageid="${id}"]`) ?? doc.getElementById(`message-${messageId}`);
+  if (direct) return direct;
+  if (/^\d+$/.test(messageId)) {
+    const idx = parseInt(messageId, 10);
+    const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
+    if (hosts[idx]) return hosts[idx];
+  }
+  return null;
 }
 function messageIdFromElement(element) {
   const host = element?.closest?.("[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid]");
@@ -4049,6 +4056,72 @@ function isToolbarLikeCluster(candidate) {
 function isInsideMessageHost(el) {
   return Boolean(el.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]'));
 }
+function hasAiToolbarSignals(host) {
+  const buttons = Array.from(host.querySelectorAll('button, [role="button"], a, svg, [data-action]'));
+  return buttons.some((btn) => {
+    const text = (btn.textContent || btn.getAttribute("aria-label") || btn.getAttribute("title") || btn.className || "").trim();
+    return /\b(Regenerate|swipe|variant|alternate|previous response|next response|prev response|fork)\b/i.test(text);
+  });
+}
+function domMessageRole(host) {
+  const attrs = ["data-role", "data-sender", "data-message-role", "data-author-role", "data-type", "data-message-type"];
+  for (const attr of attrs) {
+    const val = host.getAttribute(attr);
+    if (val) {
+      const r = val.toLowerCase();
+      if (r === "user" || r === "human" || r === "you") return "user";
+      if (r === "assistant" || r === "ai" || r === "bot" || r === "model" || r === "system") return "assistant";
+    }
+  }
+  for (const attr of attrs) {
+    const child = host.querySelector(`[${attr}]`);
+    if (child && host.contains(child)) {
+      const val = child.getAttribute(attr);
+      if (val) {
+        const r = val.toLowerCase();
+        if (r === "user" || r === "human" || r === "you") return "user";
+        if (r === "assistant" || r === "ai" || r === "bot" || r === "model" || r === "system") return "assistant";
+      }
+    }
+  }
+  const cls = host.className || "";
+  const userClassRe = /\b(user[-_]?message|human[-_]?message|you[-_]?message|user[-_]?turn|human[-_]?turn|user[-_]?bubble|sender[-_]?user|from[-_]?user|is[-_]?user|chat[-_]?user|msg[-_]?user|outgoing|self[-_]?message|message[-_]?right|my[-_]?message|align[-_]?right|right[-_]?align)\b/i;
+  const assistantClassRe = /\b(assistant[-_]?message|ai[-_]?message|bot[-_]?message|model[-_]?message|assistant[-_]?turn|ai[-_]?turn|bot[-_]?turn|chat[-_]?assistant|msg[-_]?assistant|incoming|from[-_]?ai|from[-_]?bot|response[-_]?message|message[-_]?left|align[-_]?left|left[-_]?align|char[-_]?message|character[-_]?message)\b/i;
+  if (userClassRe.test(cls)) return "user";
+  if (assistantClassRe.test(cls)) return "assistant";
+  const children = Array.from(host.children);
+  for (const child of children) {
+    if (child instanceof HTMLElement) {
+      const childCls = child.className || "";
+      if (userClassRe.test(childCls)) return "user";
+      if (assistantClassRe.test(childCls)) return "assistant";
+    }
+  }
+  const ariaLabel = (host.getAttribute("aria-label") || "").toLowerCase();
+  if (/\b(you|your|user|human)\b/.test(ariaLabel)) return "user";
+  if (/\b(assistant|ai|bot|model|response)\b/.test(ariaLabel)) return "assistant";
+  return null;
+}
+function isAssistantMessageHost(host, messageId, state2) {
+  if (hasAiToolbarSignals(host)) return true;
+  const domRole = domMessageRole(host);
+  if (domRole === "user") return false;
+  if (domRole === "assistant") return true;
+  if (state2.chatAssistantMessages && state2.chatAssistantMessages.length > 0) {
+    const hasDirectIdMatch = state2.chatAssistantMessages.some((m) => m.id === messageId);
+    if (hasDirectIdMatch) return true;
+    const hasStringIndices = state2.chatAssistantMessages.every((m) => /^\d+$/.test(m.id));
+    if (hasStringIndices) {
+      const doc = host.ownerDocument || document;
+      const hosts = Array.from(doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]'));
+      const index = hosts.indexOf(host);
+      if (index !== -1) {
+        return state2.chatAssistantMessages.some((m) => String(m.index) === String(index) || m.id === String(index));
+      }
+    }
+  }
+  return false;
+}
 function findVisibleGlobalToolbars(doc, state2) {
   const results = [];
   const toolbarSelectors = [
@@ -4082,7 +4155,7 @@ function findVisibleGlobalToolbars(doc, state2) {
     if (toolbar.querySelector(".sotl-message-paw-btn")) continue;
     const messageId = resolveMessageIdForToolbar(toolbar, doc, state2);
     if (!messageId) continue;
-    const isAssistant = state2.chatAssistantMessages && state2.chatAssistantMessages.some((m) => m.id === messageId);
+    const isAssistant = isAssistantMessageHost(toolbar, messageId, state2);
     if (!isAssistant) continue;
     const swipeId = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
     results.push({ toolbar, messageId, swipeId, source: "global-toolbar" });
@@ -4627,7 +4700,7 @@ function mountMessageHistoryBadges(ctx, state2) {
       if (!(host instanceof HTMLElement)) return;
       const messageId = messageIdFromElement(host);
       if (!messageId) return;
-      const isAssistant = state2.chatAssistantMessages && state2.chatAssistantMessages.some((m) => m.id === messageId);
+      const isAssistant = isAssistantMessageHost(host, messageId, state2);
       if (!isAssistant) return;
       assistantHostsFound++;
       const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
@@ -4727,7 +4800,7 @@ function mountMessageTrackerActions(ctx, state2) {
       if (!messageId) return;
       const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
       const key = `${messageId}::swipe:${typeof activeSwipe === "number" ? activeSwipe : "main"}`;
-      const isAssistant = state2.chatAssistantMessages && state2.chatAssistantMessages.some((m) => m.id === messageId);
+      const isAssistant = isAssistantMessageHost(host, messageId, state2);
       if (!isAssistant) {
         const oldButton = host.querySelector(".sotl-message-paw-btn");
         if (oldButton) {

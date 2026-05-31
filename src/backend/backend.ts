@@ -46,6 +46,7 @@ function activeChatName(id: string | null, fallback: string): string {
 
 function isAssistantMessage(message: { role?: string | undefined; content?: string | undefined }): boolean {
   const role = (message.role || '').toLowerCase();
+  if (role === 'user' || role === 'human' || role === 'you') return false;
   return role === 'assistant' || role === 'model' || role === 'ai' || (!role && Boolean(message.content));
 }
 

@@ -102,13 +102,22 @@ export function setSettingsOpenState(open: boolean): void {
 
 function findMessageHostById(doc: Document, messageId: string): Element | null {
   const id = escapeSelector(messageId);
-  return doc.querySelector(`[data-message-id="${id}"]`)
+  const direct = doc.querySelector(`[data-message-id="${id}"]`)
     ?? doc.querySelector(`[data-lumiverse-message-id="${id}"]`)
     ?? doc.querySelector(`[data-lv-message-id="${id}"]`)
     ?? doc.querySelector(`[data-chat-message-id="${id}"]`)
     ?? doc.querySelector(`[data-message_id="${id}"]`)
     ?? doc.querySelector(`[data-messageid="${id}"]`)
     ?? doc.getElementById(`message-${messageId}`);
+  if (direct) return direct;
+
+  // Fallback: if messageId is a pure numeric index, find the N-th message element
+  if (/^\d+$/.test(messageId)) {
+    const idx = parseInt(messageId, 10);
+    const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
+    if (hosts[idx]) return hosts[idx];
+  }
+  return null;
 }
 
 function messageIdFromElement(element: Element | null): string | undefined {
@@ -301,6 +310,124 @@ function isInsideMessageHost(el: HTMLElement): boolean {
   return Boolean(el.closest('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]'));
 }
 
+/**
+ * Helper to check if a message element contains toolbar indicators that are
+ * uniquely present on AI/assistant messages (like Regenerate or Swipe controls).
+ */
+function hasAiToolbarSignals(host: HTMLElement): boolean {
+  const buttons = Array.from(host.querySelectorAll('button, [role="button"], a, svg, [data-action]'));
+  return buttons.some((btn) => {
+    const text = (btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || '').trim();
+    return /\b(Regenerate|swipe|variant|alternate|previous response|next response|prev response|fork)\b/i.test(text);
+  });
+}
+
+/**
+ * Detect if a message host element is a USER message based on DOM signals.
+ * Checks CSS classes, data-role attributes, and aria labels.
+ * Returns 'user', 'assistant', or null (unknown).
+ */
+function domMessageRole(host: HTMLElement): 'user' | 'assistant' | null {
+  // 1. Check direct attributes on the host element (avoiding arbitrary deep ancestor closest lookups)
+  const attrs = ['data-role', 'data-sender', 'data-message-role', 'data-author-role', 'data-type', 'data-message-type'];
+  for (const attr of attrs) {
+    const val = host.getAttribute(attr);
+    if (val) {
+      const r = val.toLowerCase();
+      if (r === 'user' || r === 'human' || r === 'you') return 'user';
+      if (r === 'assistant' || r === 'ai' || r === 'bot' || r === 'model' || r === 'system') return 'assistant';
+    }
+  }
+
+  // 2. Check direct attributes on immediate descendants (within host)
+  for (const attr of attrs) {
+    const child = host.querySelector(`[${attr}]`);
+    if (child && host.contains(child)) {
+      const val = child.getAttribute(attr);
+      if (val) {
+        const r = val.toLowerCase();
+        if (r === 'user' || r === 'human' || r === 'you') return 'user';
+        if (r === 'assistant' || r === 'ai' || r === 'bot' || r === 'model' || r === 'system') return 'assistant';
+      }
+    }
+  }
+
+  // 3. Check class name list of the host itself (not ancestors or parent classLists which are shared)
+  const cls = host.className || '';
+  const userClassRe = /\b(user[-_]?message|human[-_]?message|you[-_]?message|user[-_]?turn|human[-_]?turn|user[-_]?bubble|sender[-_]?user|from[-_]?user|is[-_]?user|chat[-_]?user|msg[-_]?user|outgoing|self[-_]?message|message[-_]?right|my[-_]?message|align[-_]?right|right[-_]?align)\b/i;
+  const assistantClassRe = /\b(assistant[-_]?message|ai[-_]?message|bot[-_]?message|model[-_]?message|assistant[-_]?turn|ai[-_]?turn|bot[-_]?turn|chat[-_]?assistant|msg[-_]?assistant|incoming|from[-_]?ai|from[-_]?bot|response[-_]?message|message[-_]?left|align[-_]?left|left[-_]?align|char[-_]?message|character[-_]?message)\b/i;
+
+  if (userClassRe.test(cls)) return 'user';
+  if (assistantClassRe.test(cls)) return 'assistant';
+
+  // 4. Check direct children class names
+  const children = Array.from(host.children);
+  for (const child of children) {
+    if (child instanceof HTMLElement) {
+      const childCls = child.className || '';
+      if (userClassRe.test(childCls)) return 'user';
+      if (assistantClassRe.test(childCls)) return 'assistant';
+    }
+  }
+
+  // 5. Check aria-label on the host for role hints
+  const ariaLabel = (host.getAttribute('aria-label') || '').toLowerCase();
+  if (/\b(you|your|user|human)\b/.test(ariaLabel)) return 'user';
+  if (/\b(assistant|ai|bot|model|response)\b/.test(ariaLabel)) return 'assistant';
+
+  return null;
+}
+
+export function isDomUserMessage(host: HTMLElement): boolean {
+  const role = domMessageRole(host);
+  if (role === 'user') return true;
+  // If explicitly identified as assistant, it's NOT a user message
+  if (role === 'assistant') return false;
+  // Unknown: don't assume it's a user message (allow badge injection)
+  return false;
+}
+
+/**
+ * Returns true if we can positively confirm the host is an ASSISTANT message.
+ * Uses DOM signals first, then falls back to the chatAssistantMessages list.
+ */
+function isAssistantMessageHost(
+  host: HTMLElement,
+  messageId: string,
+  state: { chatAssistantMessages?: { id: string; index?: number }[] | null | undefined },
+): boolean {
+  // 1. If it has AI-specific toolbar buttons (like Regenerate/Swipe), it is DEFINITELY assistant!
+  if (hasAiToolbarSignals(host)) return true;
+
+  // 2. DOM-based role detection
+  const domRole = domMessageRole(host);
+  // If DOM positively says user — skip
+  if (domRole === 'user') return false;
+  // If DOM positively says assistant — allow
+  if (domRole === 'assistant') return true;
+
+  // 3. Fall back to backend list with index-aware mapping support for numeric fallback IDs
+  if (state.chatAssistantMessages && state.chatAssistantMessages.length > 0) {
+    // Check direct ID match
+    const hasDirectIdMatch = state.chatAssistantMessages.some((m) => m.id === messageId);
+    if (hasDirectIdMatch) return true;
+
+    // Check if the backend IDs look like string indices (e.g. '0', '1', '2')
+    const hasStringIndices = state.chatAssistantMessages.every((m) => /^\d+$/.test(m.id));
+    if (hasStringIndices) {
+      const doc = host.ownerDocument || document;
+      const hosts = Array.from(doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]'));
+      const index = hosts.indexOf(host);
+      if (index !== -1) {
+        return state.chatAssistantMessages.some((m) => String(m.index) === String(index) || m.id === String(index));
+      }
+    }
+  }
+
+  // 4. Default to false to avoid injecting on wrong/user turns
+  return false;
+}
+
 export function findVisibleGlobalToolbars(doc: Document, state: LoomFrontendState): GlobalToolbarMatch[] {
   const results: GlobalToolbarMatch[] = [];
 
@@ -347,7 +474,7 @@ export function findVisibleGlobalToolbars(doc: Document, state: LoomFrontendStat
     const messageId = resolveMessageIdForToolbar(toolbar, doc, state);
     if (!messageId) continue;
 
-    const isAssistant = state.chatAssistantMessages && state.chatAssistantMessages.some((m) => m.id === messageId);
+    const isAssistant = isAssistantMessageHost(toolbar as HTMLElement, messageId, state);
     if (!isAssistant) continue;
 
     const swipeId = state.activeSwipeByMessageId ? state.activeSwipeByMessageId[messageId] : undefined;
@@ -1015,7 +1142,7 @@ export function mountMessageHistoryBadges(ctx: FrontendContext, state: LoomFront
       const messageId = messageIdFromElement(host);
       if (!messageId) return;
 
-      const isAssistant = state.chatAssistantMessages && state.chatAssistantMessages.some((m) => m.id === messageId);
+      const isAssistant = isAssistantMessageHost(host, messageId, state);
       if (!isAssistant) return;
 
       assistantHostsFound++;
@@ -1149,7 +1276,7 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
       const activeSwipe = state.activeSwipeByMessageId ? state.activeSwipeByMessageId[messageId] : undefined;
       const key = `${messageId}::swipe:${typeof activeSwipe === 'number' ? activeSwipe : 'main'}`;
 
-      const isAssistant = state.chatAssistantMessages && state.chatAssistantMessages.some((m) => m.id === messageId);
+      const isAssistant = isAssistantMessageHost(host, messageId, state);
       if (!isAssistant) {
         const oldButton = host.querySelector('.sotl-message-paw-btn');
         if (oldButton) {
