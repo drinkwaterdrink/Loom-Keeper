@@ -1267,4 +1267,85 @@ export const loomStyles = `
   filter: drop-shadow(0 0 4px var(--lv-accent-glow, rgba(56, 100, 217, 0.4)));
 }
 
+/* ---- Per-message Tracker History Badge/Button ---- */
+.sotl-message-history-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  opacity: 0.65;
+  color: inherit;
+  margin-left: 6px;
+  flex-shrink: 0;
+  
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.sotl-message-history-badge .sotl-message-paw-svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  color: var(--lv-text-muted, #8f9baa);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+/* Hover effects */
+.sotl-message-history-badge:hover {
+  opacity: 1 !important;
+  transform: scale(1.08);
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.sotl-message-history-badge:hover .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+}
+
+/* Has tracker class */
+.sotl-message-history-badge--has-tracker {
+  opacity: 0.95;
+}
+.sotl-message-history-badge--has-tracker .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+  filter: drop-shadow(0 0 3px var(--lv-accent-glow, rgba(56, 100, 217, 0.3)));
+}
+
+/* Missing tracker class */
+.sotl-message-history-badge--missing-tracker {
+  opacity: 0.5;
+}
+
+/* Floating variant when header row is not detected */
+.sotl-message-history-badge--floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(12, 16, 24, 0.65) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  margin-left: 0;
+  z-index: 10;
+}
+.sotl-message-history-badge--floating:hover {
+  background: rgba(21, 27, 38, 0.85) !important;
+  border-color: var(--lv-accent, #3864d9) !important;
+}
+
+/* Generating / weaving state styling */
+.sotl-message-history-badge--generating .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+  animation: sotl-needle-stitch 1.2s infinite ease-in-out;
+}
+
 `;

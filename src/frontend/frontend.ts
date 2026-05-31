@@ -1,6 +1,6 @@
 import type { LoomBackendMessage, LoomFrontendMessage, LoomFrontendState, LoomSettings, LoomTrackerState } from '../shared/types.js';
 import { renderDrawer } from './drawer.js';
-import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, mountMessageTrackerActions, cleanupMessageTrackerActions, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback, rememberMessageActionTarget, getMessageActionDiagnostics } from './messageCards.js';
+import { ensureFloatingButton, mountMessageCards, ensureChatLoomPanel, mountMessageTrackerActions, mountMessageHistoryBadges, cleanupMessageTrackerActions, registerRerenderCallback, setDrawerOpenState, setSettingsOpenState, registerOpenDrawerCallback, rememberMessageActionTarget, getMessageActionDiagnostics } from './messageCards.js';
 import { bearPawSvg } from './icons.js';
 import { renderTrackerForState, resolveActiveTrackerForState } from './rendering.js';
 import { renderSettingsPanel } from './settingsPanel.js';
@@ -634,13 +634,22 @@ function updateMessageCardStatus(): void {
       pawStatus = 'Tracker actions failed to mount';
     }
 
-    lastRenderStatus = [cardStatus, pawStatus].filter(Boolean).join(' ');
+    let badgeStatus = '';
+    try {
+      const badgeResult = mountMessageHistoryBadges(contextRef, state);
+      badgeStatus = badgeResult.status;
+    } catch (err) {
+      console.warn('Loom Keeper: mountMessageHistoryBadges failed', err);
+      badgeStatus = 'Badges failed to mount';
+    }
+
+    lastRenderStatus = [cardStatus, pawStatus, badgeStatus].filter(Boolean).join(' ');
 
     // Capture message action diagnostics for debugging
     try {
       const diag = getMessageActionDiagnostics();
-      if (diag.buttonsInjected > 0 || diag.globalPortalToolbarsFound > 0) {
-        lastRenderStatus += ` [msg-action: hosts=${diag.messageHostsFound}, inHost=${diag.inHostToolbarsFound}, portal=${diag.globalPortalToolbarsFound}, btns=${diag.buttonsInjected}, reason=${diag.lastMountReason}]`;
+      if (diag.nativeToolbarButtonsMounted > 0 || diag.messageHistoryBadgesMounted > 0 || diag.portalToolbarsFound > 0) {
+        lastRenderStatus += ` [msg-action: hosts=${diag.messageHostsFound}, assistantHosts=${diag.assistantMessageHostsFound}, badges=${diag.messageHistoryBadgesMounted}, nativeBtns=${diag.nativeToolbarButtonsMounted}, portal=${diag.portalToolbarsFound}, reason=${diag.lastMessageActionMountReason}]`;
       }
     } catch {
       // Diagnostics are optional

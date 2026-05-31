@@ -20,7 +20,8 @@
     "smoke:ui-settings": "node ./scripts/ui-settings-smoke.mjs",
     "smoke:swipe-storage": "node ./scripts/swipe-tracker-smoke.mjs",
     "smoke:swipe-ui": "node ./scripts/swipe-ui-smoke.mjs",
-    "smoke:message-action": "node ./scripts/message-action-smoke.mjs"
+    "smoke:message-action": "node ./scripts/message-action-smoke.mjs",
+    "smoke:message-history-badge": "node ./scripts/message-history-badge-smoke.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.0",

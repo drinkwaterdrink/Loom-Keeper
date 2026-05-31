@@ -3863,17 +3863,17 @@ function bearPawSvg(className = "sotl-paw-svg") {
 // src/frontend/messageCards.ts
 var injectedWrappers = /* @__PURE__ */ new Map();
 var injectedMessagePaws = /* @__PURE__ */ new Map();
+var injectedHistoryBadges = /* @__PURE__ */ new Map();
 var injectedContextMenuItems = /* @__PURE__ */ new Set();
 var lastSelectedMessageTarget = null;
-var lastDiagnostics = {
-  messageHostsFound: 0,
-  inHostToolbarsFound: 0,
-  globalPortalToolbarsFound: 0,
-  buttonsInjected: 0,
-  contextMenuItemsInjected: 0,
-  selectedMessageTarget: null,
-  lastMountReason: "not-yet-run"
-};
+var lastHostsFound = 0;
+var lastAssistantHostsFound = 0;
+var lastBadgesMounted = 0;
+var lastNativeToolbarButtonsMounted = 0;
+var lastPortalToolbarsFound = 0;
+var lastContextMenuItemsMounted = 0;
+var lastInHostToolbarsFound = 0;
+var lastMountReasonStr = "not-yet-run";
 var isChatLoomPanelExpanded = false;
 var isDrawerOpen = false;
 var isSettingsOpen = false;
@@ -4016,7 +4016,24 @@ function findNearestChatMessageIdForElement(element, state2) {
   return best?.id;
 }
 function getMessageActionDiagnostics() {
-  return { ...lastDiagnostics, selectedMessageTarget: lastSelectedMessageTarget };
+  const doc = documentRef2();
+  return {
+    globalLauncherMounted: doc ? Boolean(doc.querySelector(".sotl-chat-pill")) : false,
+    messageHostsFound: lastHostsFound,
+    assistantMessageHostsFound: lastAssistantHostsFound,
+    messageHistoryBadgesMounted: lastBadgesMounted,
+    nativeToolbarButtonsMounted: lastNativeToolbarButtonsMounted,
+    portalToolbarsFound: lastPortalToolbarsFound,
+    contextMenuItemsMounted: lastContextMenuItemsMounted,
+    lastSelectedMessageTarget,
+    lastMessageActionMountReason: lastMountReasonStr,
+    // Backwards compatibility fields
+    inHostToolbarsFound: lastInHostToolbarsFound,
+    globalPortalToolbarsFound: lastPortalToolbarsFound,
+    buttonsInjected: lastNativeToolbarButtonsMounted,
+    contextMenuItemsInjected: lastContextMenuItemsMounted,
+    lastMountReason: lastMountReasonStr
+  };
 }
 function isToolbarLikeCluster(candidate) {
   if (!isVisibleElement(candidate)) return false;
@@ -4250,7 +4267,7 @@ function cleanupDisconnectedMessagePaws() {
 }
 function cleanupMessageTrackerActions() {
   const doc = documentRef2();
-  doc?.querySelectorAll('[data-sotl-message-paw="true"], [data-sotl-context-menu-item="true"]').forEach((node) => {
+  doc?.querySelectorAll('[data-sotl-message-paw="true"], [data-sotl-message-history-badge="true"], [data-sotl-context-menu-item="true"]').forEach((node) => {
     try {
       node.remove();
     } catch {
@@ -4263,6 +4280,13 @@ function cleanupMessageTrackerActions() {
     }
   }
   injectedMessagePaws.clear();
+  for (const badge2 of injectedHistoryBadges.values()) {
+    try {
+      badge2.remove();
+    } catch {
+    }
+  }
+  injectedHistoryBadges.clear();
   for (const item of injectedContextMenuItems) {
     try {
       item.remove();
@@ -4607,15 +4631,118 @@ function findMessageToolbar(host) {
   }
   return null;
 }
+function findHeaderRow(host) {
+  const headerSelectors = [
+    ".message-header",
+    ".message-title",
+    ".message-author",
+    ".message-metadata",
+    ".message-info",
+    ".avatar-row",
+    ".char-name",
+    ".user-name",
+    ".message-head",
+    ".message-header-row",
+    "header",
+    ".header",
+    ".metadata",
+    ".info"
+  ];
+  for (const selector of headerSelectors) {
+    const el = host.querySelector(selector);
+    if (el && isVisibleElement(el)) return el;
+  }
+  return null;
+}
+function mountMessageHistoryBadges(ctx, state2) {
+  void ctx;
+  const doc = documentRef2();
+  if (!doc) return { status: "Message history badge unavailable: no document." };
+  if (!state2) {
+    doc.querySelectorAll(".sotl-message-history-badge").forEach((btn) => btn.remove());
+    injectedHistoryBadges.clear();
+    lastAssistantHostsFound = 0;
+    lastBadgesMounted = 0;
+    return { status: "Message history badge waiting for state." };
+  }
+  const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
+  let assistantHostsFound = 0;
+  let badgesMounted = 0;
+  const activeKeys = /* @__PURE__ */ new Set();
+  hosts.forEach((host) => {
+    try {
+      if (!(host instanceof HTMLElement)) return;
+      const messageId = messageIdFromElement(host);
+      if (!messageId) return;
+      const isAssistant = state2.chatAssistantMessages && state2.chatAssistantMessages.some((m) => m.id === messageId);
+      if (!isAssistant) return;
+      assistantHostsFound++;
+      const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
+      const key = `${messageId}::swipe:${typeof activeSwipe === "number" ? activeSwipe : "main"}`;
+      activeKeys.add(key);
+      let badge2 = host.querySelector(".sotl-message-history-badge");
+      if (!badge2) {
+        badge2 = doc.createElement("button");
+        badge2.type = "button";
+        badge2.className = "sotl-message-history-badge";
+        const header = findHeaderRow(host);
+        if (header) {
+          header.appendChild(badge2);
+        } else {
+          host.style.position = "relative";
+          badge2.classList.add("sotl-message-history-badge--floating");
+          host.prepend(badge2);
+        }
+      }
+      badge2.dataset.sotlAction = "message-paw";
+      badge2.dataset.sotlMessageId = messageId;
+      badge2.dataset.sotlMessageHistoryBadge = "true";
+      if (typeof activeSwipe === "number") {
+        badge2.dataset.sotlSwipeId = String(activeSwipe);
+      } else {
+        delete badge2.dataset.sotlSwipeId;
+      }
+      badge2.title = "Tracker History";
+      badge2.setAttribute("aria-label", "Open tracker history for this response");
+      const hasTracker = state2.messageTrackers.some(
+        (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== "number" || t.swipeId === activeSwipe)
+      );
+      badge2.classList.toggle("sotl-message-history-badge--has-tracker", hasTracker);
+      badge2.classList.toggle("sotl-message-history-badge--missing-tracker", !hasTracker);
+      badge2.classList.toggle("sotl-message-history-badge--generating", state2.generation.running);
+      badge2.innerHTML = bearPawSvg("sotl-message-paw-svg");
+      injectedHistoryBadges.set(key, badge2);
+      badgesMounted++;
+    } catch (err) {
+      console.warn("Loom Keeper: failed to mount history badge", err);
+    }
+  });
+  for (const [key, badge2] of injectedHistoryBadges.entries()) {
+    if (!badge2.isConnected || !activeKeys.has(key)) {
+      try {
+        badge2.remove();
+      } catch {
+      }
+      injectedHistoryBadges.delete(key);
+    }
+  }
+  lastAssistantHostsFound = assistantHostsFound;
+  lastBadgesMounted = badgesMounted;
+  return { status: `Mounted ${badgesMounted} history badges.` };
+}
 function mountMessageTrackerActions(ctx, state2) {
   void ctx;
   const doc = documentRef2();
   if (!doc) return { status: "Message tracker paw unavailable: no document." };
   cleanupDisconnectedMessagePaws();
+  lastHostsFound = 0;
+  lastNativeToolbarButtonsMounted = 0;
+  lastPortalToolbarsFound = 0;
+  lastContextMenuItemsMounted = 0;
+  lastMountReasonStr = "no-state";
   if (!state2) {
     doc.querySelectorAll(".sotl-message-paw-btn").forEach((btn) => btn.remove());
     injectedMessagePaws.clear();
-    lastDiagnostics = { ...lastDiagnostics, messageHostsFound: 0, inHostToolbarsFound: 0, globalPortalToolbarsFound: 0, buttonsInjected: 0, contextMenuItemsInjected: 0, lastMountReason: "no-state" };
     return { status: "Message tracker paw waiting for backend state." };
   }
   const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
@@ -4677,15 +4804,12 @@ function mountMessageTrackerActions(ctx, state2) {
   }
   const menuMounted = mountContextMenuTrackerAction(doc, state2);
   const mountReason = inlineMounted > 0 ? globalToolbarCount > 0 ? "mounted-in-host-and-portal" : "mounted-in-host" : globalToolbarCount > 0 ? "mounted-portal-only" : hosts.length > 0 ? "no-visible-toolbars" : "no-message-hosts";
-  lastDiagnostics = {
-    messageHostsFound: hosts.length,
-    inHostToolbarsFound,
-    globalPortalToolbarsFound: globalToolbarCount,
-    buttonsInjected: inlineMounted,
-    contextMenuItemsInjected: menuMounted,
-    selectedMessageTarget: lastSelectedMessageTarget,
-    lastMountReason: mountReason
-  };
+  lastHostsFound = hosts.length;
+  lastNativeToolbarButtonsMounted = inlineMounted;
+  lastPortalToolbarsFound = globalToolbarCount;
+  lastContextMenuItemsMounted = menuMounted;
+  lastInHostToolbarsFound = inHostToolbarsFound;
+  lastMountReasonStr = mountReason;
   if (inlineMounted > 0 || globalToolbarCount > 0 || menuMounted > 0) {
     const tgt = lastSelectedMessageTarget;
     const tgtStr = tgt ? `${tgt.messageId} via ${tgt.source}/${tgt.confidence}` : "none";
@@ -6245,6 +6369,87 @@ var loomStyles = `
   filter: drop-shadow(0 0 4px var(--lv-accent-glow, rgba(56, 100, 217, 0.4)));
 }
 
+/* ---- Per-message Tracker History Badge/Button ---- */
+.sotl-message-history-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  opacity: 0.65;
+  color: inherit;
+  margin-left: 6px;
+  flex-shrink: 0;
+  
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.sotl-message-history-badge .sotl-message-paw-svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  color: var(--lv-text-muted, #8f9baa);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+/* Hover effects */
+.sotl-message-history-badge:hover {
+  opacity: 1 !important;
+  transform: scale(1.08);
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.sotl-message-history-badge:hover .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+}
+
+/* Has tracker class */
+.sotl-message-history-badge--has-tracker {
+  opacity: 0.95;
+}
+.sotl-message-history-badge--has-tracker .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+  filter: drop-shadow(0 0 3px var(--lv-accent-glow, rgba(56, 100, 217, 0.3)));
+}
+
+/* Missing tracker class */
+.sotl-message-history-badge--missing-tracker {
+  opacity: 0.5;
+}
+
+/* Floating variant when header row is not detected */
+.sotl-message-history-badge--floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(12, 16, 24, 0.65) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  margin-left: 0;
+  z-index: 10;
+}
+.sotl-message-history-badge--floating:hover {
+  background: rgba(21, 27, 38, 0.85) !important;
+  border-color: var(--lv-accent, #3864d9) !important;
+}
+
+/* Generating / weaving state styling */
+.sotl-message-history-badge--generating .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+  animation: sotl-needle-stitch 1.2s infinite ease-in-out;
+}
+
 `;
 
 // src/frontend/frontend.ts
@@ -6772,11 +6977,19 @@ function updateMessageCardStatus() {
       console.warn("Loom Keeper: mountMessageTrackerActions failed", err);
       pawStatus = "Tracker actions failed to mount";
     }
-    lastRenderStatus = [cardStatus, pawStatus].filter(Boolean).join(" ");
+    let badgeStatus = "";
+    try {
+      const badgeResult = mountMessageHistoryBadges(contextRef, state);
+      badgeStatus = badgeResult.status;
+    } catch (err) {
+      console.warn("Loom Keeper: mountMessageHistoryBadges failed", err);
+      badgeStatus = "Badges failed to mount";
+    }
+    lastRenderStatus = [cardStatus, pawStatus, badgeStatus].filter(Boolean).join(" ");
     try {
       const diag = getMessageActionDiagnostics();
-      if (diag.buttonsInjected > 0 || diag.globalPortalToolbarsFound > 0) {
-        lastRenderStatus += ` [msg-action: hosts=${diag.messageHostsFound}, inHost=${diag.inHostToolbarsFound}, portal=${diag.globalPortalToolbarsFound}, btns=${diag.buttonsInjected}, reason=${diag.lastMountReason}]`;
+      if (diag.nativeToolbarButtonsMounted > 0 || diag.messageHistoryBadgesMounted > 0 || diag.portalToolbarsFound > 0) {
+        lastRenderStatus += ` [msg-action: hosts=${diag.messageHostsFound}, assistantHosts=${diag.assistantMessageHostsFound}, badges=${diag.messageHistoryBadgesMounted}, nativeBtns=${diag.nativeToolbarButtonsMounted}, portal=${diag.portalToolbarsFound}, reason=${diag.lastMessageActionMountReason}]`;
       }
     } catch {
     }
