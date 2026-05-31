@@ -347,6 +347,9 @@ export function findVisibleGlobalToolbars(doc: Document, state: LoomFrontendStat
     const messageId = resolveMessageIdForToolbar(toolbar, doc, state);
     if (!messageId) continue;
 
+    const isAssistant = state.chatAssistantMessages && state.chatAssistantMessages.some((m) => m.id === messageId);
+    if (!isAssistant) continue;
+
     const swipeId = state.activeSwipeByMessageId ? state.activeSwipeByMessageId[messageId] : undefined;
     results.push({ toolbar, messageId, swipeId, source: 'global-toolbar' });
   }
@@ -1145,6 +1148,16 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
 
       const activeSwipe = state.activeSwipeByMessageId ? state.activeSwipeByMessageId[messageId] : undefined;
       const key = `${messageId}::swipe:${typeof activeSwipe === 'number' ? activeSwipe : 'main'}`;
+
+      const isAssistant = state.chatAssistantMessages && state.chatAssistantMessages.some((m) => m.id === messageId);
+      if (!isAssistant) {
+        const oldButton = host.querySelector('.sotl-message-paw-btn');
+        if (oldButton) {
+          oldButton.remove();
+          injectedMessagePaws.delete(key);
+        }
+        return;
+      }
 
       const toolbar = findMessageToolbar(host);
       if (!toolbar) {

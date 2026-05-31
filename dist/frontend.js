@@ -1,5 +1,5 @@
 // src/shared/defaults.ts
-var LOOM_VERSION = "1.0.24";
+var LOOM_VERSION = "1.0.25";
 var LOOM_SCHEMA_VERSION = "1";
 var GRAND_CONTINUITY_ATLAS_PRESET_ID = "grand_continuity_atlas";
 var SLIM_SCENE_PRESET_ID = "slim_scene_loom";
@@ -4082,6 +4082,8 @@ function findVisibleGlobalToolbars(doc, state2) {
     if (toolbar.querySelector(".sotl-message-paw-btn")) continue;
     const messageId = resolveMessageIdForToolbar(toolbar, doc, state2);
     if (!messageId) continue;
+    const isAssistant = state2.chatAssistantMessages && state2.chatAssistantMessages.some((m) => m.id === messageId);
+    if (!isAssistant) continue;
     const swipeId = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
     results.push({ toolbar, messageId, swipeId, source: "global-toolbar" });
   }
@@ -4725,6 +4727,15 @@ function mountMessageTrackerActions(ctx, state2) {
       if (!messageId) return;
       const activeSwipe = state2.activeSwipeByMessageId ? state2.activeSwipeByMessageId[messageId] : void 0;
       const key = `${messageId}::swipe:${typeof activeSwipe === "number" ? activeSwipe : "main"}`;
+      const isAssistant = state2.chatAssistantMessages && state2.chatAssistantMessages.some((m) => m.id === messageId);
+      if (!isAssistant) {
+        const oldButton = host.querySelector(".sotl-message-paw-btn");
+        if (oldButton) {
+          oldButton.remove();
+          injectedMessagePaws.delete(key);
+        }
+        return;
+      }
       const toolbar = findMessageToolbar(host);
       if (!toolbar) {
         const oldButton = host.querySelector(".sotl-message-paw-btn");

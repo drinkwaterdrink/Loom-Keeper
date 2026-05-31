@@ -464,8 +464,8 @@ class LoomKeeperBackend {
     const chatAssistantMessages: LoomChatMessageSummary[] = [];
     for (let i = 0; i < active.messages.length; i++) {
       const m = active.messages[i];
-      if (m.id && (m.role === 'assistant' || m.role === 'model')) {
-        chatAssistantMessages.push({ id: m.id, role: m.role, swipeId: m.swipe_id, index: i });
+      if (m.id && isAssistantMessage(m)) {
+        chatAssistantMessages.push({ id: m.id, role: m.role || 'assistant', swipeId: m.swipe_id, index: i });
       }
     }
 
