@@ -121,18 +121,29 @@ function findMessageHostById(doc: Document, messageId: string): Element | null {
 }
 
 function messageIdFromElement(element: Element | null): string | undefined {
-  const host = element?.closest?.('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid]');
+  if (!element) return undefined;
+
+  // Try dataset attributes first (element itself or closest ancestor)
+  const host = element.closest?.('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid]');
   if (host instanceof HTMLElement) {
-    return host.dataset.messageId
+    const id = host.dataset.messageId
       ?? host.dataset.lumiverseMessageId
       ?? host.dataset.lvMessageId
       ?? host.dataset.chatMessageId
       ?? host.dataset.message_id
-      ?? host.dataset.messageid
-      ?? undefined;
+      ?? host.dataset.messageid;
+    if (id) return id;
   }
-  const id = element instanceof HTMLElement ? element.id : '';
-  const match = id.match(/^message-(.+)$/);
+
+  // Fallback: closest ancestor with id starting with "message-"
+  const idHost = element.closest?.('[id^="message-"]');
+  if (idHost instanceof HTMLElement) {
+    const match = idHost.id.match(/^message-(.+)$/);
+    if (match?.[1]) return match[1];
+  }
+
+  // Final fallback: element itself has id starting with "message-"
+  const match = element.id.match(/^message-(.+)$/);
   return match?.[1];
 }
 

@@ -1336,4 +1336,224 @@ export const loomStyles = `
   animation: sotl-needle-stitch 1.2s infinite ease-in-out;
 }
 
+.sotl-message-history-badge--floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(12, 16, 24, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  display: inline-flex !important;
+}
+
+.sotl-message-history-badge--floating:hover {
+.sotl-message-row, .sotl-swipe-row {
+    grid-template-columns: 1fr;
+  }
+  .sotl-message-row .sotl-actions, .sotl-swipe-row .sotl-actions {
+    margin-top: 4px;
+  }
+  .sotl-panel {
+    padding: 10px;
+  }
+  .sotl-settings-section > summary {
+    align-items: flex-start;
+  }
+  .sotl-summary-meta {
+    max-width: 44%;
+  }
+  .sotl-card__head {
+    flex-direction: column;
+  }
+  .sotl-float {
+    right: 12px;
+    bottom: 88px;
+  }
+  .sotl-chat-panel-container:not(.sotl-chat-panel-container--expanded) {
+    right: var(--sotl-launcher-right-mobile);
+    top: var(--sotl-launcher-top-mobile);
+    display: flex !important;
+  }
+  .sotl-chat-panel-container.sotl-chat-panel-container--expanded {
+    left: 6px;
+    right: 6px;
+    top: 40px;
+    bottom: 84px;
+    width: auto;
+    max-width: none;
+    margin-left: 0;
+  }
+  .sotl-chat-panel {
+    width: 100%;
+  }
+  .sotl-chat-panel-container--expanded .sotl-chat-panel {
+    height: 100%;
+    max-height: none;
+    padding: 10px;
+  }
+  .sotl-chat-panel-container--expanded .sotl-chat-panel__scroll-body {
+    max-height: none;
+  }
+}
+
+.sotl-message-paw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  position: relative;
+  top: auto;
+  right: auto;
+  width: var(--sotl-native-width, var(--sotl-native-size, 28px));
+  height: var(--sotl-native-height, var(--sotl-native-size, 28px));
+  border-radius: var(--sotl-native-radius, 6px);
+  background: var(--sotl-native-bg, transparent);
+  border: var(--sotl-native-border, none);
+  padding: var(--sotl-native-padding, 0);
+  opacity: var(--sotl-native-opacity, 0.75);
+  box-shadow: var(--sotl-native-shadow, none);
+  color: var(--sotl-native-color, inherit);
+  margin: 0 !important;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.sotl-message-paw-btn .sotl-message-paw-svg {
+  width: var(--sotl-native-glyph-size, 16px);
+  height: var(--sotl-native-glyph-size, 16px);
+  display: block;
+  color: var(--lv-accent, #3864d9);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.sotl-message-paw-btn:hover {
+  opacity: 1 !important;
+  transform: scale(1.08);
+  background: var(--lv-surface-hover, rgba(255, 255, 255, 0.15)) !important;
+}
+
+.sotl-message-paw-btn:hover .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+}
+
+.sotl-message-paw-btn--has-tracker {
+  opacity: 0.95;
+  color: var(--lv-accent, #3864d9) !important;
+}
+
+.sotl-message-paw-btn--has-tracker .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+  filter: drop-shadow(0 0 4px var(--lv-accent-glow, rgba(56, 100, 217, 0.4)));
+}
+
+/* ---- Per-message Tracker History Badge/Button ---- */
+.sotl-message-history-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  opacity: 0.65;
+  color: inherit;
+  margin: 0 !important;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.sotl-message-history-badge .sotl-message-paw-svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  color: var(--lv-text-muted, #8f9baa);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.sotl-message-history-badge--toolbar {
+  width: var(--sotl-native-width, var(--sotl-native-size, 28px));
+  height: var(--sotl-native-height, var(--sotl-native-size, 28px));
+  border-radius: var(--sotl-native-radius, 6px);
+  background: var(--sotl-native-bg, transparent);
+  border: var(--sotl-native-border, none);
+  padding: var(--sotl-native-padding, 0);
+  opacity: var(--sotl-native-opacity, 0.75);
+  box-shadow: var(--sotl-native-shadow, none);
+  color: var(--sotl-native-color, inherit);
+}
+
+.sotl-message-history-badge--toolbar .sotl-message-paw-svg {
+  width: var(--sotl-native-glyph-size, 16px);
+  height: var(--sotl-native-glyph-size, 16px);
+  color: var(--lv-accent, #3864d9);
+}
+
+/* Hover effects */
+.sotl-message-history-badge:hover {
+  opacity: 1 !important;
+  transform: scale(1.08);
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.sotl-message-history-badge:hover .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+}
+
+/* Has tracker class */
+.sotl-message-history-badge--has-tracker {
+  opacity: 0.95;
+}
+.sotl-message-history-badge--has-tracker .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+  filter: drop-shadow(0 0 3px var(--lv-accent-glow, rgba(56, 100, 217, 0.3)));
+}
+
+/* Missing tracker class */
+.sotl-message-history-badge--missing-tracker {
+  opacity: 0.5;
+}
+
+/* Generating / weaving state styling */
+.sotl-message-history-badge--generating .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+  animation: sotl-needle-stitch 1.2s infinite ease-in-out;
+}
+
+.sotl-message-history-badge--floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(12, 16, 24, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  display: inline-flex !important;
+}
+
+.sotl-message-history-badge--floating:hover {
+  background: rgba(20, 25, 35, 0.9) !important;
+  border-color: var(--lv-accent, #3864d9) !important;
+  transform: scale(1.08);
+}
+
+.sotl-message-history-badge--floating .sotl-message-paw-svg {
+  width: 14px;
+  height: 14px;
+  color: var(--lv-accent, #3864d9) !important;
+}
 `;
