@@ -643,18 +643,85 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
   if (!doc) return { status: 'Message tracker paw unavailable: no document.' };
   cleanupDisconnectedMessagePaws();
 
-  // v1.0.22: Completely disable message-toolbar inline paw buttons and rely on per-message Tracker History context menu.
-  doc.querySelectorAll<HTMLElement>('[data-sotl-message-paw="true"]').forEach((button) => {
-    button.remove();
-  });
-  injectedMessagePaws.clear();
+  if (!state) {
+    doc.querySelectorAll<HTMLElement>('.sotl-message-paw-btn').forEach((btn) => btn.remove());
+    injectedMessagePaws.clear();
+    return { status: 'Message tracker paw waiting for backend state.' };
+  }
 
-  if (!state) return { status: 'Message tracker paw waiting for backend state.' };
+  const hosts = doc.querySelectorAll('[data-message-id], [data-lumiverse-message-id], [data-lv-message-id], [data-chat-message-id], [data-message_id], [data-messageid], [id^="message-"]');
+  let inlineMounted = 0;
+  const activeKeys = new Set<string>();
+
+  hosts.forEach((host) => {
+    if (!(host instanceof HTMLElement)) return;
+    const messageId = messageIdFromElement(host);
+    if (!messageId) return;
+
+    // Ensure container has position relative if static
+    try {
+      const computed = doc.defaultView?.getComputedStyle(host);
+      if (computed && computed.position === 'static') {
+        host.style.position = 'relative';
+      }
+    } catch {
+      // safe best-effort
+    }
+
+    const activeSwipe = state.activeSwipeByMessageId[messageId];
+    const key = `${messageId}::swipe:${typeof activeSwipe === 'number' ? activeSwipe : 'main'}`;
+    activeKeys.add(key);
+
+    const hasTracker = state.messageTrackers.some(
+      (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== 'number' || t.swipeId === activeSwipe)
+    );
+
+    let button = host.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
+    if (!button) {
+      button = doc.createElement('button');
+      button.type = 'button';
+      button.className = 'sotl-message-paw-btn';
+      host.append(button);
+      inlineMounted += 1;
+    }
+
+    button.dataset.sotlAction = 'message-paw';
+    button.dataset.sotlMessageId = messageId;
+    if (typeof activeSwipe === 'number') {
+      button.dataset.sotlSwipeId = String(activeSwipe);
+    } else {
+      delete button.dataset.sotlSwipeId;
+    }
+
+    button.title = hasTracker ? 'View Tracker History' : 'Generate Tracker';
+    button.setAttribute('aria-label', button.title);
+    
+    // Inject the bearPawSvg with the correct class
+    button.innerHTML = bearPawSvg('sotl-message-paw-svg');
+
+    // Toggle styling class
+    button.classList.toggle('sotl-message-paw-btn--has-tracker', hasTracker);
+
+    injectedMessagePaws.set(key, button);
+  });
+
+  // Cleanup old buttons that are no longer in the DOM or whose swipe keys are stale
+  for (const [key, btn] of injectedMessagePaws.entries()) {
+    if (!btn.isConnected || !activeKeys.has(key)) {
+      try {
+        btn.remove();
+      } catch {
+        // ignore
+      }
+      injectedMessagePaws.delete(key);
+    }
+  }
 
   const menuMounted = mountContextMenuTrackerAction(doc, state);
   const reports: string[] = [];
-  if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action${menuMounted === 1 ? '' : 's'}.`);
-  return { status: reports.join(' ') || 'No visible message dropdown menu found.' };
+  if (inlineMounted > 0) reports.push(`Injected/updated ${hosts.length} inline paw button(s).`);
+  if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action(s).`);
+  return { status: reports.join(' ') || 'No message containers found.' };
 }
 
 function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFrontendState, missingSwipeId?: number | undefined): string {
