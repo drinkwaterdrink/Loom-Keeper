@@ -3841,17 +3841,7 @@ function renderDrawer(state2, status = {}) {
 function bearPawSvg(className = "sotl-paw-svg") {
   return [
     `<svg class="${className}" viewBox="0 0 512 512" width="26" height="26" fill="currentColor" aria-hidden="true">`,
-    '  <path class="sotl-bear-claw sotl-bear-claw--1" d="M66,138 Q92,164 102,189 C110,186 113,181 113,179 Q97,153 66,138 Z"/>',
-    '  <path class="sotl-bear-claw sotl-bear-claw--2" d="M143,72 Q159,102 166,130 C174,128 177,123 177,120 Q164,92 143,72 Z"/>',
-    '  <path class="sotl-bear-claw sotl-bear-claw--3" d="M256,46 Q251,82 248,110 C256,112 256,112 264,110 Q261,82 256,46 Z"/>',
-    '  <path class="sotl-bear-claw sotl-bear-claw--4" d="M369,72 Q353,102 346,130 C338,128 335,123 335,120 Q348,92 369,72 Z"/>',
-    '  <path class="sotl-bear-claw sotl-bear-claw--5" d="M446,138 Q420,164 410,189 C402,186 399,181 399,179 Q415,153 446,138 Z"/>',
-    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--1" cx="113" cy="230" rx="26" ry="33" transform="rotate(-20 113 230)"/>',
-    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--2" cx="174" cy="169" rx="28" ry="36" transform="rotate(-10 174 169)"/>',
-    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--3" cx="256" cy="143" rx="31" ry="39"/>',
-    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--4" cx="338" cy="169" rx="28" ry="36" transform="rotate(10 338 169)"/>',
-    '  <ellipse class="sotl-paw-pad sotl-bear-toe sotl-bear-toe--5" cx="399" cy="230" rx="26" ry="33" transform="rotate(20 399 230)"/>',
-    '  <path class="sotl-paw-main sotl-bear-main" d="M102,333 C92,266 179,235 256,245 C333,235 420,266 410,333 C400,400 317,420 256,420 C195,420 112,400 102,333 Z"/>',
+    '  <path d="M226.5 92.9c14.3 42.9-.3 86.2-32.6 96.8s-70.1-15.6-84.4-58.5S110 45 142.3 34.4s70.1 15.6 84.4 58.5zM100.4 198.6c18.9 30.9 9.5 71.1-21 89.9s-71.1 9.5-89.9-21-9.5-71.1 21-89.9 71.1-9.5 89.9 21zm289.4-64.2c-14.3 42.9-57.8 69.1-96.8 58.5s-46.9-54.2-32.6-96.8 57.8-69.1 96.8-58.5 46.9 54.2 32.6 96.8zm73.3 64.2c-18.9 30.9-59.4 39.7-89.9 21s-39.7-59.4-21-89.9 59.4-39.7 89.9-21 39.7 59.4 21 89.9zm-252.8 171.7c-50.6 8.7-98.8-19.3-107.2-62.7s26.8-85.3 77.4-94 98.8 19.3 107.2 62.7-26.8 85.3-77.4 94zm241.7-62.7c-8.4 43.4-56.6 71.4-107.2 62.7s-85.8-50.6-77.4-94 56.6-71.4 107.2-62.7 85.8 50.6 77.4 94z"/>',
     "</svg>"
   ].join("");
 }
@@ -4040,56 +4030,6 @@ function shouldShowGlobalPaw(doc, state2) {
   if (!hasVisibleChatContent(doc) && !state2.activeChat.id) return false;
   return true;
 }
-function visibleToolbarCandidate(element) {
-  if (!isVisibleElement(element)) return false;
-  if (element.querySelector('[data-sotl-message-paw="true"]')) return true;
-  const controls = element.querySelectorAll('button, [role="button"], a, [data-action], [data-lv-action]');
-  return controls.length > 0;
-}
-function findVisibleMessageToolbars(doc, state2) {
-  const target = lastMessageActionTarget;
-  if (!target || Date.now() - target.seenAt > 5e3) return [];
-  const selector = [
-    "[data-message-actions]",
-    "[data-lv-message-actions]",
-    "[data-message-action-bar]",
-    "[data-lumiverse-message-actions]",
-    '[role="toolbar"]',
-    ".message-actions",
-    ".message-action-buttons",
-    ".chat-message-actions",
-    ".lv-message-actions",
-    ".lv-message-action-bar",
-    ".message-controls"
-  ].join(",");
-  const seen = /* @__PURE__ */ new Set();
-  const toolbars = [];
-  const candidates = Array.from(doc.querySelectorAll(selector)).filter(visibleToolbarCandidate);
-  const messageHost = findMessageHostById(doc, target.messageId);
-  const hostRect = messageHost instanceof HTMLElement && isVisibleElement(messageHost) ? messageHost.getBoundingClientRect() : null;
-  const viewportHeight = doc.defaultView?.innerHeight ?? 0;
-  for (const candidate of candidates) {
-    if (seen.has(candidate) || candidate.closest('.sotl-chat-panel-container, [data-sotl-tracker-preview="true"]')) continue;
-    const rect = candidate.getBoundingClientRect();
-    if (viewportHeight > 0 && rect.top > viewportHeight * 0.72) continue;
-    if (candidate.closest("[data-chat-input], [data-input-bar], [data-composer], .chat-input, .composer, .input-bar, footer")) continue;
-    const candidateMessageId = messageIdFromElement(candidate);
-    const messageId = candidateMessageId ?? target.messageId;
-    if (messageId !== target.messageId) continue;
-    if (hostRect) {
-      const overlapsHorizontally = rect.right >= hostRect.left && rect.left <= hostRect.right;
-      const verticalGap = rect.top > hostRect.bottom ? rect.top - hostRect.bottom : hostRect.top > rect.bottom ? hostRect.top - rect.bottom : 0;
-      if (!overlapsHorizontally || verticalGap > 120) continue;
-    }
-    seen.add(candidate);
-    toolbars.push({
-      toolbar: candidate,
-      messageId,
-      swipeId: state2.activeSwipeByMessageId[messageId]
-    });
-  }
-  return toolbars.slice(0, 1);
-}
 function cleanupDisconnectedMessagePaws() {
   for (const [key, button2] of injectedMessagePaws.entries()) {
     if (!button2.isConnected) injectedMessagePaws.delete(key);
@@ -4117,9 +4057,6 @@ function cleanupMessageTrackerActions() {
     }
   }
   injectedContextMenuItems.clear();
-}
-function messageActionKey(messageId, swipeId) {
-  return `${messageId}::swipe:${typeof swipeId === "number" ? swipeId : "active"}`;
 }
 function syncNativeLikeButtonVariables(target, reference) {
   try {
@@ -4219,24 +4156,19 @@ function syncFixedLauncherToStockIcon(doc, container) {
   syncNativeLikeButtonVariables(pill, reference);
   const rect = reference.getBoundingClientRect();
   const gap = Math.max(6, Math.min(10, rect.height * 0.22));
-  container.style.position = "fixed";
-  container.style.left = `${Math.round(rect.left)}px`;
-  container.style.right = "auto";
-  container.style.top = `${Math.round(rect.bottom + gap)}px`;
-  container.style.width = `${Math.round(rect.width)}px`;
-}
-function createMessagePawButton(doc, messageId, swipeId) {
-  const button2 = doc.createElement("button");
-  button2.className = "sotl-message-paw-action";
-  button2.type = "button";
-  button2.dataset.sotlMessagePaw = "true";
-  button2.dataset.sotlAction = "message-paw";
-  button2.dataset.sotlMessageId = messageId;
-  if (typeof swipeId === "number") button2.dataset.sotlSwipeId = String(swipeId);
-  button2.title = typeof swipeId === "number" ? `Open Loom tracker for Swipe ${swipeId + 1}` : "Open Loom tracker for this message";
-  button2.setAttribute("aria-label", button2.title);
-  button2.innerHTML = bearPawSvg("sotl-message-paw-svg");
-  return button2;
+  const nextLeft = Math.round(rect.left);
+  const nextTop = Math.round(rect.bottom + gap);
+  const nextWidth = Math.round(rect.width);
+  const curLeft = parseInt(container.style.left || "0", 10);
+  const curTop = parseInt(container.style.top || "0", 10);
+  const curWidth = parseInt(container.style.width || "0", 10);
+  if (Math.abs(nextLeft - curLeft) > 1 || Math.abs(nextTop - curTop) > 1 || Math.abs(nextWidth - curWidth) > 1 || container.style.position !== "fixed") {
+    container.style.position = "fixed";
+    container.style.left = `${nextLeft}px`;
+    container.style.right = "auto";
+    container.style.top = `${nextTop}px`;
+    container.style.width = `${nextWidth}px`;
+  }
 }
 function visibleContextMenuCandidate(element) {
   if (!isVisibleElement(element)) return false;
@@ -4257,7 +4189,8 @@ function mountContextMenuTrackerAction(doc, state2) {
   let mounted = 0;
   for (const menu of menus) {
     if (menu.querySelector('[data-sotl-context-menu-item="true"]')) continue;
-    const reference = Array.from(menu.querySelectorAll('button, [role="menuitem"], [data-menu-item], li, div')).find((candidate) => isVisibleElement(candidate) && /\b(Copy|Edit|Hide from AI context|Fork chat here|Prompt Breakdown)\b/i.test(candidate.textContent || ""));
+    const candidates = Array.from(menu.querySelectorAll('button, [role="menuitem"], [data-menu-item], li, div'));
+    const reference = candidates.find((candidate) => isVisibleElement(candidate) && /\b(Copy|Edit|Hide from AI context|Fork chat here|Prompt Breakdown)\b/i.test(candidate.textContent || ""));
     const item = doc.createElement(reference?.tagName.toLowerCase() === "button" ? "button" : "div");
     if (item instanceof HTMLButtonElement) item.type = "button";
     item.className = "sotl-context-menu-item";
@@ -4267,9 +4200,17 @@ function mountContextMenuTrackerAction(doc, state2) {
     if (typeof target.swipeId === "number") item.dataset.sotlSwipeId = String(target.swipeId);
     item.setAttribute("role", reference?.getAttribute("role") || "menuitem");
     item.setAttribute("tabindex", "0");
-    item.innerHTML = `<span class="sotl-context-menu-item__icon">${bearPawSvg("sotl-message-paw-svg")}</span><span>Open Tracker</span>`;
+    item.innerHTML = `<span class="sotl-context-menu-item__icon">${bearPawSvg("sotl-message-paw-svg")}</span><span>Tracker History</span>`;
     if (reference) syncNativeLikeButtonVariables(item, reference);
-    menu.insertBefore(item, menu.firstChild);
+    const promptBreakdownItem = candidates.find((candidate) => isVisibleElement(candidate) && /Prompt Breakdown/i.test(candidate.textContent || ""));
+    const deleteItem = candidates.find((candidate) => isVisibleElement(candidate) && /Delete/i.test(candidate.textContent || ""));
+    if (promptBreakdownItem) {
+      promptBreakdownItem.insertAdjacentElement("afterend", item);
+    } else if (deleteItem) {
+      deleteItem.insertAdjacentElement("beforebegin", item);
+    } else {
+      menu.insertBefore(item, menu.firstChild);
+    }
     injectedContextMenuItems.add(item);
     mounted += 1;
   }
@@ -4410,38 +4351,15 @@ function mountMessageTrackerActions(ctx, state2) {
   const doc = documentRef2();
   if (!doc) return { status: "Message tracker paw unavailable: no document." };
   cleanupDisconnectedMessagePaws();
-  if (!state2) return { status: "Message tracker paw waiting for backend state." };
-  let mounted = 0;
-  const toolbars = findVisibleMessageToolbars(doc, state2);
-  const desiredKeys = new Set(toolbars.map(({ messageId, swipeId }) => messageActionKey(messageId, swipeId)));
   doc.querySelectorAll('[data-sotl-message-paw="true"]').forEach((button2) => {
-    const messageId = button2.dataset.sotlMessageId || "";
-    const swipeValue = button2.dataset.sotlSwipeId;
-    const swipeId = swipeValue === void 0 || swipeValue === "" ? void 0 : Number(swipeValue);
-    const key = messageActionKey(messageId, Number.isFinite(swipeId) ? swipeId : void 0);
-    const desired = desiredKeys.has(key) && toolbars.some(({ toolbar }) => toolbar.contains(button2));
-    if (!desired) {
-      button2.remove();
-      injectedMessagePaws.delete(key);
-    }
+    button2.remove();
   });
-  for (const { toolbar, messageId, swipeId } of toolbars) {
-    if (toolbar.querySelector('[data-sotl-message-paw="true"]')) continue;
-    const key = messageActionKey(messageId, swipeId);
-    const button2 = createMessagePawButton(doc, messageId, swipeId);
-    const reference = Array.from(toolbar.querySelectorAll('button, [role="button"], a')).find((entry) => isVisibleElement(entry) && entry.dataset.sotlMessagePaw !== "true");
-    if (reference) syncNativeLikeButtonVariables(button2, reference);
-    const insertionTarget = reference?.parentElement === toolbar ? reference : toolbar.firstChild;
-    toolbar.insertBefore(button2, insertionTarget);
-    injectedMessagePaws.set(key, button2);
-    mounted += 1;
-  }
-  const reports = [];
-  if (mounted > 0) reports.push(`Mounted ${mounted} message paw action${mounted === 1 ? "" : "s"}.`);
+  injectedMessagePaws.clear();
+  if (!state2) return { status: "Message tracker paw waiting for backend state." };
   const menuMounted = mountContextMenuTrackerAction(doc, state2);
+  const reports = [];
   if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action${menuMounted === 1 ? "" : "s"}.`);
-  if (toolbars.length === 0) reports.push("No visible native message toolbar found; using context-menu/history fallback.");
-  return { status: reports.join(" ") || "No visible message toolbar found for paw actions." };
+  return { status: reports.join(" ") || "No visible message dropdown menu found." };
 }
 function renderCompactPanel(tracker, state2, missingSwipeId) {
   const isGenerating = state2.generation.running;
@@ -4560,11 +4478,20 @@ function ensureChatLoomPanel(ctx, state2) {
   }
   if (!isChatLoomPanelExpanded) {
     const generatingClass = state2.generation.running ? " sotl-chat-pill--generating" : "";
-    container.innerHTML = `
-      <div class="sotl-chat-pill${generatingClass}" data-sotl-panel-action="expand" title="Open Loom HUD" role="button" aria-label="Open Loom HUD" tabindex="0">
-        ${bearPawSvg()}
-      </div>
-    `;
+    const pill = container.querySelector(".sotl-chat-pill");
+    if (pill) {
+      if (state2.generation.running) {
+        pill.classList.add("sotl-chat-pill--generating");
+      } else {
+        pill.classList.remove("sotl-chat-pill--generating");
+      }
+    } else {
+      container.innerHTML = `
+        <div class="sotl-chat-pill${generatingClass}" data-sotl-panel-action="expand" title="Open Loom HUD" role="button" aria-label="Open Loom HUD" tabindex="0">
+          ${bearPawSvg()}
+        </div>
+      `;
+    }
     if (mountLauncherInNativeRail(doc, container)) {
       attachContainerClickHandler(container, ctx, state2, doc);
       return;
@@ -6150,9 +6077,12 @@ function renderTrackerPreviewOverlay() {
   const status = tracker ? current ? "current" : "previous retained" : "missing";
   const jsonButton = tracker ? '<button class="sotl-button" type="button" data-sotl-action="preview-copy-json">Copy JSON</button>' : "";
   const isGenerating = Boolean(state?.generation.running);
-  const regenerateButton = tracker ? `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(tracker.messageId || trackerPreviewRef.messageId)}"${typeof tracker.swipeId === "number" ? ` data-sotl-swipe-id="${tracker.swipeId}"` : ""}>${isGenerating ? "Stop Generation" : "Regenerate"}</button>` : `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(trackerPreviewRef.messageId)}"${typeof resolved.swipeId === "number" ? ` data-sotl-swipe-id="${resolved.swipeId}"` : ""}>${isGenerating ? "Stop Generation" : "Generate This Swipe"}</button>`;
+  const regenerateButton = tracker ? `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(tracker.messageId || trackerPreviewRef.messageId)}"${typeof tracker.swipeId === "number" ? ` data-sotl-swipe-id="${tracker.swipeId}"` : ""}>${isGenerating ? "Stop Generation" : "Regenerate"}</button>` : `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml2(trackerPreviewRef.messageId)}"${typeof resolved.swipeId === "number" ? ` data-sotl-swipe-id="${resolved.swipeId}"` : ""} style="margin-top: 10px; width: 100%; justify-content: center;">${isGenerating ? "Stop Generation" : "Generate Tracker"}</button>`;
   const drawerButton = tracker && !isMobileViewport() ? '<button class="sotl-button" type="button" data-sotl-action="preview-open-drawer">Open in Track drawer</button>' : "";
-  const body = tracker && state ? renderTrackerForState(tracker, state).html : `<div class="sotl-tracker-preview__missing">${escapeHtml2(resolved.notice || `No retained/generated tracker for ${formatSwipeLabel2(resolved.swipeId)}.`)}</div>`;
+  const body = tracker && state ? renderTrackerForState(tracker, state).html : `<div class="sotl-tracker-preview__missing" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center;">
+         <p style="margin: 0 0 10px; font-weight: 500; font-size: 14px;">No tracker history exists for this message.</p>
+         ${regenerateButton}
+       </div>`;
   const meta = [
     `Message ${formatShortId(tracker?.messageId || trackerPreviewRef.messageId)}`,
     formatSwipeLabel2(resolved.swipeId ?? tracker?.swipeId),
@@ -6173,13 +6103,13 @@ function renderTrackerPreviewOverlay() {
     '    <button class="sotl-icon-button sotl-tracker-preview__close" type="button" data-sotl-action="close-tracker-preview" aria-label="Close tracker preview">\xD7</button>',
     "  </header>",
     isGenerating ? `<p class="sotl-note">${escapeHtml2(state?.generation.message || "Generating tracker...")} Existing tracker content stays visible until replacement is saved.</p>` : "",
-    resolved.notice ? `<p class="sotl-note sotl-warning">${escapeHtml2(resolved.notice)}</p>` : "",
+    resolved.notice && tracker ? `<p class="sotl-note sotl-warning">${escapeHtml2(resolved.notice)}</p>` : "",
     `  <div class="sotl-tracker-preview__body">${body}</div>`,
     '  <footer class="sotl-tracker-preview__actions">',
     '    <button class="sotl-button" type="button" data-sotl-action="close-tracker-preview">Close</button>',
     drawerButton,
     jsonButton,
-    regenerateButton,
+    tracker ? regenerateButton : "",
     "  </footer>",
     "</section>"
   ].filter(Boolean).join("\n");

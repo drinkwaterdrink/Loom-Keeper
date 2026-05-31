@@ -349,13 +349,20 @@ function renderTrackerPreviewOverlay(): void {
   const status = tracker ? (current ? 'current' : 'previous retained') : 'missing';
   const jsonButton = tracker ? '<button class="sotl-button" type="button" data-sotl-action="preview-copy-json">Copy JSON</button>' : '';
   const isGenerating = Boolean(state?.generation.running);
+  
   const regenerateButton = tracker
     ? `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml(tracker.messageId || trackerPreviewRef.messageId)}"${typeof tracker.swipeId === 'number' ? ` data-sotl-swipe-id="${tracker.swipeId}"` : ''}>${isGenerating ? 'Stop Generation' : 'Regenerate'}</button>`
-    : `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml(trackerPreviewRef.messageId)}"${typeof resolved.swipeId === 'number' ? ` data-sotl-swipe-id="${resolved.swipeId}"` : ''}>${isGenerating ? 'Stop Generation' : 'Generate This Swipe'}</button>`;
+    : `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml(trackerPreviewRef.messageId)}"${typeof resolved.swipeId === 'number' ? ` data-sotl-swipe-id="${resolved.swipeId}"` : ''} style="margin-top: 10px; width: 100%; justify-content: center;">${isGenerating ? 'Stop Generation' : 'Generate Tracker'}</button>`;
+  
   const drawerButton = tracker && !isMobileViewport() ? '<button class="sotl-button" type="button" data-sotl-action="preview-open-drawer">Open in Track drawer</button>' : '';
+  
   const body = tracker && state
     ? renderTrackerForState(tracker, state).html
-    : `<div class="sotl-tracker-preview__missing">${escapeHtml(resolved.notice || `No retained/generated tracker for ${formatSwipeLabel(resolved.swipeId)}.`)}</div>`;
+    : `<div class="sotl-tracker-preview__missing" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center;">
+         <p style="margin: 0 0 10px; font-weight: 500; font-size: 14px;">No tracker history exists for this message.</p>
+         ${regenerateButton}
+       </div>`;
+  
   const meta = [
     `Message ${formatShortId(tracker?.messageId || trackerPreviewRef.messageId)}`,
     formatSwipeLabel(resolved.swipeId ?? tracker?.swipeId),
@@ -377,13 +384,13 @@ function renderTrackerPreviewOverlay(): void {
     '    <button class="sotl-icon-button sotl-tracker-preview__close" type="button" data-sotl-action="close-tracker-preview" aria-label="Close tracker preview">×</button>',
     '  </header>',
     isGenerating ? `<p class="sotl-note">${escapeHtml(state?.generation.message || 'Generating tracker...')} Existing tracker content stays visible until replacement is saved.</p>` : '',
-    resolved.notice ? `<p class="sotl-note sotl-warning">${escapeHtml(resolved.notice)}</p>` : '',
+    resolved.notice && tracker ? `<p class="sotl-note sotl-warning">${escapeHtml(resolved.notice)}</p>` : '',
     `  <div class="sotl-tracker-preview__body">${body}</div>`,
     '  <footer class="sotl-tracker-preview__actions">',
     '    <button class="sotl-button" type="button" data-sotl-action="close-tracker-preview">Close</button>',
     drawerButton,
     jsonButton,
-    regenerateButton,
+    tracker ? regenerateButton : '',
     '  </footer>',
     '</section>',
   ].filter(Boolean).join('\n');
