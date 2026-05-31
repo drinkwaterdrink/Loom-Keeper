@@ -1199,57 +1199,65 @@ export const loomStyles = `
 }
 
 /*
- * Loom Keeper Inline Message Paw Button.
- * Positioned absolutely in the corner of message containers.
- * Fades in on hover of the container, or remains partially visible if a tracker is saved.
+ * Loom Keeper Inline Message Paw (Needle/Thread) Button.
+ * Injected natively inside the selected message toolbar.
+ * Adapts 100% to the native theme borders, paddings, sizing, and transitions.
  */
 .sotl-message-paw-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 24px;
-  height: 24px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: var(--lumiverse-fill-subtle, var(--lv-surface-subtle, rgba(255, 255, 255, 0.15)));
-  border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.25)));
-  color: var(--lv-accent, #3864d9);
   cursor: pointer;
-  z-index: 10;
-  opacity: 0;
-  transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease;
-  padding: 0;
-}
-
-[data-message-id]:hover .sotl-message-paw-btn,
-[data-lumiverse-message-id]:hover .sotl-message-paw-btn,
-[data-lv-message-id]:hover .sotl-message-paw-btn,
-[data-chat-message-id]:hover .sotl-message-paw-btn,
-[data-message_id]:hover .sotl-message-paw-btn,
-[data-messageid]:hover .sotl-message-paw-btn,
-[id^="message-"]:hover .sotl-message-paw-btn {
-  opacity: 1;
-}
-
-.sotl-message-paw-btn--has-tracker {
-  opacity: 0.6;
-  background: var(--lumiverse-fill, var(--lv-surface, rgba(255, 255, 255, 0.35)));
-  border-color: var(--lv-accent, #3864d9);
-}
-
-.sotl-message-paw-btn:hover {
-  opacity: 1 !important;
-  transform: scale(1.1);
-  background: var(--lumiverse-fill-raised, var(--lv-surface-hover, rgba(255, 255, 255, 0.55)));
-  border-color: var(--lv-accent, #3864d9);
+  outline: none;
+  
+  /* Reset absolute coordinates to flow cleanly in toolbars */
+  position: relative;
+  top: auto;
+  right: auto;
+  
+  /* Layout variables synced from native sibling actions */
+  width: var(--sotl-native-width, var(--sotl-native-size, 28px));
+  height: var(--sotl-native-height, var(--sotl-native-size, 28px));
+  border-radius: var(--sotl-native-radius, 6px);
+  background: var(--sotl-native-bg, transparent);
+  border: var(--sotl-native-border, none);
+  padding: var(--sotl-native-padding, 0);
+  opacity: var(--sotl-native-opacity, 0.75);
+  box-shadow: var(--sotl-native-shadow, none);
+  color: var(--sotl-native-color, inherit);
+  
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
 }
 
 .sotl-message-paw-btn .sotl-message-paw-svg {
-  width: 14px;
-  height: 14px;
+  width: var(--sotl-native-glyph-size, 16px);
+  height: var(--sotl-native-glyph-size, 16px);
+  display: block;
   color: var(--lv-accent, #3864d9);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+/* Hover effects */
+.sotl-message-paw-btn:hover {
+  opacity: 1 !important;
+  transform: scale(1.08);
+  background: var(--lv-surface-hover, rgba(255, 255, 255, 0.15)) !important;
+}
+
+.sotl-message-paw-btn:hover .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+}
+
+/* Premium indicator when message already has a stored tracker */
+.sotl-message-paw-btn--has-tracker {
+  opacity: 0.95;
+  color: var(--lv-accent, #3864d9) !important;
+}
+
+.sotl-message-paw-btn--has-tracker .sotl-message-paw-svg {
+  color: var(--lv-accent, #3864d9) !important;
+  filter: drop-shadow(0 0 4px var(--lv-accent-glow, rgba(56, 100, 217, 0.4)));
 }
 
 `;

@@ -307,15 +307,17 @@ function markGenerationStopping(): void {
     },
   };
 }
-
 function isCurrentTracker(tracker: LoomTrackerState | null, currentState: LoomFrontendState | null): boolean {
   if (!tracker || !currentState) return false;
   const current = resolveActiveTrackerForState(currentState).tracker;
   return Boolean(current && current.messageId === tracker.messageId && current.swipeId === tracker.swipeId);
 }
 
+let lastPreviewRenderKey = '';
+
 function closeTrackerPreview(): void {
   trackerPreviewRef = null;
+  lastPreviewRenderKey = '';
   documentRef()?.querySelector('[data-sotl-tracker-preview="true"]')?.remove();
 }
 
@@ -334,9 +336,23 @@ function renderTrackerPreviewOverlay(): void {
   const doc = documentRef();
   if (!doc) return;
   let overlay = doc.querySelector<HTMLElement>('[data-sotl-tracker-preview="true"]');
-  if (!trackerPreviewRef) return;
+  if (!trackerPreviewRef) {
+    overlay?.remove();
+    lastPreviewRenderKey = '';
+    return;
+  }
 
   const resolved = resolveTrackerForMessageSwipe(state, trackerPreviewRef.messageId, trackerPreviewRef.swipeId);
+  const isGenerating = Boolean(state?.generation.running);
+  const stateMsg = state?.generation.message || '';
+  const trackerKey = resolved.tracker ? `${resolved.tracker.generatedAt}::${resolved.tracker.validation.ok}` : 'missing';
+
+  const renderKey = `${trackerPreviewRef.messageId}::${resolved.swipeId}::${isGenerating}::${stateMsg}::${trackerKey}`;
+  if (renderKey === lastPreviewRenderKey && overlay && overlay.isConnected) {
+    return;
+  }
+  lastPreviewRenderKey = renderKey;
+
   const tracker = resolved.tracker;
   if (!overlay) overlay = doc.createElement('div');
   overlay.className = 'sotl-tracker-preview-overlay';
@@ -348,7 +364,6 @@ function renderTrackerPreviewOverlay(): void {
   const current = isCurrentTracker(tracker, state);
   const status = tracker ? (current ? 'current' : 'previous retained') : 'missing';
   const jsonButton = tracker ? '<button class="sotl-button" type="button" data-sotl-action="preview-copy-json">Copy JSON</button>' : '';
-  const isGenerating = Boolean(state?.generation.running);
   
   const regenerateButton = tracker
     ? `<button class="sotl-button" type="button" data-sotl-action="preview-regenerate" data-sotl-message-id="${escapeHtml(tracker.messageId || trackerPreviewRef.messageId)}"${typeof tracker.swipeId === 'number' ? ` data-sotl-swipe-id="${tracker.swipeId}"` : ''}>${isGenerating ? 'Stop Generation' : 'Regenerate'}</button>`
@@ -364,33 +379,41 @@ function renderTrackerPreviewOverlay(): void {
        </div>`;
   
   const meta = [
-    `Message ${formatShortId(tracker?.messageId || trackerPreviewRef.messageId)}`,
+    `Msg ${formatShortId(tracker?.messageId || trackerPreviewRef.messageId)}`,
     formatSwipeLabel(resolved.swipeId ?? tracker?.swipeId),
-    tracker ? formatGeneratedAt(tracker.generatedAt) : 'not retained',
-    tracker ? (preset?.name || tracker.presetId) : 'no tracker',
-    tracker ? tracker.source : 'missing',
+    tracker ? formatGeneratedAt(tracker.generatedAt) : 'not generated',
+    tracker ? (preset?.name || tracker.presetId) : 'no template',
   ];
+
+  const detailsHtml = [
+    '<details class="sotl-card-details" style="margin-top: 2px; width: 100%; border: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80, 88, 100, 0.2))); border-radius: 6px; padding: 4px 8px; background: rgba(0,0,0,0.15); box-sizing: border-box;">',
+    '  <summary style="font-size: 11px; font-weight: 600; cursor: pointer; user-select: none; outline: none;">Show Scene Summary & Metadata</summary>',
+    '  <div style="margin-top: 6px; display: grid; gap: 4px;">',
+    `    <h4 style="margin: 0; font-size: 12px; font-weight: 700; color: inherit;">${tracker ? escapeHtml(tracker.compactSummary || preset?.name || 'Retained Continuity') : 'No Continuity Retained'}</h4>`,
+    `    <p style="margin: 0; font-size: 10px; color: var(--lumiverse-text-muted, var(--lv-text-muted, #8f9baa));">${meta.map(escapeHtml).join(' - ')}</p>`,
+    '  </div>',
+    '</details>'
+  ].join('\n');
 
   overlay.innerHTML = [
     '<div class="sotl-tracker-preview__scrim" data-sotl-action="close-tracker-preview"></div>',
-    '<section class="sotl-tracker-preview" role="dialog" aria-modal="true" aria-label="Loom Keeper tracker preview">',
-    '  <header class="sotl-tracker-preview__head">',
-    '    <div>',
-    '      <p class="sotl-tracker-preview__eyebrow">Loom Keeper</p>',
-    `      <h3>${tracker ? escapeHtml(tracker.compactSummary || preset?.name || 'Retained tracker') : 'No tracker retained'}</h3>`,
-    `      <p class="sotl-tracker-preview__meta">${meta.map(escapeHtml).join(' - ')}</p>`,
+    '<section class="sotl-tracker-preview" role="dialog" aria-modal="true" aria-label="Loom Keeper tracker preview" style="padding: 10px; gap: 6px; display: flex; flex-direction: column;">',
+    '  <header class="sotl-tracker-preview__head" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 4px; border-bottom: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80,88,100,0.15))); gap: 8px;">',
+    '    <div style="display: flex; align-items: center; gap: 6px;">',
+    `      <span style="font-size: 13px; font-weight: 700; color: var(--lv-accent, #3864d9);">Loom History</span>`,
+    `      <span class="sotl-tracker-preview__badge" data-status="${escapeHtml(status)}" style="padding: 1px 6px; font-size: 10px; height: auto;">${escapeHtml(status)}</span>`,
     '    </div>',
-    `    <span class="sotl-tracker-preview__badge" data-status="${escapeHtml(status)}">${escapeHtml(status)}</span>`,
-    '    <button class="sotl-icon-button sotl-tracker-preview__close" type="button" data-sotl-action="close-tracker-preview" aria-label="Close tracker preview">×</button>',
+    '    <button class="sotl-icon-button sotl-tracker-preview__close" type="button" data-sotl-action="close-tracker-preview" aria-label="Close tracker preview" style="width: 24px; height: 24px; font-size: 14px; display: flex; align-items: center; justify-content: center; line-height: 1;">×</button>',
     '  </header>',
-    isGenerating ? `<p class="sotl-note">${escapeHtml(state?.generation.message || 'Generating tracker...')} Existing tracker content stays visible until replacement is saved.</p>` : '',
-    resolved.notice && tracker ? `<p class="sotl-note sotl-warning">${escapeHtml(resolved.notice)}</p>` : '',
-    `  <div class="sotl-tracker-preview__body">${body}</div>`,
-    '  <footer class="sotl-tracker-preview__actions">',
-    '    <button class="sotl-button" type="button" data-sotl-action="close-tracker-preview">Close</button>',
-    drawerButton,
-    jsonButton,
-    tracker ? regenerateButton : '',
+    detailsHtml,
+    isGenerating ? `<p class="sotl-note" style="font-size: 11px; margin: 0 0 2px;">${escapeHtml(state?.generation.message || 'Generating tracker...')} Existing content remains until replacement is saved.</p>` : '',
+    resolved.notice && tracker ? `<p class="sotl-note sotl-warning" style="font-size: 11px; margin: 0 0 2px;">${escapeHtml(resolved.notice)}</p>` : '',
+    `  <div class="sotl-tracker-preview__body" style="flex: 1; min-height: 120px; overflow-y: auto; padding-right: 2px;">${body}</div>`,
+    '  <footer class="sotl-tracker-preview__actions" style="display: flex; gap: 6px; padding-top: 6px; border-top: 1px solid var(--lumiverse-border, var(--lv-border, rgba(80,88,100,0.15))); flex-wrap: wrap;">',
+    '    <button class="sotl-button" type="button" data-sotl-action="close-tracker-preview" style="min-height: 28px; font-size: 12px; padding: 0 8px; height: 28px;">Close</button>',
+    drawerButton ? drawerButton.replace('sotl-button', 'sotl-button" style="min-height: 28px; font-size: 12px; padding: 0 8px; height: 28px;') : '',
+    jsonButton ? jsonButton.replace('sotl-button', 'sotl-button" style="min-height: 28px; font-size: 12px; padding: 0 8px; height: 28px;') : '',
+    tracker ? regenerateButton.replace('sotl-button', 'sotl-button" style="min-height: 28px; font-size: 12px; padding: 0 8px; height: 28px;') : '',
     '  </footer>',
     '</section>',
   ].filter(Boolean).join('\n');

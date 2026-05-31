@@ -637,6 +637,41 @@ export function mountMessageCards(ctx: FrontendContext, state: LoomFrontendState
   };
 }
 
+function findMessageToolbar(host: HTMLElement): HTMLElement | null {
+  const selector = [
+    '[data-message-actions]',
+    '[data-lv-message-actions]',
+    '[data-message-action-bar]',
+    '[data-lumiverse-message-actions]',
+    '[role="toolbar"]',
+    '.message-actions',
+    '.message-action-buttons',
+    '.chat-message-actions',
+    '.lv-message-actions',
+    '.lv-message-action-bar',
+    '.message-controls'
+  ].join(',');
+  const found = host.querySelector<HTMLElement>(selector);
+  if (found && isVisibleElement(found)) return found;
+
+  const candidates = Array.from(host.querySelectorAll<HTMLElement>('div, nav, section, menu, span'));
+  for (const candidate of candidates) {
+    if (!isVisibleElement(candidate)) continue;
+    const rect = candidate.getBoundingClientRect();
+    if (rect.height > 72 || rect.width > 420) continue;
+    
+    const buttons = Array.from(candidate.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action], svg'));
+    if (buttons.length < 2) continue;
+
+    const hasCopyOrDelete = buttons.some((btn) => {
+      const text = (btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || '').trim();
+      return /\b(Copy|Edit|Delete|Hide|Fork|Breakdown|trash|pencil|clone)\b/i.test(text);
+    });
+    if (hasCopyOrDelete) return candidate;
+  }
+  return null;
+}
+
 export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFrontendState | null): MessageCardMountStatus {
   void ctx;
   const doc = documentRef();
@@ -658,30 +693,45 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
     const messageId = messageIdFromElement(host);
     if (!messageId) return;
 
-    // Ensure container has position relative if static
-    try {
-      const computed = doc.defaultView?.getComputedStyle(host);
-      if (computed && computed.position === 'static') {
-        host.style.position = 'relative';
-      }
-    } catch {
-      // safe best-effort
-    }
-
     const activeSwipe = state.activeSwipeByMessageId[messageId];
     const key = `${messageId}::swipe:${typeof activeSwipe === 'number' ? activeSwipe : 'main'}`;
+
+    const toolbar = findMessageToolbar(host);
+    if (!toolbar) {
+      // Toolbar not visible (message is not selected/hovered) — remove the button
+      const oldButton = host.querySelector('.sotl-message-paw-btn');
+      if (oldButton) {
+        oldButton.remove();
+        injectedMessagePaws.delete(key);
+      }
+      return;
+    }
+
     activeKeys.add(key);
 
     const hasTracker = state.messageTrackers.some(
       (t) => t.messageId === messageId && !t.hidden && (typeof activeSwipe !== 'number' || t.swipeId === activeSwipe)
     );
 
-    let button = host.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
+    let button = toolbar.querySelector<HTMLButtonElement>('.sotl-message-paw-btn');
     if (!button) {
       button = doc.createElement('button');
       button.type = 'button';
       button.className = 'sotl-message-paw-btn';
-      host.append(button);
+      
+      // Inject just to the left of the Copy button inside the toolbar
+      const copyBtn = Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a, [data-action], [data-lv-action]'))
+        .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn') && /\b(Copy|clone)\b/i.test(btn.textContent || btn.getAttribute('aria-label') || btn.getAttribute('title') || btn.className || ''));
+      
+      const referenceBtn = copyBtn || Array.from(toolbar.querySelectorAll<HTMLElement>('button, [role="button"], a'))
+        .find((btn) => isVisibleElement(btn) && !btn.classList.contains('sotl-message-paw-btn'));
+
+      if (referenceBtn) {
+        syncNativeLikeButtonVariables(button, referenceBtn);
+        toolbar.insertBefore(button, referenceBtn);
+      } else {
+        toolbar.insertBefore(button, toolbar.firstChild);
+      }
       inlineMounted += 1;
     }
 
@@ -693,10 +743,10 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
       delete button.dataset.sotlSwipeId;
     }
 
-    button.title = hasTracker ? 'View Tracker History' : 'Generate Tracker';
+    button.title = hasTracker ? 'View Continuity History' : 'Generate Continuity State';
     button.setAttribute('aria-label', button.title);
     
-    // Inject the bearPawSvg with the correct class
+    // Inject the Needle & Thread SVG
     button.innerHTML = bearPawSvg('sotl-message-paw-svg');
 
     // Toggle styling class
@@ -719,9 +769,9 @@ export function mountMessageTrackerActions(ctx: FrontendContext, state: LoomFron
 
   const menuMounted = mountContextMenuTrackerAction(doc, state);
   const reports: string[] = [];
-  if (inlineMounted > 0) reports.push(`Injected/updated ${hosts.length} inline paw button(s).`);
+  if (inlineMounted > 0) reports.push(`Injected ${inlineMounted} native toolbar button(s).`);
   if (menuMounted > 0) reports.push(`Mounted ${menuMounted} context menu tracker action(s).`);
-  return { status: reports.join(' ') || 'No message containers found.' };
+  return { status: reports.join(' ') || 'No active message toolbars found.' };
 }
 
 function renderCompactPanel(tracker: LoomTrackerState | null, state: LoomFrontendState, missingSwipeId?: number | undefined): string {
